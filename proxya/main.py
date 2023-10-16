@@ -3,12 +3,19 @@
 import numpy as np
 #import pysqm as ps 
 from coordinates import *
+from proxy_a import *
 
 coords = get_random_coordinates(4)
 nats = len(coords[:,1])
 symbols = []
 symbols = ["H"] * nats
 write_xyz_coordinates(coords,symbols)
+
+H = get_hamiltonian(coords)
+
+print(H)
+
+
 
 #Give the coordinates to the engine
 #Get the DM, evals, core contribution to each eigenpair, back
