@@ -12,8 +12,12 @@ symbols = ["H"] * nats
 write_xyz_coordinates(coords,symbols)
 
 H = get_hamiltonian(coords)
+N = len(H[:,1])
+Nocc = 2
+D = get_densityMatrix(H,N,Nocc)
 
-print(H)
+print("Hamiltonian = ",H)
+print("Density Matrix = ",D)
 
 
 

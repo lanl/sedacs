@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.linalg as sp
 
 def get_hamiltonian(coords,atomTypes=np.zeros((1),dtype=int)):
 
@@ -24,6 +25,25 @@ def get_hamiltonian(coords,atomTypes=np.zeros((1),dtype=int)):
   #end
   return H 
 
+def get_densityMatrix(H,N,Nocc):
+  
+  """Calcualted the full density matrix from H"""
+
+  E,Q = sp.eigh(H)
+  mu = 0.5*(E[Nocc] + E[Nocc + 1])
+  D = np.zeros((N,N))
+  print("Q=",Q)
+  for i in range(0,N):
+    if (E[i] < mu):
+      D = D + np.outer(Q[:,i],Q[:,i])
+      print(i,"D=",D)
+      print(i,"Q=",Q[:,1])
+    #endif
+  #endfor
+  print("mu = ",mu)
+  print("E=",E)
+  return D
+
 if(__name__ == '__main__'):
 
   coords = np.zeros((4,3))
@@ -33,5 +53,7 @@ if(__name__ == '__main__'):
   coords[3,0] = -0.2; coords[3,1] = -2.12; coords[3,2] = 2.7;
 
   H = get_hamiltonian(coords)
-  print(H)
+  print("H=",H)
+  D = get_densityMatrix(H,4,2)
+  print("D=",D)
   
