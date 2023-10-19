@@ -7,6 +7,15 @@ from coordinates import *
 from ptable import *
 
 
+## General LATTE dm API call 
+# This function will take coordinates and atom type and 
+# retreive the density matrix. 
+# @param box Lattice vectors. box[0,:] = first lattice vectors
+# @param symbols List of elements symbols for each atom type
+# @param types A list of types for every atom in the system
+# @param coords Positions for every atom in the system. coords[0,2] z-coordinate of atom 0
+# @return dm Density matrix
+#
 def get_latte_dm(box,symbols,types,coords):
     nats = len(types) #Number of atoms
     atele = []
@@ -37,7 +46,7 @@ def get_latte_dm(box,symbols,types,coords):
     #Get the inverse overlap factors
     zmat = genX(smat,method="Diag",verbose=True)
 
-    #Initializong a periodig table
+    #Initializing a periodic table
     pt = ptable()
 
     #Getting number of electrons
@@ -57,6 +66,7 @@ def get_latte_dm(box,symbols,types,coords):
 
 
 if(__name__ == '__main__'):
+
     myVerb = True
     #Read coordinates from pdb file 
     box,symbols,types,coords = read_xyz_file("coords.xyz",lib="None",verb=myVerb)
