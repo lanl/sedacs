@@ -8,8 +8,8 @@ import quippy as qp
 import chemcoord as chc
 import ase.io
 
-## Chemicas system type 
-# To be use only when really needed! 
+## Chemical system type 
+# To be used only when really needed! 
 # 
 class system:
     """A prototype for the system type.
