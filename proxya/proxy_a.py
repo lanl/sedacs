@@ -12,6 +12,18 @@ import sys
 import scipy.linalg as sp
 
 ## Simple random number generator
+#
+# To initialize: 
+# \verbatim
+#   myRand = rand(123)
+# \endverbatim
+# where the argument of rand is the seed. 
+#
+# To get a random number between "low" and "high":
+# \verbatim 
+#   rnd = myRand.get_rand(low,high)
+# \endverbatim
+#
 class rand:
     """To generate random numbers.
     """
@@ -35,9 +47,8 @@ class rand:
         return(rand)
 
 ## Generating random coordinates 
-# Creates a system of size "nats = Number of atoms" with coordindates having 
-# a random (-1,1) displacement from a simple cubic lattice 
-# with parameter 2.0 Ang.
+# @brief Creates a system of size "nats = Number of atoms" with coordindates having 
+# a random (-1,1) displacement from a simple cubic lattice with parameter 2.0 Ang.
 #
 # @param nats The total number of atoms
 # @return coordinates Position for every atom. z-coordinate of atom 1 = coords[0,2]
