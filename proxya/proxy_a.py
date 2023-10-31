@@ -12,6 +12,8 @@ import sys
 import scipy.linalg as sp
 
 ## Simple random number generator
+# This is important in order to compare across codes 
+# written in different languages.
 #
 # To initialize: 
 # \verbatim
@@ -28,19 +30,19 @@ class rand:
     """To generate random numbers.
     """
     def __init__(self,seed):
-        self.a = 475
-        self.b = 38
-        self.c = 41
+        self.a = 321
+        self.b = 231
+        self.c = 13
         self.seed = seed
-        self.status = seed
+        self.status = seed*1000
 
     def get_rand(self,low,high):
         """Get a random real number in between low and high."""
         w = high - low
         place = self.a*self.status
-        place = place/self.b
+        place = int(place/self.b)
         rand = (place%self.c)/self.c
-        place = rand*100000
+        place = int(rand*1000000)
         self.status = place
         rand = low + w*rand
 
@@ -59,7 +61,7 @@ def get_random_coordinates(nats):
     coords = np.zeros((nats,3))
     latticeParam = 2.0
     atomsCounter = -1
-    myrand = rand(123)
+    myrand = rand(111)
     for i in range(length):
         for j in range(length):
             for k in range(length):
@@ -88,14 +90,12 @@ def get_hamiltonian(coords,atomTypes=np.zeros((1),dtype=int),verb=False):
   N = len(coords[:,1]); Nocc = int(N/4); eps = 1e-9; decay_min = 0.1; m = 78;
   a = 3.817632; c = 0.816371; x = 1.029769; n = 13;
   b = 1.927947; d = 3.386142; y = 2.135545;
-  H = np.zeros((N,N)); xx = np.zeros(N); yy = np.zeros(N);
+  H = np.zeros((N,N))
   if(verb): print("Constructing a simple Hamiltonian for the full system")
   cnt = 0 
-  R = np.zeros((N,1))
   for i in range(0,N):  #Actually from 0 to N-1
     x = (a*x+c)%m       #Hamiltonian parameters
-    y = (b*y+d)%n      
-    xx[i] = x ; yy[i] = y;
+    y = (b*y+d)%n
     for j in range(i,N): #Actually from i to N-1
       dist = np.linalg.norm(coords[i,:]-coords[j,:])
       tmp = (x/m)*np.exp(-(y/n + decay_min)*(dist**2))
@@ -111,7 +111,7 @@ def get_hamiltonian(coords,atomTypes=np.zeros((1),dtype=int),verb=False):
 # \f[ \rho  =  \sum^{nocc} v_k v_k^T \f]
 # where \f$ v_k \f$ are the eigenvectors of the matris \f$ H \f$
 #
-# @param H Hamiltonian mtrix 
+# @param H Hamiltonian matrix 
 # @param Nocc Number of occupied orbitals
 # @param verb Verbosity. If True is passed, information is printed.
 #
@@ -122,10 +122,12 @@ def get_densityMatrix(H,Nocc,verb="False"):
   if(verb): print("Computing the Density matrix")
   E,Q = sp.eigh(H)
   N = len(H[:,0])
-  mu = 0.5*(E[Nocc] + E[Nocc + 1])
+  homoIndex = Nocc - 1
+  lumoIndex = Nocc
+  mu = 0.5*(E[homoIndex] + E[lumoIndex])
   D = np.zeros((N,N))
-  print("Q=",Q)
-  for i in range(0,N):
+  if(verb): print("Eigenvalues of H:",E)
+  for i in range(N):
     if (E[i] < mu):
       D = D + np.outer(Q[:,i],Q[:,i])
     #endif
@@ -148,9 +150,12 @@ if(__name__ == '__main__'):
       nats = int(sys.argv[1])
   verb = True
   coords = get_random_coordinates(nats)
+
   H = get_hamiltonian(coords)
-  occ = int(nats/2) #Get the total occupied orbitals 
+
+  occ = int(float(nats)/2.0) #Get the total occupied orbitals 
   D = get_densityMatrix(H,occ)
+  
   print("Hamiltonian matrix=",H)
   print("Density matrix=",D)
   
