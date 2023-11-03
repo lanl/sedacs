@@ -269,7 +269,6 @@ def read_pdb_file(fileName,lib="None",verb=False):
         coordsyList = []
         coordszList = []
         typesIndex = -1
-        count = -1
         for lines in fileIn:
             linesSplit = lines.split()
             if(len(linesSplit) != 0):
@@ -298,6 +297,8 @@ def read_pdb_file(fileName,lib="None",verb=False):
                     coordsyList.append(float(linesSplit[6]))
                     coordszList.append(float(linesSplit[7]))
 
+    print("count",count)
+    exit(0)
     coords = np.zeros((count,3))
     for i in range(count):
         coords[i,0] = coordsxList[i]
