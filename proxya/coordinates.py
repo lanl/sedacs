@@ -1,7 +1,7 @@
 """coordinates
 Some functions to create and read coordinates
  
-So far: Creates random coordinates; reads and xyz file
+So far: Creates random coordinates; reads xyz and pdb file
 """
 import numpy as np
 import quippy as qp
@@ -9,17 +9,22 @@ import chemcoord as chc
 import ase.io
 
 ## Chemical system type 
-# To be used only when really needed! 
+# @brief To be used only when really needed! 
 # 
 class system:
     """A prototype for the system type.
     """
     def __init__(self):
-        self.nats = 1 #Number of atoms
-        self.ntypes = 1 #Number of atom types
-        self.types = np.zeros(self.nats,dtype=int) #Type of each atom
-        self.coords = np.zeros((self.nats,3)) #Coordinates for each atom
-        self.symbols = ["Bl"] * self.ntypes #Symbols for each atom type
+        ## Number of atoms
+        self.nats = 1 
+        ## Number of atom types 
+        self.ntypes = 1 
+        ## Type for each atom, e.g., the first atom is of type "types[0]"
+        self.types = np.zeros(self.nats,dtype=int) 
+        ## Coordinates for each atom, e.g., z-coordinate of the frist atom is coords[0,2]
+        self.coords = np.zeros((self.nats,3)) 
+        ## Symbols for each atom type, e.g, the element symbol of the first atom is symbols[types[0]] 
+        self.symbols = ["Bl"] * self.ntypes 
 
 
 ## Transforms the lattice parameters into lattice vectors.

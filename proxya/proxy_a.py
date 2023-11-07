@@ -83,7 +83,7 @@ def get_random_coordinates(nats):
 # @param coords Position for every atoms. z-coordinate of atom 1 = coords[0,2]
 # @param types Index type for each atom in the system. Type for first atom = type[0] (not used yet)
 # @return H 2D numpy array of Hamiltonian elements
-# @param verb Verbosity. If True is passed, information is printed.
+# @param verb Verbosity. If True is passed, information is printed
 #
 def get_hamiltonian(coords,atomTypes=np.zeros((1),dtype=int),verb=False):
   """Construct simple toy s-Hamiltonian """
@@ -93,23 +93,21 @@ def get_hamiltonian(coords,atomTypes=np.zeros((1),dtype=int),verb=False):
   H = np.zeros((N,N))
   if(verb): print("Constructing a simple Hamiltonian for the full system")
   cnt = 0 
-  for i in range(0,N):  #Actually from 0 to N-1
+  for i in range(0,N):  
     x = (a*x+c)%m       #Hamiltonian parameters
     y = (b*y+d)%n
-    for j in range(i,N): #Actually from i to N-1
+    for j in range(i,N): 
       dist = np.linalg.norm(coords[i,:]-coords[j,:])
       tmp = (x/m)*np.exp(-(y/n + decay_min)*(dist**2))
       H[i,j] = tmp
       H[j,i] = tmp
-   #end
-  #end
   return H 
 
 ## Computes the Density matrix from a given Hamiltonian.
 # @author Anders Niklasson
 # @brief This will create a "zero-temperature" Density matrix \f$ \rho \f$
 # \f[ \rho  =  \sum^{nocc} v_k v_k^T \f]
-# where \f$ v_k \f$ are the eigenvectors of the matris \f$ H \f$
+# where \f$ v_k \f$ are the eigenvectors of the matrix \f$ H \f$
 #
 # @param H Hamiltonian matrix 
 # @param Nocc Number of occupied orbitals
@@ -117,7 +115,7 @@ def get_hamiltonian(coords,atomTypes=np.zeros((1),dtype=int),verb=False):
 #
 # @return D Density matrix
 #
-def get_densityMatrix(H,Nocc,verb="False"):
+def get_densityMatrix(H,Nocc,verb=False):
   """Calcualted the full density matrix from H"""
   if(verb): print("Computing the Density matrix")
   E,Q = sp.eigh(H)
@@ -130,8 +128,6 @@ def get_densityMatrix(H,Nocc,verb="False"):
   for i in range(N):
     if (E[i] < mu):
       D = D + np.outer(Q[:,i],Q[:,i])
-    #endif
-  #endfor
   if(verb): print("Chemical potential = ",mu)
   return D
 

@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 """ Periodic table of elements.
  
  This data was generated with pybabel and openbable packages
@@ -7,13 +9,14 @@
 """
 
 import numpy as np
-import argparse
+import sys
 
 class ptable:
     """A simple periodic table.
     """
     def __init__(self):
-        self.ntypes = 104 #Number of atom types. Each atomic number is a type.
+        ## Number of atom types. Each atomic number is a type.
+        self.ntypes = 104 
 
         ## Element symbols for every atom type (atomic number)
         # The Bl (Bolonium) is added to have index = atomic number
@@ -371,41 +374,25 @@ class ptable:
 
 if(__name__ == '__main__'):
 
-    parser = argparse.ArgumentParser(description="""Parser for the ptable""")
+    n = len(sys.argv)
+    if(n == 1):
+      print("Give any element symbol as input. Example:\n")
+      print("./ptable C\n")
+      exit(0)
+    else:
+      elementSymbol = sys.argv[1]
 
-    parser.add_argument("-name", help="Getting the name of a particular element", type=str, default="Bl")
-    parser.add_argument("-mass", help="Getting the mass of a particular element (a.u.)", type=str, default="Bl")
-    parser.add_argument("-vdwr", help="Getting the van Der Waals radius of a particular element (Ang)", type=str, default="Bl")
-    parser.add_argument("-covr", help="Getting the covalency radius of a particular element (Ang)", type=str, default="Bl")
-    parser.add_argument("-ip", help="Getting the ionization energy of a particular element (eV)", type=str, default="Bl")
-    parser.add_argument("-ea", help="Getting the electron affinity of a particular element (eV)", type=str, default="Bl")
-    parser.add_argument("-en", help="Getting the electronegativity of a particular element", type=str, default="Bl")
-    parser.add_argument("-maxbonds", help="Getting the maximun allowed bonds of a particular element", type=str, default="Bl")
-    parser.add_argument("-numel", help="Getting the last shell number of electrons of a particular element", type=str, default="Bl")
-    parser.add_argument("-econf", help="Getting the electron configuration of a particular element", type=str, default="Bl")
-    parser.add_argument("-atnum", help="Getting the atomic number of a particular element", type=str, default="Bl")
-
-    options = parser.parse_args()
     pt = ptable()
-    if(options.name != "Bl"):
-        print("Element name: ",pt.names[pt.get_atomic_number(options.name)])
-    if(options.mass != "Bl"):
-        print("Element mass (a.u.) = ",pt.mass[pt.get_atomic_number(options.mass)])
-    if(options.vdwr != "Bl"):
-        print("Element van Der Waals radius (Ang) = ",pt.vdwr[pt.get_atomic_number(options.vdwr)])
-    if(options.covr != "Bl"):
-        print("Element covalency radius (Ang) = ",pt.covr[pt.get_atomic_number(options.covr)])
-    if(options.ip != "Bl"):
-        print("Element ionization potential (eV) = ",pt.ip[pt.get_atomic_number(options.ip)])
-    if(options.ea != "Bl"):
-        print("Element electron affinity (eV) = ",pt.ea[pt.get_atomic_number(options.ea)])
-    if(options.en != "Bl"):
-        print("Element electronegativity  = ",pt.en[pt.get_atomic_number(options.en)])
-    if(options.maxbonds != "Bl"):
-        print("Element max bonds = ",pt.maxbonds[pt.get_atomic_number(options.maxbonds)])
-    if(options.numel != "Bl"):
-        print("Element number of electrons = ",pt.numel[pt.get_atomic_number(options.numel)])
-    if(options.econf != "Bl"):
-        print("Element electron configuration = ",pt.econf[pt.get_atomic_number(options.econf)])
-    if(options.atnum != "Bl"):
-        print("Element atomic number = ",pt.get_atomic_number(options.atnum))
+    if(elementSymbol != "Bl"):
+        atnum = pt.get_atomic_number(elementSymbol)
+        print("Element name: ",pt.names[atnum])
+        print("Element mass (a.u.) = ",pt.mass[atnum])
+        print("Element van Der Waals radius (Ang) = ",pt.vdwr[atnum])
+        print("Element covalency radius (Ang) = ",pt.covr[atnum])
+        print("Element ionization potential (eV) = ",pt.ip[atnum])
+        print("Element electron affinity (eV) = ",pt.ea[atnum])
+        print("Element electronegativity  = ",pt.en[atnum])
+        print("Element max bonds = ",pt.maxbonds[atnum])
+        print("Element number of electrons = ",pt.numel[atnum])
+        print("Element electron configuration = ",pt.econf[atnum])
+        print("Element atomic number = ",pt.get_atomic_number(elementSymbol))

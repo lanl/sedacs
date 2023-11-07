@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import numpy as np
-from readtb import *
 from latte import *
 from coordinates import *
 from ptable import *
@@ -69,7 +68,7 @@ if(__name__ == '__main__'):
 
     myVerb = True
     #Read coordinates from pdb file 
-    box,symbols,types,coords = read_xyz_file("coords.xyz",lib="None",verb=myVerb)
+    box,symbols,types,coords = read_pdb_file("coords_300.pdb",lib="None",verb=myVerb)
 
     #Call latte to get the density matrix
     dm = get_latte_dm(box,symbols,types,coords)

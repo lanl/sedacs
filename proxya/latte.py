@@ -1351,6 +1351,7 @@ def genX(smat,method,verbose):
         print("\nZmat Matrix")
         print(zmat)
 
+
     return zmat
 
 

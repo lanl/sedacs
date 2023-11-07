@@ -12,21 +12,21 @@ module proxy_a_mod
   integer, parameter :: dp = kind(1.0D0) !Precision
   public :: get_random_coordinates, get_densityMatrix
 
-  !! Simple random number generator
-! This is important in order to compare across codes
-! written in different languages.
-!
-! To initialize:
-! \verbatim
-!   myRand = rand(123)
-! \endverbatim
-! where the argument of rand is the seed.
-!
-! To get a random number between "low" and "high":
-! \verbatim
-!   rnd = myRand.get_rand(low,high)
-! \endverbatim
-!
+!!> Simple random number generator
+!! This is important in order to compare across codes
+!! written in different languages.
+!!
+!! To initialize:
+!! \verbatim
+!!   myRand = rand(123)
+!! \endverbatim
+!! where the argument of rand is the seed.
+!!
+!! To get a random number between "low" and "high":
+!! \verbatim
+!!   rnd = myRand.get_rand(low,high)
+!! \endverbatim
+!!
 type, public :: rand
     integer :: a = 321
     integer :: b = 231
@@ -147,7 +147,7 @@ contains
   !! @author Anders Niklasson
   !! @brief This will create a "zero-temperature" Density matrix \f$ \rho \f$
   !! \f[ \rho  =  \sum^{nocc} v_k v_k^T \f]
-  !! where \f$ v_k \f$ are the eigenvectors of the matris \f$ H \f$
+  !! where \f$ v_k \f$ are the eigenvectors of the matrix \f$ H \f$
   !!
   !! @param H Hamiltonian mtrix 
   !! @param Nocc Number of occupied orbitals
@@ -191,7 +191,6 @@ contains
           enddo
       enddo
     enddo
-    write(*,*)"D",D
     if(verb)write(*,*)"Chemical potential = ",mu
     return
 
