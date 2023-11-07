@@ -63,32 +63,46 @@ def parameters_to_vectors(paramA,paramB,paramC,angleAlpha,angleBeta,angleGamma,\
 
     return latticeVectors
 
-
+## Simple random number generator
+# This is important in order to compare across codes 
+# written in different languages.
+#
+# To initialize: 
+# \verbatim
+#   myRand = rand(123)
+# \endverbatim
+# where the argument of rand is the seed. 
+#
+# To get a random number between "low" and "high":
+# \verbatim 
+#   rnd = myRand.get_rand(low,high)
+# \endverbatim
+#
 class rand:
     """To generate random numbers.
     """
     def __init__(self,seed):
-        self.a = 475
-        self.b = 38
-        self.c = 41
+        self.a = 321
+        self.b = 231
+        self.c = 13
         self.seed = seed
-        self.status = seed
+        self.status = seed*1000
 
     def get_rand(self,low,high):
-        """Get a random real number in betwee low and high."""
+        """Get a random real number in between low and high."""
         w = high - low
         place = self.a*self.status
-        place = place/self.b
+        place = int(place/self.b)
         rand = (place%self.c)/self.c
-        place = rand*100000
+        place = int(rand*1000000)
         self.status = place
         rand = low + w*rand
 
         return(rand)
 
-## Generating random coordinates 
-# Creates a system of size length^3 with coorindates having 
-# a random (-1,1) displacement from a simple cubic lattice 
+## Generating random coordinates
+# Creates a system of size length^3 with coorindates having
+# a random (-1,1) displacement from a simple cubic lattice
 # with parameter 2.0 Ang.
 #
 # @param lenght The total number of point in x, y, and z directions.
@@ -102,7 +116,7 @@ def get_random_coordinates(length):
     """Get random coordinates real number in betwee low and high."""
     nats = length**3
     coords = np.zeros((nats,3))
-    latticeParam = 2.0 
+    latticeParam = 2.0
     atomsCounter = -1
     myrand = rand(123)
     for i in range(length):
@@ -114,9 +128,8 @@ def get_random_coordinates(length):
                 rnd = myrand.get_rand(-1.0,1.0)
                 coords[atomsCounter,1] = j*latticeParam + rnd
                 rnd = myrand.get_rand(-1.0,1.0)
-                coords[atomsCounter,2] = k*latticeParam + rnd 
+                coords[atomsCounter,2] = k*latticeParam + rnd
     return coords
-
 
 ## xyz file parser
 #  Reads in an xyz file with lattice informations.
