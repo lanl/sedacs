@@ -6,7 +6,6 @@ from proxy_a import *
 from sdc_ptable import ptable
 
 pt = ptable()
-
 latticeVectors,symbols,types,coords = read_pdb_file("coords.pdb",lib="None",verb=True)
 nats = len(coords[:,1])
 write_xyz_coordinates(coords,types,symbols)
