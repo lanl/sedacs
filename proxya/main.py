@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 import numpy as np
-from coordinates import *
+from sdc_system import *
 from proxy_a import *
-from ptable import ptable
+from sdc_ptable import ptable
 
 pt = ptable()
 
