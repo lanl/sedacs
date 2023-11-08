@@ -1,0 +1,5 @@
+#!/bin/bash
+PYLATTE_PATH=`pwd`
+MOD_PATH=$PYLATTE_PATH/../
+export PYTHONPATH=$PYTHONPATH:$MOD_PATH
+export PYTHONWARNINGS="ignore:Unverified HTTPS request"
