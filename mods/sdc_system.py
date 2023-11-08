@@ -1,12 +1,18 @@
-"""coordinates
-Some functions to create and read coordinates
+"""system
+Some functions to create and read coordinates of chemical
  
-So far: Creates random coordinates; reads xyz and pdb file
+So far: Creates random coordinates, reads xyz and pdb file
 """
 import numpy as np
-import quippy as qp
-import chemcoord as chc
-import ase.io
+global aseLib
+try:
+    import ase1.io
+    aseLib = True
+except ImportError as e:
+    aseLib = False
+
+#import quippy as qp
+#import chemcoord as chc
 
 ## Chemical system type 
 # @brief To be used only when really needed! 
@@ -17,6 +23,8 @@ class system:
     def __init__(self):
         ## Number of atoms
         self.nats = 1 
+        ## Number of core atoms 
+        self.ncores = self.nats 
         ## Number of atom types 
         self.ntypes = 1 
         ## Type for each atom, e.g., the first atom is of type "types[0]"
@@ -219,6 +227,9 @@ def read_xyz_file(fileName,lib="None",verb=True):
             latticeVectors[2,2] = np.max(coords[:,2]) - np.min(coords[:,2])
     
     if(lib == "Ase"): #https://wiki.fysik.dtu.dk/ase/ase/atoms.html
+        if(aseLib == False):
+            print("\n ERROR: Consider installing ASE library (https://wiki.fysik.dtu.dk/ase/ase/atoms.html) \n")
+            exit(0)
         system = ase.io.read(fileName)
         coords = system.get_positions()
         symbols = [] #Symbols for each atom type
@@ -236,7 +247,6 @@ def read_xyz_file(fileName,lib="None",verb=True):
                 types[count] = typesIndex
             else:
                 types[count] = symbols.index(symb)
-
     if(verb):
         print("latticeVectors",latticeVectors)
         print("symbols",symbols)
