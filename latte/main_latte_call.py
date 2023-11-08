@@ -2,8 +2,8 @@
 
 import numpy as np
 from latte import *
-from coordinates import *
-from ptable import *
+from sdc_system import *
+from sdc_ptable import *
 
 
 ## General LATTE dm API call 
@@ -68,7 +68,7 @@ if(__name__ == '__main__'):
 
     myVerb = True
     #Read coordinates from pdb file 
-    box,symbols,types,coords = read_pdb_file("coords_300.pdb",lib="None",verb=myVerb)
+    box,symbols,types,coords = read_xyz_file("coords.xyz",lib="Ase",verb=myVerb)
 
     #Call latte to get the density matrix
     dm = get_latte_dm(box,symbols,types,coords)
