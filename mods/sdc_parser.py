@@ -18,6 +18,12 @@ class sdc_input:
         ## A tag for naming files. First argument is the key, the second is 
         # the default.
         self.tag = self.get_a_string("Tag=","myRun",keyVals,verb)
+        ## Coordinates file name
+        self.coordsFileName = self.get_a_string("CoordsFile=","coords.xyz",keyVals,verb)
+        ## Max degree for the grpah
+        self.maxDeg = self.get_an_int("MaxDeg=",100,keyVals,verb)
+        ## Radius cutoff
+        self.rcut = self.get_a_real("Rcut=",5.0,keyVals,verb)
         ## A threshold read from input 
         self.thresh = self.get_a_real("Threshold=",0.0,keyVals,verb)
         ## A field read from input 
@@ -81,7 +87,7 @@ class sdc_input:
     # @param deafult Default value in case it is not in the dict
     # @param keyVals A dictionary where values are list of characters after the key
     # 
-    def get_an_int(key,default,keyVals,verb=False):
+    def get_an_int(self,key,default,keyVals,verb=False):
         if(key in keyVals.keys()):
             myInt = int(keyVals[key][0])
         else:
@@ -95,7 +101,7 @@ class sdc_input:
     # @param deafult Default value in case it is not in the dict
     # @param keyVals A dictionary where values are list of characters after the key
     # 
-    def get_an_bool(key,keyVals):
+    def get_an_bool(self,key,default,keyVals,verb=False):
         if(key in keyVals.keys()):
             myBool = bool(keyVals[key][0])
         else:
