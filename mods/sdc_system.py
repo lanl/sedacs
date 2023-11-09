@@ -10,6 +10,7 @@ try:
     aseLib = True
 except ImportError as e:
     aseLib = False
+from sdc_out import *
 
 #import quippy as qp
 #import chemcoord as chc
@@ -138,6 +139,23 @@ def get_random_coordinates(length):
                 rnd = myrand.get_rand(-1.0,1.0)
                 coords[atomsCounter,2] = k*latticeParam + rnd
     return coords
+
+def read_coords_file(fileName,lib="None",verb=True):
+    """coords file main parser: Reads in an xyz/pdb file with lattice informations.
+    """
+    ext = fileName[len(fileName)-3:len(fileName)]
+    if(ext == "xyz"):
+        latticeVectors,symbols,types,coords = \
+            read_xyz_file(fileName,lib=lib,verb=False)
+    elif(ext == "pdb"):
+        latticeVectors,symbols,types,coords = \
+            read_pdb_file(fileName,lib=lib,verb=False)
+    else:
+        msg = ext+" not recognized .."
+        raise_error("read_coords_file",msg)
+
+    return latticeVectors,symbols,types,coords
+
 
 ## xyz file parser
 #  Reads in an xyz file with lattice informations.
@@ -309,7 +327,6 @@ def read_pdb_file(fileName,lib="None",verb=False):
                     paramGamma = float(linesSplit[6])
                     latticeVectors = parameters_to_vectors(paramA,paramB,paramC,paramAlpha, \
                             paramBeta,paramGamma,latticeVectors)
-                    print(latticeVectors)
                 else:
                     noBox = True
                 if((linesSplit[0] == "ATOM") or (linesSplit[0] == "HETATM")):

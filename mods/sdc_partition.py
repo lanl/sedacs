@@ -1,4 +1,6 @@
 
-def regular_partition(graph,sy,each,verb=False):
-   subSy = []
+
+def regular_partition(graph,each,verb=False):
+
+   part = 
 
