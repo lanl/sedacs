@@ -93,9 +93,14 @@ def metis_partition(graph,nparts,verb=False):
             print("part",i,"=",parts[i])
     return parts
 
-
-def get_coreHaloIndices(part,graph,njumps):
-    coreHalo = part
+## Get the core and halo indices
+# @brief Gets the halos given a list of cores and a graph
+# @param core list of cores 
+# @param graph Graph to extract the halos from
+# @param njumps It will search the halos among the "njumps" nearest neighbors
+#
+def get_coreHaloIndices(core,graph,njumps):
+    coreHalo = core
     nc = len(coreHalo)
     nch = nc
     nnodes = len(graph[:,0])
