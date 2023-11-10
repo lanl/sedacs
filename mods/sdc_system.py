@@ -5,15 +5,9 @@ So far: Creates random coordinates, reads xyz and pdb file
 """
 import numpy as np
 global aseLib
-try:
-    import ase1.io
-    aseLib = True
-except ImportError as e:
-    aseLib = False
+try: import ase1.io; aseLib = True
+except: aseLib = False
 from sdc_out import *
-
-#import quippy as qp
-#import chemcoord as chc
 
 ## Chemical system type 
 # @brief To be used only when really needed! 
@@ -303,7 +297,7 @@ def read_xyz_file(fileName,lib="None",verb=True):
 #
 def read_pdb_file(fileName,lib="None",verb=False):
     """Reads a pdb file"""
-    print("In read_pdb_file")
+    if(verb):print("\nIn read_pdb_file...\n")
     if(lib == "None"):
         fileIn = open(fileName,"r")
         count = 0

@@ -2,7 +2,9 @@
 
 Threshold= 1.0E-5
 CoordsFile= coords.pdb
-MaxDeg= 50 #Max graph degree
+MaxDeg= 20 #Max graph degree
 Rcut= 5.0 #Radius cutoff
+PartitionType= Regular
+NumParts= 4
 
 

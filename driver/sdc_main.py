@@ -24,11 +24,38 @@ sdc = sdc_input("input.in",True)
 latticeVectors,symbols,types,coords = \
         read_coords_file(sdc.coordsFileName,lib="None",verb=False)
 
-#Get initial graph (neighbor list)
+sy = system(); sy.coords = coords; sy.latticeVectors = latticeVectors
+sy.symbols = symbols; sy.types = types
+
+#Get initial graph (from a neighbor list)
 graph = get_initial_graph(coords,sdc.rcut,sdc.maxDeg,True)
+print_graph(graph)
+
+#Partition the graph 
+parts = partition(graph,sdc.partitionType,sdc.nparts,True)
+
+njumps = 1
+coreHalos,nc,nh = get_coreHaloIndices(parts[0],graph,njumps)
+
+print("coreHalos",coreHalos)
+
+
+#Get adjacency matrix
+#Initiate partition 
+#gp = Part()
+#gp.getGraph(ham,0.01)
+#gp.metis(nparts=2)
+#print(gp.parts)
+#print(gp.sizes)
+
+#gp.getCoreHalos(ham,True)
+
+#gp.printCoreHalos(1)
+
+#gp.getSubmats(ham)
 
 sy = system() 
-nxGraph = get_nx_graph(graph,1.0)
+#nxGraph = get_nx_graph(graph,1.0)
 #print_nx_graph(nxGraph)
 subSy = []
 subSy.append(sy)

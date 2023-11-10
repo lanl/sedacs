@@ -12,6 +12,7 @@ class sdc_input:
     """Simple input parser  
     """
     def __init__(self,fileName,verb=False):
+        if(verb):print("\nInput variables:")
         ## Keys and values read from the input file
         keyVals = self.get_all_vals(fileName)
 
@@ -20,8 +21,12 @@ class sdc_input:
         self.tag = self.get_a_string("Tag=","myRun",keyVals,verb)
         ## Coordinates file name
         self.coordsFileName = self.get_a_string("CoordsFile=","coords.xyz",keyVals,verb)
+        ## Coordinates file name
+        self.partitionType = self.get_a_string("PartitionType=","regular",keyVals,verb)
         ## Max degree for the grpah
         self.maxDeg = self.get_an_int("MaxDeg=",100,keyVals,verb)
+        ## Number of parts to perform graph partitioning
+        self.nparts = self.get_an_int("NumParts=",1,keyVals,verb)
         ## Radius cutoff
         self.rcut = self.get_a_real("Rcut=",5.0,keyVals,verb)
         ## A threshold read from input 
