@@ -134,7 +134,7 @@ contains
       x = mod((a*x+c),real(m))       
       y = mod((b*y+d),real(n))
       do j = i,hdim
-         dist = norm2(coords(:,i)-coords(:,j))
+        dist = norm2(coords(:,i)-coords(:,j))
         tmp = (x/real(m))*exp(-(y/real(n) + decay_min)*dist**2)
         H(i,j) = tmp
         H(j,i) = tmp
