@@ -34,10 +34,10 @@ int main(int argc, char *argv[])
       printf("%g\n",H[ofst + j]);
     }
   }
-  /*
+
   D = (double *)malloc(nats*nats*sizeof(double));
   nocc = (int)((double)nats/2.0);
-  get_densityMatrix(H, nocc, D, true);
+  get_densityMatrix(nats,H, nocc, D, true);
   printf("Density matrix:\n");
   for (i = 0; i < nats; i++) {
     size_t ofst = nats * i;
@@ -45,5 +45,4 @@ int main(int argc, char *argv[])
       printf("%g\n",D[ofst + j]);
     }
   }
-  */
 }

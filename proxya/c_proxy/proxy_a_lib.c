@@ -11,7 +11,7 @@
 
 */
 
-//#include<lapack.h>
+#include "lapacke.h"
 #include "proxy_a.h"
 
 /*
@@ -95,7 +95,7 @@ int get_random_coordinates(int nats, double *coords)
     for (j = 0; j < length; j++) {
       for (k = 0; k < length; k++) {
 	atomsCounter = atomsCounter + 1;
-	int ofst = (atomsCounter - 1) * 3;
+	size_t ofst = (atomsCounter - 1) * 3;
 	if (atomsCounter > nats) break;
 	rnd = proxy_rand(-1.,1.,0,false);
 	coords[ofst + 0] = i * latticeParam + rnd;
@@ -163,11 +163,11 @@ int get_hamiltonian(int nats, double *coords, int *atomTypes, double *H, bool ve
   if (verb) printf("Constructing a simple Hamiltonian for the full system\n");
   cnt = 0;
   for (i = 0; i < hdim; i++) {
-    int iofst = i * 3;
+    size_t iofst = i * 3;
     x = fmod((a * x + c), (double)m);
     y = fmod((b * y + d), (double)n);
     for (j = i; j < hdim; j++) {
-      int jofst = j * 3;
+      size_t jofst = j * 3;
       dist2 = 0.0;
       for (k = 0; k < 3; k++) {
 	dvec[k] = coords[iofst + k] - coords[jofst + k];
@@ -195,7 +195,59 @@ int get_hamiltonian(int nats, double *coords, int *atomTypes, double *H, bool ve
 
 */
 
-//int get_densityMatrix(int nats, double *H, int Nocc, double *D, bool verb)
-//{
-  
-//}
+int get_densityMatrix(int nats, double *H, int Nocc, double *D, bool verb)
+{
+  double
+    *Q,
+    *E,
+    mu,
+    *work;
+
+  int
+    info,
+    lwork,
+    i,
+    j,
+    k,
+    hdim,
+    homoIndex,
+    lumoIndex;
+
+  char
+    jobz = 'V',
+    uplo = 'U';
+
+  if (verb) printf("Computing the Density matrix");
+
+  hdim = nats;
+  lwork = 3*hdim - 1;
+
+  Q = (double *)malloc(hdim*hdim*sizeof(double));
+  work = (double *)malloc(lwork*sizeof(double));
+  E = (double *)malloc(hdim*sizeof(double));
+  memcpy(Q,H,hdim*hdim*sizeof(double));
+  info = LAPACKE_dsyev(LAPACK_COL_MAJOR,jobz,uplo,hdim,Q,hdim,E);
+  if (verb) {
+    printf("Eigenvalues:\n");
+    for (i = 0; i < hdim; i++) {
+      printf("%g\n",E[i]);
+    }
+    homoIndex = Nocc;
+    lumoIndex = Nocc + 1;
+    mu = 0.5*(E[homoIndex] + E[lumoIndex]);
+    memset(D,0,hdim*hdim*sizeof(double));
+    for (i = 0; i < hdim; i++) {
+      size_t iofst = i * hdim;
+      for (j = 0; j < hdim; j++) {
+	size_t jofst = j * hdim;
+	for (k = 0; k < hdim; k++) {
+	  if (E[k] < mu) {
+	    D[iofst + j] = D[iofst + j] + Q[iofst + k]*Q[jofst + k];
+	  }
+	}
+      }
+    }
+    if (verb) printf("Chemical potential = %g\n",mu);
+    return(0);
+  }
+}
