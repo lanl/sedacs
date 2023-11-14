@@ -73,7 +73,7 @@ contains
   !!
   subroutine get_random_coordinates(nats,coords)
     implicit none 
-    integer :: lenght,nats,ssize,length,atomsCounter
+    integer :: nats,ssize,length,atomsCounter
     integer :: i,j,k
     integer, allocatable :: seedin(:)
     real(dp), allocatable :: coords(:,:)
@@ -115,14 +115,14 @@ contains
   !
   subroutine get_hamiltonian(coords,atomTypes,H,verb)
     implicit none 
-    integer :: N,Nocc,m,hdim
+    integer :: n,Nocc,m,hdim
     logical, intent(in) :: verb
     real(dp), allocatable :: xx(:)
     real(dp), allocatable, intent(in) :: coords(:,:)
     integer, allocatable, intent(in) :: atomTypes(:)
     real(dp), allocatable, intent(out) :: H(:,:) 
     real(dp) :: a,c,x,b,d,y,tmp,dist,eps,decay_min
-    integer :: i,j,cnt
+    integer :: i,j,k,cnt
 
     hdim = size(coords,dim=2); Nocc = int(real(hdim)/4.0); eps = 1e-9; decay_min = 0.1; m = 78;
     a = 3.817632; c = 0.816371; x = 1.029769; n = 13;
@@ -135,7 +135,7 @@ contains
       y = mod((b*y+d),real(n))
       do j = i,hdim
         dist = norm2(coords(:,i)-coords(:,j))
-        tmp = (x/m)*exp(-(y/n + decay_min)*(dist**2))
+        tmp = (x/real(m))*exp(-(y/real(n) + decay_min)*dist**2)
         H(i,j) = tmp
         H(j,i) = tmp
       enddo
