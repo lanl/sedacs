@@ -16,28 +16,56 @@ from sdc_partition import *
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
+numranks = comm.Get_size()
 
 #Initialize the code by reading the input file
 sdc = sdc_input("input.in",True)
 
 #Read the coordinates
-latticeVectors,symbols,types,coords = \
-        read_coords_file(sdc.coordsFileName,lib="None",verb=False)
+print("1")
+sy = system(1)
+sy.latticeVectors,sy.symbols,sy.types,sy.coords = \
+        read_coords_file(sdc.coordsFileName,lib="None",verb=True)
+sy.nats = len(sy.coords[:,0])
+print("2")
 
-sy = system(); sy.coords = coords; sy.latticeVectors = latticeVectors
-sy.symbols = symbols; sy.types = types
+nl,nlTrx,nlTry,nlTrz = build_nlist(sy.coords,sy.latticeVectors,5.0,rank=rank,numranks=numranks,verb=False)
+
+#Get the neighbors of atom 1234 
+subSy = system(nl[1234,0])
+subSy.symbols = sy.symbols
+subSy.coords,subSy.types = extract_subsystem(sy.coords,sy.types,sy.symbols,nl[1234,1:nl[1234,0]])
+write_pdb_coordinates("subSy.pdb",subSy.coords,subSy.types,subSy.symbols)
+exit(0)
 
 #Get initial graph (from a neighbor list)
-graph = get_initial_graph(coords,sdc.rcut,sdc.maxDeg,True)
+graph = get_initial_graph(sy.coords,sdc.rcut,sdc.maxDeg,True)
 print_graph(graph)
 
+print("3")
 #Partition the graph 
 parts = partition(graph,sdc.partitionType,sdc.nparts,True)
 
 njumps = 1
-coreHalos,nc,nh = get_coreHaloIndices(parts[0],graph,njumps)
+partsCoreHalo = []
+numCores = []
 
-print("coreHalos",coreHalos)
+print("\nCore and halos indices for every part:")
+for i in range(sdc.nparts):
+    coreHalo,nc,nh = get_coreHaloIndices(parts[i],graph,njumps)
+    partsCoreHalo.append(coreHalo)
+    numCores.append(nc)
+    print("coreHalo for part",i,"=",coreHalo)
+
+## Every rank will do a subset of the list of coreHalos
+# @todo We will need to "reshuffle" the list so that the work-load 
+# gets distributed. 
+
+subSy = system(len(partsCoreHalo[1]))
+subSy.symbols = sy.symbols
+subSy.coords,subSy.types = extract_subsystem(sy.coords,sy.types,sy.symbols,partsCoreHalo[1])
+
+write_pdb_coordinates("subSy.pdb",subSy.coords,subSy.types,subSy.symbols)
 
 
 #Get adjacency matrix
@@ -54,7 +82,7 @@ print("coreHalos",coreHalos)
 
 #gp.getSubmats(ham)
 
-sy = system() 
+sy = system(3) 
 #nxGraph = get_nx_graph(graph,1.0)
 #print_nx_graph(nxGraph)
 subSy = []

@@ -1,3 +1,7 @@
+"""grap
+Some graph functions
+ 
+"""
 import numpy as np
 global nxLib
 try:
@@ -9,6 +13,51 @@ global pltLib
 try: import matplotlib.pyplot as plt ; pltLib = True
 except: pltLib = False
 
+
+## Get an initial graph based on distance
+# @brief This will give a graph based on distaces. Similar to
+# a neighbor list.
+# @param coords System coordinates
+# @param radius Radius Cutoff to search for the neighbors
+# @param maxDeg Max degrees allowed for each none
+# @param verb Verbosity mode
+# @return graph The graph consisting on a 2D integer numpy array. 
+# E.g, graph[i,k] is the kth neighbor of node i
+#
+def get_initial_graph(coords,radius,maxDeg,verb=False):
+    nats = len(coords[:,0])
+    graph = np.zeros((nats,maxDeg),dtype=int)
+    graph[:,:] = -1
+    for i in range(nats):
+        ik = -1
+        print("atom",i)
+        for j in range(nats):
+            distance = np.linalg.norm(coords[i,:] - coords[j,:])
+            if(distance < radius):
+                ik = ik + 1
+                if(ik < maxDeg):
+                    graph[i,ik] = j
+                else:
+                    print("WARNING: at get_initial_graph. maxDeg exceeded. Consider increasing this number")
+                    break
+
+    return graph
+
+## Print graph
+# @brief Print the graph by showing the connection of every node.
+# @param graph The graph consisting on a 2D numpy array. 
+# E.g, graph[i,k] is the kth neighbor of node i. 
+#
+def print_graph(graph):
+    nnodes = len(graph[:,0])
+    mDeg = len(graph[0,:])
+    print("\nGraph structure:")
+    for i in range(nnodes):
+        nodesList = []
+        for k in range(mDeg):
+            if(graph[i,k] != -1):
+                nodesList.append(graph[i,k])
+        print(i,"-",nodesList)
 
 ## Get a networkX graph
 # @param graph The graph in 2D numpy array where graph[i,k] is the kth neighbor
@@ -50,34 +99,3 @@ def plot_nx_graph(nxGraph,nodeColor='r'):
     plt.savefig("graph.png", dpi=400)
     plt.show()
 
-## Get an initial graph based on distance
-# @brief This will give a graph based on distaces. Similar to 
-# a neighbor list. 
-# @param coords System coordinates
-# @param radius Radius Cutoff to search for the neighbors
-# @param maxDeg Max degrees allowed for each none
-# 
-def get_initial_graph(coords,radius,maxDeg,verb=False):
-    nats = len(coords[:,0])
-    graph = np.zeros((nats,maxDeg),dtype=int)
-    graph[:,:] = -1
-    for i in range(nats):
-        ik = -1
-        for j in range(nats):
-            distance = np.linalg.norm(coords[i,:] - coords[j,:])
-            if(distance < radius):
-                ik = ik + 1
-                graph[i,ik] = j
-
-    return graph
-
-def print_graph(graph):
-    nnodes = len(graph[:,0])
-    mDeg = len(graph[0,:])
-    print("\nGraph structure:")
-    for i in range(nnodes):
-        nodesList = []
-        for k in range(mDeg):
-            if(graph[i,k] != -1):
-                nodesList.append(graph[i,k])
-        print(i,"-",nodesList)
