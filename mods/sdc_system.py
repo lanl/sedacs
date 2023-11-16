@@ -8,7 +8,7 @@ import numpy as np
 global aseLib
 try: import ase1.io; aseLib = True
 except: aseLib = False
-from sdc_out import *
+#from sdc_out import *
 try:
     from mpi4py import MPI
     mpiLib = True
