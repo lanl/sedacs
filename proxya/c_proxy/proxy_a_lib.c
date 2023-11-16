@@ -11,8 +11,8 @@
 
 */
 
-#include "lapacke.h"
 #include "proxy_a.h"
+#include "lapack.h"
 
 /*
   Simple random number generator
@@ -226,7 +226,7 @@ int get_densityMatrix(int nats, double *H, int Nocc, double *D, bool verb)
   work = (double *)malloc(lwork*sizeof(double));
   E = (double *)malloc(hdim*sizeof(double));
   memcpy(Q,H,hdim*hdim*sizeof(double));
-  info = LAPACKE_dsyev(LAPACK_COL_MAJOR,jobz,uplo,hdim,Q,hdim,E);
+  LAPACK_dsyev(&jobz,&uplo,&hdim,Q,&hdim,E,work,&lwork,&info);
   if (verb) {
     printf("Eigenvalues:\n");
     for (i = 0; i < hdim; i++) {
