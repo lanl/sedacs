@@ -6,6 +6,7 @@
 from sdc_parser import *
 from sdc_system import *
 from proxy_a import *
+import time
 try:
     from mpi4py import MPI
     mpi = True
@@ -22,14 +23,17 @@ numranks = comm.Get_size()
 sdc = sdc_input("input.in",True)
 
 #Read the coordinates
-print("1")
 sy = system(1)
 sy.latticeVectors,sy.symbols,sy.types,sy.coords = \
         read_coords_file(sdc.coordsFileName,lib="None",verb=True)
 sy.nats = len(sy.coords[:,0])
-print("2")
 
-nl,nlTrx,nlTry,nlTrz = build_nlist(sy.coords,sy.latticeVectors,5.0,rank=rank,numranks=numranks,verb=False)
+tic = time.perf_counter()
+nl,nlTrx,nlTry,nlTrz = build_nlist(sy.coords,sy.latticeVectors,sdc.rcut,rank=rank,numranks=numranks,verb=False)
+comm.Barrier()
+toc = time.perf_counter()
+print("Time for build_nlist", toc - tic,"(s)")
+exit(0)
 
 #Get the neighbors of atom 1234 
 subSy = system(nl[1234,0])

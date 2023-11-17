@@ -17,6 +17,7 @@ except ImportError as e:
 from multiprocessing import Pool
 if(mpiLib): 
     from sdc_mpi import * 
+import time
 
 ## Chemical system type 
 # @brief To be used only when really needed! 
@@ -34,7 +35,10 @@ class system:
         ## Type for each atom, e.g., the first atom is of type "types[0]"
         self.types = np.zeros(self.nats,dtype=int) 
         ## Coordinates for each atom, e.g., z-coordinate of the frist atom is coords[0,2]
-        self.coords = np.zeros((self.nats,3)) 
+        self.coords = np.zeros((self.nats,3))
+        ## LatticeVectors. 3x3 matrix containing the lattice vectors for the simulation box.
+        # latticeVectors[1,:] = first lattice vector.
+        self.latticeVectors = np.zeros((3,3))
         ## Symbols for each atom type, e.g, the element symbol of the first atom is symbols[types[0]] 
         self.symbols = ["Bl"] * self.ntypes 
 
@@ -455,7 +459,6 @@ def get_volBox(latticeVectors,verb=False):
 # @param rank MPI rank
 #
 def build_nlist(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
-
     if(verb): print("Building neighbor list ...")
     
     mpiON = False
@@ -475,13 +478,35 @@ def build_nlist(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
     volBox = get_volBox(latticeVectors,verb=False)
     density = 1.0
     maxneigh = int(3.14592 * (4.0/3.0) * density * rcut**3)
+    #maxneigh = int(27*density * rcut**3)
 
     #We assume the box is orthogonal
-    nx = 1 + int(latticeVectors[0,0]/(2.0*rcut))
-    ny = 1 + int(latticeVectors[1,1]/(2.0*rcut))
-    nz = 1 + int(latticeVectors[2,2]/(2.0*rcut))
+    maxx = np.max(coords[:,0])
+    maxy = np.max(coords[:,1])
+    maxz = np.max(coords[:,2])
+    minx = np.min(coords[:,0])
+    miny = np.min(coords[:,1])
+    minz = np.min(coords[:,2])
+    
+    smallReal = 0.1 #To ensure the borders are contained in the limiting boxes
+
+    nx =  int((maxx - minx)/(rcut))
+    ny =  int((maxy - miny)/(rcut))
+    nz =  int((maxz - minz)/(rcut))
+    dx = (maxx - minx + smallReal)/float(nx)
+    dy = (maxy - miny + smallReal)/float(ny) 
+    dz = (maxz - minz + smallReal)/float(nz)
+    #nx = nx + 1; ny = ny + 1; nz = nz + 1
+    #nx = 1 + int((maxx - minx)/(dx))
+    #ny = 1 + int((maxy - miny)/(dy))
+    #nz = 1 + int((maxz - minz)/(dz))
+
+    ix =  int((maxx - minx + smallReal)/(dx)) #small box x-index of atom i
+    iy =  int((maxy - miny + smallReal)/(dy)) #small box y-index 
+    iz =  int((maxz - minz + smallReal)/(dz)) #small box z-index
+
     nBox = nx*ny*nz
-    maxInBox = int(density*(2.0*rcut)**3) #Upper bound for the max number of atoms per box
+    maxInBox = int(density*(rcut)**3) #Upper bound for the max number of atoms per box
     inbox = np.zeros((nBox,maxInBox),dtype=int)
     inbox[:,:] = -1
     totPerBox = np.zeros((nBox),dtype=int)
@@ -492,19 +517,15 @@ def build_nlist(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
     zBox = np.zeros((nBox),dtype=int)
     ithFromXYZ = np.zeros((nx,ny,nz),dtype=int)
 
-    minx = np.min(coords[:,0])
-    miny = np.min(coords[:,1])
-    minz = np.min(coords[:,2])
 
-    smallReal = 0.0
     #Search for the box coordinate and index of every atom
 
     for i in range(nats):
         #Index every atom respect to the discretized position on the simulation box.
         #tranlation = coords[i,:] - origin !For the general case we need to make sure coords are > 0
-        ix =  int((coords[i,0] - minx + smallReal)/(2.0*rcut)) #small box x-index of atom i
-        iy =  int((coords[i,1] - miny + smallReal)/(2.0*rcut)) #small box y-index 
-        iz =  int((coords[i,2] - minz + smallReal)/(2.0*rcut)) #small box z-index
+        ix =  int((coords[i,0] - minx )/(dx)) #small box x-index of atom i
+        iy =  int((coords[i,1] - miny )/(dy)) #small box y-index 
+        iz =  int((coords[i,2] - minz )/(dz)) #small box z-index
 
         if(ix > nx or ix < 0): print("Error in box index"); exit(0)
         if(iy > ny or iy < 0): print("Error in box index"); exit(0) 
@@ -514,6 +535,7 @@ def build_nlist(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
         boxOfI[i] = ith
 
         #From index to box coordinates
+        #print("ith",ith,nBox,ix,iy,iz,nx,ny)
         xBox[ith] = ix
         yBox[ith] = iy
         zBox[ith] = iz
@@ -525,65 +547,87 @@ def build_nlist(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
         if(totPerBox[ith] >= maxInBox): 
             print("Exceeding the max in box allowed")
             exit(0)
-        inbox[ith,totPerBox[ith]] = i #Who is in both ith
-    print(inbox[boxOfI[0],:],totPerBox[0],boxOfI[0],0)
+        inbox[ith,totPerBox[ith]] = i #Who is in box ith
+
+    for i in range(nBox): #Correcting - from indexing to 
+        totPerBox[i] = totPerBox[i] + 1
+
+    rcut2 = rcut*rcut
 
     #For each atom we will look around to see who are its neighbors
-
     def get_neighs_of(i,boxOfI,ithFromXYZ,inbox,latticeVectors):    
         nlVect = np.zeros((maxneigh),dtype=int)
         nlTrVectX = np.zeros((maxneigh),dtype=int)
         nlTrVectY = np.zeros((maxneigh),dtype=int)
         nlTrVectZ = np.zeros((maxneigh),dtype=int)
-        #print("atom",i)
+        translation = np.zeros((3))
         cnt = -1
         #Which box it beongs to
         ibox = boxOfI[i]
         #Look inside the box and the neighboring boxes
+        xBoxIbox = xBox[ibox] ; yBoxIbox = yBox[ibox] ; zBoxIbox = zBox[ibox]
         for ix in range(-1,2):
             for iy in range(-1,2):
                 for iz in range(-1,2):
                     #Get neigh box coordinate
-                    jxBox = xBox[ibox] + ix
-                    jyBox = yBox[ibox] + iy
-                    jzBox = zBox[ibox] + iz
-                    tx = 0.0 ; ty = 0.0 ; tz = 0.0
+                    jxBox = xBoxIbox + ix
+                    jyBox = yBoxIbox + iy
+                    jzBox = zBoxIbox + iz
+                    tx = 0.0 ; ty = 0.0 ; tz = 0.0 ; tr = False
                     if(jxBox < 0):
                         jxBox = nx-1
                         tx = -1
+                        tr = True
                     elif(jxBox == nx):
                         jxBox = 0
                         tx = 1
+                        tr = True
                     if(jyBox < 0):
                         jyBox = ny-1
                         ty = -1
+                        tr = True
                     elif(jyBox == ny):
                         jyBox = 0
                         ty = 1
+                        tr = True
                     if(jzBox < 0):
                         jzBox = nz-1
                         tz = -1
+                        tr = True
                     elif(jzBox == nz):
                         jzBox = 0
                         tz = 1
+                        tr = True
                     
                     #Get the neigh box index
                     jbox = ithFromXYZ[jxBox,jyBox,jzBox]
-                    #Now loop over the atoms in the jbox
-                    for j in range(totPerBox[jbox]):
-                        jj = inbox[jbox,j] #Get atoms in box j
+                    if (tr):
                         translation = tx*latticeVectors[0,:] + ty*latticeVectors[1,:] + tz*latticeVectors[2,:]
-                        coordsNeigh = coords[jj,:] + translation
-                        distance = np.linalg.norm(coords[i,:] - coordsNeigh)
-                        if ((distance < rcut) and (distance > 1.0E-12)):
-                        #if (True == True):
-                            cnt = cnt + 1
-                            nlVect[cnt] = jj # jj is a neighbor of i by some translation
-                            nlTrVectX[cnt] = tx
-                            nlTrVectY[cnt] = ty
-                            nlTrVectZ[cnt] = tz
-        nlVect[0] = cnt
+                    else:
+                        translation[:] = 0.0
 
+                    empty = False
+
+                    if(empty):
+                        pass
+                    else:
+                        #Now loop over the atoms in the jbox
+                        for j in range(totPerBox[jbox]):
+                            jj = inbox[jbox,j] #Get atoms in box j
+                            if(tr):
+                                coordsNeigh = coords[jj,:] + translation
+                            else:
+                                coordsNeigh = coords[jj,:] 
+                            distance = (coords[i,0] - coordsNeigh[0])**2 + \
+                                    (coords[i,1] - coordsNeigh[1])**2 + \
+                                    (coords[i,2] - coordsNeigh[2])**2
+                            if ((distance < rcut2) and (distance > 1.0E-12)):
+                                cnt = cnt + 1
+                                nlVect[cnt] = jj # jj is a neighbor of i by some translation
+                                nlTrVectX[cnt] = tx
+                                nlTrVectY[cnt] = ty
+                                nlTrVectZ[cnt] = tz
+        nlVect[0] = cnt
         return(nlVect,nlTrVectX,nlTrVectY,nlTrVectZ)
 
     nlChunk = np.empty([natsInRank,maxneigh],dtype=int)
@@ -617,23 +661,9 @@ def build_nlist(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
 
     if rank == 0:
         for kk in range(nats):
-            print("nl",nl[kk,0:5])
+            print("Neighs of",kk,"=",nl[kk,1:100])
     
-    #comm.Allgather(nlChunk,nl)
-    #comm.Allgather(nlTrChunkX,nlTrX)
-    #comm.Allgather(nlTrChunkY,nlTrY)
-    #comm.Allgather(nlTrChunkZ,nlTrZ)
-
     return(nl,nlTrX,nlTrY,nlTrZ)
-
-#def send_and_receive(dataSend,fromRank,toRank,rank,comm):
-#    dataRecv = None
-#    if rank == fromRank:
-#        comm.Send(dataSend, dest=toRank, tag=77)
-#    elif rank == toRank:
-#        dataRecv = np.empty((len(dataSend[:,0]), len(dataSend[0,:])), dtype='i')
-#        comm.Recv(dataRecv, source=fromRank, tag=77)
-#    return dataRecv
 
 
 
