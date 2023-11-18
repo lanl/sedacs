@@ -51,16 +51,18 @@ sy.latticeVectors,sy.symbols,sy.types,sy.coords = \
 sy.nats = len(sy.coords[:,0])
 
 tic = time.perf_counter()
-nl,nlTrx,nlTry,nlTrz = build_nlist(sy.coords,sy.latticeVectors,sdc.rcut,rank=rank,numranks=numranks,verb=False)
-comm.Barrier()
-toc = time.perf_counter()
-print("Time for build_nlist", toc - tic,"(s)")
-exit(0)
 if args.use_torch:
     nl = build_nlist_torch(sy.coords,sy.latticeVectors,5.0,rank=rank,numranks=numranks,verb=False)
 else:    
     nl,nlTrX,nlTrY,nlTrZ = build_nlist(sy.coords,sy.latticeVectors,5.0,rank=rank,numranks=numranks,verb=False)
-
+comm.Barrier()
+toc = time.perf_counter()
+print("Time for build_nlist", toc - tic,"(s)")
+if rank == 0:
+    with open('neighborinfo.txt','w') as of:
+        for kk in range(sy.nats):
+            print("Neighs (x-coords) of {} = ".format(kk),nl[kk,1:nl[kk,0]],"(",sy.coords[nl[kk,1:nl[kk,0]],0],")",file=of)
+exit(0)
 #Get the neighbors of atom 1234 
 subSy = system(nl[1234,0])
 subSy.symbols = sy.symbols

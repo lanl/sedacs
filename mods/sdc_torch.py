@@ -159,10 +159,6 @@ def build_nlist_torch(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
     else:
         nl = nlChunk
 
-    if rank == 0:
-        for kk in range(nats):
-            print("Neighs (x-coords) of {} = ".format(kk),nl[kk,1:nl[kk,0]],"(",coords[nl[kk,1:nl[kk,0]],0],")")
-    
     #comm.Allgather(nlChunk,nl)
     #comm.Allgather(nlTrChunkX,nlTrX)
     #comm.Allgather(nlTrChunkY,nlTrY)
