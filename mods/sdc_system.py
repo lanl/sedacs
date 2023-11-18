@@ -661,7 +661,7 @@ def build_nlist(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
 
     if rank == 0:
         for kk in range(nats):
-            print("Neighs of",kk,"=",nl[kk,1:100])
+            print("Neighs (x-coords) of {} = ".format(kk),nl[kk,1:nl[kk,0]],"(",coords[nl[kk,1:nl[kk,0]],0],")")
     
     return(nl,nlTrX,nlTrY,nlTrZ)
 

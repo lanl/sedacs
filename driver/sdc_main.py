@@ -57,9 +57,9 @@ toc = time.perf_counter()
 print("Time for build_nlist", toc - tic,"(s)")
 exit(0)
 if args.use_torch:
-    nl,nlTrx,nlTry,nlTrz = build_nlist_torch(sy.coords,sy.latticeVectors,5.0,rank=rank,numranks=numranks,verb=False)
+    nl = build_nlist_torch(sy.coords,sy.latticeVectors,5.0,rank=rank,numranks=numranks,verb=False)
 else:    
-    nl,nlTrx,nlTry,nlTrz = build_nlist(sy.coords,sy.latticeVectors,5.0,rank=rank,numranks=numranks,verb=False)
+    nl,nlTrX,nlTrY,nlTrZ = build_nlist(sy.coords,sy.latticeVectors,5.0,rank=rank,numranks=numranks,verb=False)
 
 #Get the neighbors of atom 1234 
 subSy = system(nl[1234,0])
