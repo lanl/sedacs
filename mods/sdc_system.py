@@ -659,10 +659,6 @@ def build_nlist(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
         nlTrY = nlTrChunkY
         nlTrZ = nlTrChunkZ
 
-    if rank == 0:
-        for kk in range(nats):
-            print("Neighs of",kk,"=",nl[kk,1:100])
-    
     return(nl,nlTrX,nlTrY,nlTrZ)
 
 
