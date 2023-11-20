@@ -478,7 +478,6 @@ def build_nlist(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
     volBox = get_volBox(latticeVectors,verb=False)
     density = 1.0
     maxneigh = int(3.14592 * (4.0/3.0) * density * rcut**3)
-    #maxneigh = int(27*density * rcut**3)
 
     #We assume the box is orthogonal
     maxx = np.max(coords[:,0])
@@ -496,10 +495,6 @@ def build_nlist(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
     dx = (maxx - minx + smallReal)/float(nx)
     dy = (maxy - miny + smallReal)/float(ny) 
     dz = (maxz - minz + smallReal)/float(nz)
-    #nx = nx + 1; ny = ny + 1; nz = nz + 1
-    #nx = 1 + int((maxx - minx)/(dx))
-    #ny = 1 + int((maxy - miny)/(dy))
-    #nz = 1 + int((maxz - minz)/(dz))
 
     ix =  int((maxx - minx + smallReal)/(dx)) #small box x-index of atom i
     iy =  int((maxy - miny + smallReal)/(dy)) #small box y-index 
@@ -517,9 +512,7 @@ def build_nlist(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
     zBox = np.zeros((nBox),dtype=int)
     ithFromXYZ = np.zeros((nx,ny,nz),dtype=int)
 
-
     #Search for the box coordinate and index of every atom
-
     for i in range(nats):
         #Index every atom respect to the discretized position on the simulation box.
         #tranlation = coords[i,:] - origin !For the general case we need to make sure coords are > 0
@@ -606,27 +599,22 @@ def build_nlist(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
                     else:
                         translation[:] = 0.0
 
-                    empty = False
-
-                    if(empty):
-                        pass
-                    else:
-                        #Now loop over the atoms in the jbox
-                        for j in range(totPerBox[jbox]):
-                            jj = inbox[jbox,j] #Get atoms in box j
-                            if(tr):
-                                coordsNeigh = coords[jj,:] + translation
-                            else:
-                                coordsNeigh = coords[jj,:] 
-                            distance = (coords[i,0] - coordsNeigh[0])**2 + \
-                                    (coords[i,1] - coordsNeigh[1])**2 + \
-                                    (coords[i,2] - coordsNeigh[2])**2
-                            if ((distance < rcut2) and (distance > 1.0E-12)):
-                                cnt = cnt + 1
-                                nlVect[cnt] = jj # jj is a neighbor of i by some translation
-                                nlTrVectX[cnt] = tx
-                                nlTrVectY[cnt] = ty
-                                nlTrVectZ[cnt] = tz
+                    #Now loop over the atoms in the jbox
+                    for j in range(totPerBox[jbox]):
+                        jj = inbox[jbox,j] #Get atoms in box j
+                        if(tr):
+                            coordsNeigh = coords[jj,:] + translation
+                        else:
+                            coordsNeigh = coords[jj,:] 
+                        distance = (coords[i,0] - coordsNeigh[0])**2 + \
+                                (coords[i,1] - coordsNeigh[1])**2 + \
+                                (coords[i,2] - coordsNeigh[2])**2
+                        if ((distance < rcut2) and (distance > 1.0E-12)):
+                            cnt = cnt + 1
+                            nlVect[cnt] = jj # jj is a neighbor of i by some translation
+                            nlTrVectX[cnt] = tx
+                            nlTrVectY[cnt] = ty
+                            nlTrVectZ[cnt] = tz
         nlVect[0] = cnt
         return(nlVect,nlTrVectX,nlTrVectY,nlTrVectZ)
 
