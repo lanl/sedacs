@@ -1,6 +1,8 @@
 # Pytorch kernels
 
 from sdc_system import *
+import torch as tc
+import torch.nn.functional as tf
 
 ## Neighbor list 
 # @brief It will bild a neighbor list using an "all to all" approach
@@ -37,14 +39,14 @@ def build_nlist_torch(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
     volBox = get_volBox(latticeVectors,verb=False)
     density = 1.0
     maxneigh = int(3.14592 * (4.0/3.0) * density * rcut**3)
-    boxSize = 2.*rcut
+    boxSize = rcut
 
     #We assume the box is orthogonal
-    nx = int(np.heaviside(latticeVectors[0,0]%boxSize,0)) + int(latticeVectors[0,0]/boxSize)
-    ny = int(np.heaviside(latticeVectors[1,1]%boxSize,0)) + int(latticeVectors[1,1]/boxSize)
-    nz = int(np.heaviside(latticeVectors[2,2]%boxSize,0)) + int(latticeVectors[2,2]/boxSize)
+    nx = int(latticeVectors[0,0]/boxSize)
+    ny = int(latticeVectors[1,1]/boxSize)
+    nz = int(latticeVectors[2,2]/boxSize)
     nBox = nx*ny*nz
-    maxInBox = int(density*(2.0*rcut)**3) #Upper bound for the max number of atoms per box
+    maxInBox = int(density*(boxSize)**3) #Upper bound for the max number of atoms per box
     inbox = np.zeros((nBox,maxInBox),dtype=int)
     inbox[:,:] = -1
     totPerBox = np.zeros((nBox),dtype=int)
@@ -68,8 +70,6 @@ def build_nlist_torch(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
         ix =  int(coords[i,0]/boxSize) % nx #small box x-index of atom i
         iy =  int(coords[i,1]/boxSize) % ny #small box x-index of atom i
         iz =  int(coords[i,2]/boxSize) % nz #small box x-index of atom i
-        if (i == 100):
-            print(ix,iy,iz)
 #        ix =  int((coords[i,0] - minx + smallReal)/(2.0*rcut)) #small box x-index of atom i
 #        iy =  int((coords[i,1] - miny + smallReal)/(2.0*rcut)) #small box y-index 
 #        iz =  int((coords[i,2] - minz + smallReal)/(2.0*rcut)) #small box z-index
@@ -133,7 +133,7 @@ def build_nlist_torch(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
             dvec[:,k] = (coords[i,k] - coords[boxneighs[:],k] + latticeVectors[k,k]/2.) % latticeVectors[k,k] \
                 - latticeVectors[k,k]/2.
         distance = np.array(np.linalg.norm(dvec,axis=1))
-        nlVect = np.where(np.logical_and(distance < rcut,distance > 1.0E-12))[0]
+        nlVect = boxneighs[np.where(np.logical_and(distance < rcut,distance > 1.0E-12))[0]]
 
         cnt = len(nlVect)
         nlVect = np.pad(nlVect,(1,maxneigh-cnt-1),'constant',constant_values=(cnt,0))

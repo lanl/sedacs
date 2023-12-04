@@ -25,7 +25,8 @@ do
     echo "$sdc_input" > tmp
     echo "$sdc_input" 
     sed 's/CoordsFile=.*/CoordsFile= '$coordsFile'/g' tmp > input.in
-    /usr/bin/mpirun -np $numranks /usr/bin/python3 sdc_main_nl_test.py | tee  out$coordsSize$numranks
+    PYTHONPATH="../mods:../proxya/python_proxy" mpirun -np $numranks python sdc_main_nl_test.py --use-torch | tee  out$coordsSize$numranks
+#    PYTHONPATH="../mods:../proxya/python_proxy" mpirun -np $numranks python sdc_main_nl_test.py | tee  out$coordsSize$numranks
     time=`grep -e $tag out$coordsSize$numranks | head -1 | awk '{print $4}'`
     echo $coordsSize $time >> $fileout
   done
