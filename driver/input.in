@@ -1,3 +1,11 @@
-Threshold= 1.0E-5 
- CoordsFile= coords_2955.pdb
- Rcut= 5.0 
+#Input file for SEDACS
+
+Threshold= 1.0E-5
+#CoordsFile= coords.pdb
+CoordsFile= coords_2955.pdb
+MaxDeg= 200 #Max graph degree
+Rcut= 5.0 #Radius cutoff
+PartitionType= Regular
+NumParts= 4
+
+
