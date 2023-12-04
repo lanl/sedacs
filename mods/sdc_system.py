@@ -1,8 +1,8 @@
 """system
-Some functions to create and read coordinates of a chemical system
+Some functions to create, read, and manupulate coordinates of a chemical system
  
 So far: Creates random coordinates; reads and writes xyz and pdb files;
-creates neighbor list.
+creates a neighbor list.
 """
 import numpy as np
 global aseLib
@@ -146,6 +146,11 @@ def get_random_coordinates(length):
                 rnd = myrand.get_rand(-1.0,1.0)
                 coords[atomsCounter,2] = k*latticeParam + rnd
     return coords
+
+
+## Coordinates main reader
+# @brief This will read the coodinates of a chemical system (so far only xyz and pdb 
+# are available.
 
 def read_coords_file(fileName,lib="None",verb=True):
     """coords file main parser: Reads in an xyz/pdb file with lattice informations.
@@ -489,6 +494,19 @@ def build_nlist(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
     
     smallReal = 0.1 #To ensure the borders are contained in the limiting boxes
 
+    #This part is for trying integer discretization of the coordinates
+    dr = 0.1 #Discretization param 
+    cx = np.zeros((nats),dtype=int)
+    cy = np.zeros((nats),dtype=int)
+    cz = np.zeros((nats),dtype=int)
+    lx = latticeVectors[0,0]/dr
+    ly = latticeVectors[1,1]/dr
+    lz = latticeVectors[2,2]/dr
+    for i in range(nats):
+        cx[i] = int(coords[i,0]/dr)
+        cy[i] = int(coords[i,1]/dr)
+        cz[i] = int(coords[i,2]/dr)
+
     nx =  int((maxx - minx)/(rcut))
     ny =  int((maxy - miny)/(rcut))
     nz =  int((maxz - minz)/(rcut))
@@ -594,21 +612,33 @@ def build_nlist(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
                     
                     #Get the neigh box index
                     jbox = ithFromXYZ[jxBox,jyBox,jzBox]
-                    if (tr):
-                        translation = tx*latticeVectors[0,:] + ty*latticeVectors[1,:] + tz*latticeVectors[2,:]
-                    else:
-                        translation[:] = 0.0
-
+                    #if (tr):
+                    #    translation = tx*latticeVectors[0,:] + ty*latticeVectors[1,:] + tz*latticeVectors[2,:]
+                    #else:
+                    #    translation[:] = 0.0
+                    
+                    trlx = tx*lx 
+                    trly = ty*ly
+                    trlz = tz*lz 
                     #Now loop over the atoms in the jbox
                     for j in range(totPerBox[jbox]):
                         jj = inbox[jbox,j] #Get atoms in box j
                         if(tr):
-                            coordsNeigh = coords[jj,:] + translation
+                          #  coordsNeigh = coords[jj,:] + translation
+                            cnx = cx[jj] + trlx
+                            cny = cy[jj] + trly     
+                            cnz = cz[jj] + trlz     
                         else:
-                            coordsNeigh = coords[jj,:] 
-                        distance = (coords[i,0] - coordsNeigh[0])**2 + \
-                                (coords[i,1] - coordsNeigh[1])**2 + \
-                                (coords[i,2] - coordsNeigh[2])**2
+                           # coordsNeigh = coords[jj,:] 
+                            cnx = cx[jj] ; cny = cy[jj] ; cnz = cz[jj]
+
+                        #distance = (coords[i,0] - coordsNeigh[0])**2 + \
+                        #        (coords[i,1] - coordsNeigh[1])**2 + \
+                        #        (coords[i,2] - coordsNeigh[2])**2
+
+                        distance = float((cx[i] - cnx)**2 + (cy[i] - cny)**2 \
+                                + (cz[i] - cnz)**2) * dr**2
+
                         if ((distance < rcut2) and (distance > 1.0E-12)):
                             cnt = cnt + 1
                             nlVect[cnt] = jj # jj is a neighbor of i by some translation
