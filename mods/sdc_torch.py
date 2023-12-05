@@ -56,6 +56,7 @@ def build_nlist_torch(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
     yBox = np.zeros((nBox),dtype=int)
     zBox = np.zeros((nBox),dtype=int)
     ithFromXYZ = np.zeros((nx,ny,nz),dtype=int)
+    neighbox = np.zeros((nBox,27),dtype=int)
 
     minx = np.min(coords[:,0])
     miny = np.min(coords[:,1])
@@ -94,7 +95,25 @@ def build_nlist_torch(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
     for i in range(nBox): #Correcting - from indexing to 
         totPerBox[i] = totPerBox[i] + 1
 
-    #For each box get a flat list of neighboring boxes
+    #For each box get a flat list of neighboring boxes (including self)
+    for i in range(nBox):
+        neighbox[i,0] = i
+        j = 1
+        for ix in range(-1,2):
+            for iy in range(-1,2):
+                for iz in range(-1,2):
+                    if not (ix == 0 and iy == 0 and iz == 0):
+                        #Get neigh box coordinate
+                        neighx = xBox[i] + ix
+                        neighy = yBox[i] + iy
+                        neighz = zBox[i] + iz
+                        jxBox = neighx % nx
+                        jyBox = neighy % ny
+                        jzBox = neighz % nz
+                        
+                        #Get the neigh box index
+                        neighbox[i,j] = ithFromXYZ[jxBox,jyBox,jzBox]
+                        j += 1
 
     def get_boxneighs_of(i,boxOfI,ithFromXYZ,inbox,totPerBox):
         boxneighs = np.array([],dtype=int)
@@ -102,20 +121,9 @@ def build_nlist_torch(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
         #Which box it beongs to
         ibox = boxOfI[i]
         #Look inside the box and the neighboring boxes
-        for ix in range(-1,2):
-            for iy in range(-1,2):
-                for iz in range(-1,2):
-                    #Get neigh box coordinate
-                    neighx = xBox[ibox] + ix
-                    neighy = yBox[ibox] + iy
-                    neighz = zBox[ibox] + iz
-                    jxBox = neighx % nx
-                    jyBox = neighy % ny
-                    jzBox = neighz % nz
-                    
-                    #Get the neigh box index
-                    jbox = ithFromXYZ[jxBox,jyBox,jzBox]
-                    boxneighs = np.concatenate((boxneighs,inbox[jbox][0:totPerBox[jbox]]))
+        for j in range(27):
+            jbox = neighbox[ibox,j]
+            boxneighs = np.concatenate((boxneighs,inbox[jbox][0:totPerBox[jbox]]))
         return(boxneighs)
 
     #For each atom we will look around to see who are its neighbors
