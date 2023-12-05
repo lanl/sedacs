@@ -1,4 +1,4 @@
-"""grap
+"""graph
 Some graph functions
  
 """
@@ -18,25 +18,28 @@ except: pltLib = False
 # @brief This will give a graph based on distaces. Similar to
 # a neighbor list.
 # @param coords System coordinates
+# @param nl Neighbor list `nl[i,0]` = total number of neighbors.
+# `nl[i,1:nl[i,0]]` = neigbors of i.
 # @param radius Radius Cutoff to search for the neighbors
 # @param maxDeg Max degrees allowed for each none
 # @param verb Verbosity mode
 # @return graph The graph consisting on a 2D integer numpy array. 
-# E.g, graph[i,k] is the kth neighbor of node i
+# E.g, `graph[i,k]` is the kth neighbor of node i
 #
-def get_initial_graph(coords,radius,maxDeg,verb=False):
+def get_initial_graph(coords,nl,radius,maxDeg,verb=False):
     nats = len(coords[:,0])
     graph = np.zeros((nats,maxDeg),dtype=int)
     graph[:,:] = -1
     for i in range(nats):
         ik = -1
         print("atom",i)
-        for j in range(nats):
-            distance = np.linalg.norm(coords[i,:] - coords[j,:])
+        for j in range(nl[i,0]):
+            jj = nl[i,j]
+            distance = np.linalg.norm(coords[i,:] - coords[jj,:])
             if(distance < radius):
                 ik = ik + 1
                 if(ik < maxDeg):
-                    graph[i,ik] = j
+                    graph[i,ik] = jj
                 else:
                     print("WARNING: at get_initial_graph. maxDeg exceeded. Consider increasing this number")
                     break
@@ -60,7 +63,7 @@ def print_graph(graph):
         print(i,"-",nodesList)
 
 ## Get a networkX graph
-# @param graph The graph in 2D numpy array where graph[i,k] is the kth neighbor
+# @param graph The graph in 2D numpy array where `graph[i,k]` is the kth neighbor
 # of node i
 # @param w The weight for the edges (tipically = 1.0)
 # @return nxGraph networkX type of graph
@@ -83,7 +86,7 @@ def get_nx_graph(graph,w):
 ## To plot the resulting graph
 # @brief Uses matplotlib to plot the nxGraph
 # @param nxGraph NetworkX type of graph
-# @nodeColor The color of the nodes
+# @param nodeColor The color of the nodes
 # This will produce a "graph.png" file with the 
 # plot.
 def plot_nx_graph(nxGraph,nodeColor='r'):

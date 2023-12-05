@@ -1,5 +1,5 @@
 """partition
-Some functions to partition a graph
+Some functions for partition a graph
  
 So far: Regular and metis partition
 """
@@ -15,7 +15,7 @@ from sdc_graph import *
 # @brief This will partition a graph based on a defined method
 # @param graph Graph to be partition
 # @param partitionType Method or type of partition to be used
-# @nparts Number of total parts
+# @param nparts Number of total parts
 # @param verb Verbosity level
 # @return parts Partition containing a "list of parts" where every 
 # part is a list of nodes
@@ -35,7 +35,7 @@ def partition(graph,partitionType,nparts,verb=False):
 # \f]
 # where \f$ N = \f$ total nodes, and \f$ k = E(N/n) \f$.
 # @param graph Graph to be partition
-# @nparts Number of total parts
+# @param nparts Number of total parts
 # @param verb Verbosity level
 # @return parts Partition containing a "list of parts" where every 
 # part is a list of nodes

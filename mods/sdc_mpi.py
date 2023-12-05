@@ -32,10 +32,10 @@ def send_and_receive(dataSend,fromRank,toRank,rank,comm):
 # @brief This will collect a full matrix from severa "regular" chunks. 
 # @param chunk Matrix chunk to be collected 
 # @param nDim Dimension of the full matrix 
-# @param rowsPerChunk Number of rows in the chunk.Typically \verbatim  rowsPerChunk = int(nDim/numranks) \endverbatim.
+# @param rowsPerChunk Number of rows in the chunk.Typically `rowsPerChunk = int(nDim/numranks)`.
 # It can happen that the last chunk contains more than rowsPerChunk. Basically 
-# the last chunk will be used to adjust in case \verbatim nDim  \endverbatim is not divisible by numranks. In this case: 
-# the last chunk (corresponding to the last rank) will have: \verbatim nDim - rowsPerChunk*(numrank-1) \endverbatim
+# the last chunk will be used to adjust in case `nDim` is not divisible by numranks. In this case: 
+# the last chunk (corresponding to the last rank) will have: `nDim - rowsPerChunk*(numrank-1)`
 # numbers of rows.
 # @param rank The number for current mpi execution rank
 # @param numranks Number of execution ranks

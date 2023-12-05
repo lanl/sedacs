@@ -149,8 +149,8 @@ def get_random_coordinates(length):
 
 
 ## Coordinates main reader
-# @brief This will read the coodinates of a chemical system (so far only xyz and pdb 
-# are available.
+# @brief This will read the coodinates of a chemical system (so far only xyz and pdb
+# are available).
 
 def read_coords_file(fileName,lib="None",verb=True):
     """coords file main parser: Reads in an xyz/pdb file with lattice informations.
@@ -396,8 +396,8 @@ def write_pdb_coordinates(fileName,coords,types,symbols,molIds=np.zeros((0),dtyp
 ## Write coordinates into an xyz file
 # 
 # @param coords Position for every atoms. z-coordinate of atom 1 = coords[0,2]
+# @param types list of types for every atom in the system. 
 # @param symbols Symbols for every atom type
-# @types list of types for every atom in the system. 
 # 
 def write_xyz_coordinates(coords,types,symbols):
     """Writes coordinates in simple pdb format
@@ -410,9 +410,16 @@ def write_xyz_coordinates(coords,types,symbols):
         symb = symbols[types[i]]
         print(symb,coords[i,0],coords[i,1],coords[i,2],file=myFileOut)
 
-
-
-## Extract subsystem 
+## Extract subsystem
+# @brief Extracs a chemical subsystem (coordinates and atomic types) 
+# from a larger system using a set of indices. 
+# @param coords Position for every atom. z-coordinate of atom 1 = coords[0,2]
+# @param types Index type for each atom in the system. Type for first atom = type[0]
+# @param symbols Symbols for every atom type
+# @param part list of index for the part to be extracted
+# @return subSyCoords Subsystem atomic coordinates
+# @return subSyTypes Subsystem atomic types
+#
 def extract_subsystem(coords,types,symbols,part):
     subSyNats = len(part)
     subSyCoords = np.zeros((subSyNats,3))
@@ -454,7 +461,6 @@ def get_volBox(latticeVectors,verb=False):
     volBox = latticeVectors[0,0]*a2xa3[0]+ latticeVectors[0,1]*a2xa3[1]+latticeVectors[0,2]*a2xa3[2]
 
     return volBox
-
 
 ## Neighbor list 
 # @brief It will bild a neighbor list using an "all to all" approach
@@ -624,12 +630,12 @@ def build_nlist(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
                     for j in range(totPerBox[jbox]):
                         jj = inbox[jbox,j] #Get atoms in box j
                         if(tr):
-                          #  coordsNeigh = coords[jj,:] + translation
+                         #   coordsNeigh = coords[jj,:] + translation
                             cnx = cx[jj] + trlx
                             cny = cy[jj] + trly     
                             cnz = cz[jj] + trlz     
                         else:
-                           # coordsNeigh = coords[jj,:] 
+                        #    coordsNeigh = coords[jj,:] 
                             cnx = cx[jj] ; cny = cy[jj] ; cnz = cz[jj]
 
                         #distance = (coords[i,0] - coordsNeigh[0])**2 + \
