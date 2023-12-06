@@ -62,19 +62,20 @@ if rank == 0:
     with open('neighborinfo.txt','w') as of:
         for kk in range(sy.nats):
             print("Neighs (x-coords) of {} = ".format(kk),nl[kk,1:nl[kk,0]],"(",sy.coords[nl[kk,1:nl[kk,0]],0],")",file=of)
-exit(0)
+
 #Get the neighbors of atom 1234 
-subSy = system(nl[1234,0])
-subSy.symbols = sy.symbols
-subSy.coords,subSy.types = extract_subsystem(sy.coords,sy.types,sy.symbols,nl[1234,1:nl[1234,0]])
-write_pdb_coordinates("subSy.pdb",subSy.coords,subSy.types,subSy.symbols)
-exit(0)
+#subSy = system(nl[1234,0])
+#subSy.symbols = sy.symbols
+#subSy.coords,subSy.types = extract_subsystem(sy.coords,sy.types,sy.symbols,nl[1234,1:nl[1234,0]])
+#if rank == 0:
+#    write_pdb_coordinates("subSy.pdb",subSy.coords,subSy.types,subSy.symbols)
+#exit(0)
+
 
 #Get initial graph (from a neighbor list)
-graph = get_initial_graph(sy.coords,sdc.rcut,sdc.maxDeg,True)
+graph = get_initial_graph(sy.coords,nl,sdc.rcut,sdc.maxDeg,True)
 print_graph(graph)
 
-print("3")
 #Partition the graph 
 parts = partition(graph,sdc.partitionType,sdc.nparts,True)
 
@@ -92,37 +93,24 @@ for i in range(sdc.nparts):
 ## Every rank will do a subset of the list of coreHalos
 # @todo We will need to "reshuffle" the list so that the work-load 
 # gets distributed. 
+partsPerRank = int(sdc.nparts/numranks)
 
-subSy = system(len(partsCoreHalo[1]))
-subSy.symbols = sy.symbols
-subSy.coords,subSy.types = extract_subsystem(sy.coords,sy.types,sy.symbols,partsCoreHalo[1])
+partIndex1 = rank*partsPerRank 
+partIndex2 = (rank+1)*partsPerRank 
+print(rank,numranks,partIndex1,partIndex2)
+for partIndex in range(partIndex1,partIndex2):
+    print("Rank, part",rank,partIndex)
+    subSy = system(len(partsCoreHalo[partIndex]))
+    subSy.symbols = sy.symbols
+    subSy.coords,subSy.types = extract_subsystem(sy.coords,sy.types,sy.symbols,partsCoreHalo[partIndex])
+    partFileName = "subSy"+str(rank)+"_"+str(partIndex)+".pdb"
+    write_pdb_coordinates(partFileName,subSy.coords,subSy.types,subSy.symbols)
+    ham = get_hamiltonian(subSy.coords,atomTypes=np.zeros((1),dtype=int),verb=False)
+    norbs = subSy.nats 
+    ham = get_hamiltonian(subSy.coords)
+    occ = int(float(norbs)/2.0) #Get the total occupied orbitals
+    rho = get_densityMatrix(ham,occ)
 
-write_pdb_coordinates("subSy.pdb",subSy.coords,subSy.types,subSy.symbols)
-
-
-#Get adjacency matrix
-#Initiate partition 
-#gp = Part()
-#gp.getGraph(ham,0.01)
-#gp.metis(nparts=2)
-#print(gp.parts)
-#print(gp.sizes)
-
-#gp.getCoreHalos(ham,True)
-
-#gp.printCoreHalos(1)
-
-#gp.getSubmats(ham)
-
-sy = system(3) 
-#nxGraph = get_nx_graph(graph,1.0)
-#print_nx_graph(nxGraph)
-subSy = []
-subSy.append(sy)
-subSy.append(sy)
-
-print("At rank",rank)
-ham = get_hamiltonian(subSy[rank].coords,atomTypes=np.zeros((1),dtype=int),verb=False)
 
 
 
