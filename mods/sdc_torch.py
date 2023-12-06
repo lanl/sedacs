@@ -120,14 +120,43 @@ def build_nlist_torch(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
         cnt = -1
         #Get the list of all atoms in neighboring boxes
         boxneighs = inbox[neighbox[boxOfI[i]]]
+        #Shorten the long dimension for speedup on CPU
+        max_nonzero_elems = np.max(np.count_nonzero(boxneighs != -1,axis=1))
+        boxneighs = boxneighs[:,0:max_nonzero_elems].flatten()
         #Filter and flatten the list
-        boxneighs = boxneighs[np.where(boxneighs != -1)]
+        #boxneighs = boxneighs[np.where(boxneighs != -1)]
         #Calculate the distances to all atoms in neighboring boxes
         dvec = np.zeros((len(boxneighs),3),dtype=np.float64)
+#        dvec = dvec + coords[None,None,i]
+        orthovec = np.diagonal(latticeVectors)
         for k in range(3):
-            dvec[:,k] = (coords[i,k] - coords[boxneighs,k] + latticeVectors[k,k]/2.) % latticeVectors[k,k] \
-                - latticeVectors[k,k]/2.
+            dvec[:,k] = (coords[i,k] - coords[boxneighs,k] + orthovec[k]/2.) % orthovec[k] \
+                - orthovec[k]/2.
         distance = np.array(np.linalg.norm(dvec,axis=1))
+        #Filter the list according to the threshold
+        nlVect = boxneighs[np.where(distance < rcut)]
+        #nlVect = boxneighs[np.where(np.logical_and(distance < rcut,distance > 1.0E-12))]
+        nlVect = nlVect[nlVect != -1]
+        nlVect = nlVect[nlVect != i]
+        cnt = len(nlVect)
+        #Format and pad the list
+        nlVect = np.pad(nlVect,(1,maxneigh-cnt-1),'constant',constant_values=(cnt,0))
+        return(nlVect)
+
+    def get_neighs_of_range(i0,i1,boxOfI,inbox,totPerBox,latticeVectors):    
+        #print("atom",i)
+        cnt = -1
+        #Get the list of all atoms in neighboring boxes
+        boxneighs = inbox[neighbox[boxOfI[i0:i1+1]]]
+        #Filter and flatten the list
+        max_nonzero_elems = np.max(np.count_nonzero(boxneighs != -1,axis=2))
+        boxneighs = boxneighs[:,:,0:max_nonzero_elems]
+        #Calculate the distances to all atoms in neighboring boxes
+        dvec = np.zeros((len(boxneighs),len(boxneighs[0]),len(boxneighs[0][0]),3),dtype=np.float64)
+        for k in range(3):
+            dvec[:,:,:,k] = (coords[:,np.newaxis,np.newaxis,k] - coords[boxneighs,k] + latticeVectors[k,k]/2.) % latticeVectors[k,k] \
+                - latticeVectors[k,k]/2.
+        distance = np.array(np.linalg.norm(dvec,axis=3))
         #Filter the list according to the threshold
         nlVect = boxneighs[np.where(np.logical_and(distance < rcut,distance > 1.0E-12))]
 
