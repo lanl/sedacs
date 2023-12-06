@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 
 import numpy as np
-from latte import *
-from coordinates import *
-from ptable import *
 import time
 
 # to call cuda/hip
@@ -11,16 +8,37 @@ import numpy.ctypeslib as npct
 import ctypes 
 
 
-## gpuLib API call to cuSolver
-# This interface function will accept two numpy arrays along with three integers
-# and call a gpuLib function and pass the arrays' C-pointers along with the integers.
-# @param A Matrix you want to diagonalize.
-# @param V Matrix of eigenvectors. 
-# @param K Integer K, converted to a C-int type
-# @param M Integer M, converted to a C-int type
-# @param N Integer N, converted to a C-int type
-# @return arr2 Numpy array you wrote to
+## gpuLib API call to HIP Chebyshev denisty matrix solver. For AMD GPUs.
+# This interface function will accept two numpy arrays, the hamiltonian, and the density matrix
+# along with two integers, matSize and expOrder. Function will build the density matrix from
+# the Hamiltonian, which have size matSize, using a fast Chebyshev expansion of order expOrder. 
+# @param ham Hamiltonian matrix.
+# @param dm Density matrix. 
+# @param matSize Matrix sizes.
+# @param expOrder Expansion order (largest poly. degree).
+# @return dm Numpy array you wrote to
 #
+def amd_dmCheby(ham,dm,matSize,N):
+
+    ## convert to C data types
+    array_type1 = ctypes.c_double*matSize
+    ham_c = array_type1(*ham)                       
+    dm_c = array_type1(*dm)               
+    matSize_c = ctypes.c_int(matSize)
+    expOrder_c = ctypes.c_int(expOrder)
+
+    ## time call
+    tic = time.perf_counter()
+  
+    ## call cheby from .so lib
+    lib.amd_dmCheby(ham_c,      \
+                    dm_c,       \
+                    matSize_c,  \
+                    expOrder_c)   
+    # end timer
+    toc = time.perf_counter()
+    print(f"Time = {toc - tic:0.4f} seconds")
+    return list(dm)                          
 
 
 
