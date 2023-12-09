@@ -3,6 +3,7 @@
 from sdc_system import *
 import torch as tc
 import torch.nn.functional as tf
+import time
 
 ## Neighbor list 
 # @brief It will bild a neighbor list using an "all to all" approach
@@ -146,32 +147,58 @@ def build_nlist_torch(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
     def get_neighs_of_range(i0,i1,boxOfI,inbox,totPerBox,latticeVectors):    
         #print("atom",i)
         cnt = -1
+        nats_this = i1 - i0 + 1
         #Get the list of all atoms in neighboring boxes
         boxneighs = inbox[neighbox[boxOfI[i0:i1+1]]]
+        #Shorten the long dimension for speedup on CPU
+        max_nonzero_elems = np.max(np.count_nonzero(boxneighs != -1,axis=1))
+        boxneighs = boxneighs[:,0:max_nonzero_elems]
         #Filter and flatten the list
-        max_nonzero_elems = np.max(np.count_nonzero(boxneighs != -1,axis=2))
-        boxneighs = boxneighs[:,:,0:max_nonzero_elems]
+        #boxneighs = boxneighs[np.where(boxneighs != -1)]
         #Calculate the distances to all atoms in neighboring boxes
-        dvec = np.zeros((len(boxneighs),len(boxneighs[0]),len(boxneighs[0][0]),3),dtype=np.float64)
+        #dvec = np.zeros((boxneighs.shape[0],boxneighs.shape[1],boxneighs.shape[2],3),dtype=np.float64)
+#        dvec = dvec + coords[None,None,i]
+        orthovec = np.diagonal(latticeVectors)
+        tic = time.perf_counter()
+        repeats = np.repeat(boxneighs.shape[1]*boxneighs.shape[2],nats_this-1)
+        dvec = np.repeat(coords[i0:i1+1],repeats,axis=0)
+        toc = time.perf_counter()
+        print("Time for repeating coords = ",toc-tic," sec")
+        #tic = time.perf_counter()
+        #dvec =  dvec.reshape(dvec.shape[0]*dvec.shape[1]*dvec.shape[2],3)
+        #toc = time.perf_counter()
+        tic = time.perf_counter()
+        boxneighs = boxneighs.reshape(boxneighs.shape[0]*boxneighs.shape[1]*boxneighs.shape[2])
+        toc = time.perf_counter()
+        print("Time for reshape of boxneighs = ",toc-tic," sec")
+        tic = time.perf_counter()
         for k in range(3):
-            dvec[:,:,:,k] = (coords[:,np.newaxis,np.newaxis,k] - coords[boxneighs,k] + latticeVectors[k,k]/2.) % latticeVectors[k,k] \
-                - latticeVectors[k,k]/2.
-        distance = np.array(np.linalg.norm(dvec,axis=3))
+            dvec[:,k] = (dvec[:,k] - coords[boxneighs,k] + orthovec[k]/2.) % orthovec[k] - orthovec[k]/2.
+        toc = time.perf_counter()
+        print("Time for dvec calculation = ",toc-tic," sec")
+        tic = time.perf_counter()
+        distance = np.array(np.linalg.norm(dvec,axis=1))
+        toc = time.perf_counter()
+        print("Time for distance norm calculation = ",toc-tic," sec")
+        exit(0)
         #Filter the list according to the threshold
-        nlVect = boxneighs[np.where(np.logical_and(distance < rcut,distance > 1.0E-12))]
-
+        nlVect = boxneighs[np.where(distance < rcut)]
+        #nlVect = boxneighs[np.where(np.logical_and(distance < rcut,distance > 1.0E-12))]
+        nlVect = nlVect[nlVect != -1]
+        nlVect = nlVect[nlVect != i]
         cnt = len(nlVect)
         #Format and pad the list
         nlVect = np.pad(nlVect,(1,maxneigh-cnt-1),'constant',constant_values=(cnt,0))
         return(nlVect)
-
+    
     nlChunk = np.empty([natsInRank,maxneigh],dtype=int)
 
  #   firstIdx = natsPerRank*(rank+1)
  #   for i in range(rank-1):
  #       if (i >= nats_left):
  #           firstIdx -= 1
-            
+#    nlVect = get_neighs_of_range(natsPerRank*rank,natsPerRank*rank+natsInRank,boxOfI,inbox,totPerBox,latticeVectors)
+ 
     for k in range(natsInRank):
         i = natsPerRank*(rank) + k 
 #        i = firstIdx + k
