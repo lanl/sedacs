@@ -1,0 +1,1 @@
+void diag(double *, double *);
