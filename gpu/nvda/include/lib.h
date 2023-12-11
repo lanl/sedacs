@@ -1,0 +1,11 @@
+extern "C"{
+
+    void dm_diag(double *, double *, int, int);
+
+}
+
+extern "C"{
+ 
+    void dm_dnnsp2(double *, double *, int, int);
+
+}
