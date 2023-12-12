@@ -32,6 +32,7 @@ if args.use_torch:
             print("Using MPS")
             args.device = tc.device('mps')
         else:
+            print("Using CPU")
             args.device = tc.device('cpu')
         from sdc_torch import *
     except ImportError as e:
@@ -52,7 +53,7 @@ sy.nats = len(sy.coords[:,0])
 
 tic = time.perf_counter()
 if args.use_torch:
-    nl = build_nlist_torch(sy.coords,sy.latticeVectors,5.0,rank=rank,numranks=numranks,verb=False)
+    nl = build_nlist_torch(sy.coords,sy.latticeVectors,5.0,device=args.device,rank=rank,numranks=numranks,verb=False)
 else:    
     nl,nlTrX,nlTrY,nlTrZ = build_nlist(sy.coords,sy.latticeVectors,5.0,rank=rank,numranks=numranks,verb=False)
 comm.Barrier()
