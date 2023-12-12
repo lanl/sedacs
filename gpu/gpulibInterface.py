@@ -7,13 +7,6 @@ import time
 import ctypes 
 
 
-
-
-
-
-
-
-
 ## gpuLib API call to neighborlist build
 # This interface function will accept two numpy arrays along with three integers
 # and call a gpuLib function and pass the arrays' C-pointers along with the integers.
@@ -67,7 +60,7 @@ def nlist(x,y,z,nlist,num_atoms,arch):
 # @param nocc Occupation number.
 # @return dm Density matrix that was constructed.
 #
-def dmDiag(ham,dm,matSize,nocc,arch,libnvda):
+def dmDiag(ham,dm,matSize,nocc,arch,lib):
 
     ## convert to C data types
     
@@ -91,15 +84,15 @@ def dmDiag(ham,dm,matSize,nocc,arch,libnvda):
 
     ## call diag from .so lib
     if (arch=="nvidia"):
-        libnvda.dm_diag(ham_c,       \
-                        dm_c,        \
-                        matSize_c,   \
-                        nocc_c)   
+        lib.dm_diag(ham_c,       \
+                    dm_c,        \
+                    matSize_c,   \
+                    nocc_c)   
     elif (arch=="amd"):
-        libamd.dm_diag(ham_c,       \
-                       dm_c,        \
-                       matSize_c,   \
-                       nocc_c)   
+        lib.dm_diag(ham_c,       \
+                    dm_c,        \
+                    matSize_c,   \
+                    nocc_c)   
      
     # end timer
     toc = time.perf_counter()
