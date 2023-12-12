@@ -18,5 +18,6 @@ NVHPC_ROOT - root directory of NVHPC
 MPI_ROOT - root directory of mpi 
 
 
-To build simply type 'make' in the command line. The makefile will build the 'libnvda.so' shared object file that can be used by python.
+To build simply execute the example build script, type './example_build' in the command line from this directory. 
+The makefile will build the 'libnvda.so' shared object file that can be used by python.
 

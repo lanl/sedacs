@@ -8,9 +8,10 @@
 # ## CC COMPILER OPTIONS ##
 #
 # ## CC compiler options:
-CXX=nvc++
-CXX_FLAGS= -O3 -DNDEBUG -cuda -gpu=sm_80 
+CXX:=${CXX}
+CXX_FLAGS:=${CXX_FLAGS} 
 CXX_SO_FLAGS= -fpic
+#$(info $$CXX is [${CXX}])
 # #
 INCLUDE_DIR= -Iinclude
 # #
@@ -78,16 +79,23 @@ $(shell   mkdir -p $(OBJ_DIRS))
 
 # # Object files:
 
-OBJSP2=    $(OBJ_DIR)/dnnsp2/linalg_tools.o\
+OBJSP2=    $(OBJ_DIR)/dnnsp2/*.o\
+
+OBJDIAG=   $(OBJ_DIR)/diag/*.o\
+
+OBJNLIST=  $(OBJ_DIR)/nlist/*.o\
+
+OBJMAIN=   $(OBJ_DIR)/lib/*.o
+#OBJSP2=    $(OBJ_DIR)/dnnsp2/linalg_tools.o\
 	   $(OBJ_DIR)/dnnsp2/tcore_hp_emulator.o\
 	   $(OBJ_DIR)/dnnsp2/dnnsp2.o\
 
-OBJDIAG=   $(OBJ_DIR)/diag/diag.o\
+#OBJDIAG=   $(OBJ_DIR)/diag/diag.o\
 
-OBJNLIST=  $(OBJ_DIR)/nlist/utils.o\
+#OBJNLIST=  $(OBJ_DIR)/nlist/utils.o\
 	   $(OBJ_DIR)/nlist/nlist.o\
 
-OBJMAIN=   $(OBJ_DIR)/lib/libnvda.o
+#OBJMAIN=   $(OBJ_DIR)/lib/libnvda.o
 
 OBJS = $(OBJSP2) $(OBJDIAG) $(OBJNLIST) $(OBJCHEBY) $(OBJMAIN)
 
