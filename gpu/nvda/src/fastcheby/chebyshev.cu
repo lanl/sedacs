@@ -1,0 +1,627 @@
+#include <vector>
+#include <sys/time.h>
+#include <time.h>
+#include <omp.h>
+#include <math.h>
+#include <iomanip>
+#include <utils.cuh>
+#include <cuda.h>
+#include <iostream>
+
+#define DEBUG_OFF
+
+
+
+void chebyshev(double *ham, double *dm, int K, int M, int n) 
+{
+
+    int ld = n;
+    int thds = 1024;
+    int blks = (int) ceil(float(K * M) / float(thds));
+
+    // Info
+    std::cout << "==================================" << "\n"
+              << "Computing Chebychev expansion for: " << "\n"
+              << "    System size = " << n << "\n"
+              << "    Num expansion terms = " << K*M << "\n"
+              << "==================================" << "\n "
+    	      << std::endl;
+
+}
+    //
+
+    // determine device number
+    //int count;
+    //hipGetDeviceCount(&count);
+    //int device=0;
+    //hipSetDevice(device);
+    //
+/*
+    for (int i=0; i<10; i++){
+        std::cout << ham[i] << std::endl;
+    }
+
+
+    // init HIP streams 
+    int num_streams = std::max(K,M);
+    hipStream_t stream[num_streams];
+    for (int i = 0 ; i < num_streams; i++){
+        hipStreamCreate(&stream[i]);
+    };
+    
+    // init rocblas
+    //rocblas_initialize();
+
+    // hip device properties
+    //hipDeviceProp_t props;
+    //hipGetDeviceProperties(&props, device);
+
+
+    // Create start/stop event objects and variable for elapsed time in ms
+    hipEvent_t start, stop;
+    HIP_API_CHECK(hipEventCreate(&start));
+    HIP_API_CHECK(hipEventCreate(&stop));
+    float elapsed_time_ms;
+
+
+    // Define and allocate Chebyshev polynomials
+    // matrices, T_n, on device
+    double *d_T[K+1];
+    double *d_aux[M+1];
+     
+    hipError_t ret;
+    for (int j=0; j <= K; j++){ 
+        HIP_API_CHECK(hipMalloc(&d_T[j], ld * n * sizeof(double)));
+    };
+    
+    for (int j=0; j <= M; j++){ 
+        HIP_API_CHECK(hipMalloc(&d_aux[j], ld * n * sizeof(double)));
+    };
+    ///////
+
+    // declare vars
+    double *d_I,*d_D,*d_temp;
+    HIP_API_CHECK(hipMalloc(&d_I, n * n * sizeof(double)));
+    HIP_API_CHECK(hipMalloc(&d_D, n * n * sizeof(double)));
+    HIP_API_CHECK(hipMalloc(&d_temp, n * n * sizeof(double)));
+
+    
+    // Determine cheby coefficients (code taken from progress)
+
+    // Cheby params
+    double ef = 0.9997;   
+    double emax = 2.0;
+    double emin = -101.0;
+    double kbt = 0.1;  //eV
+    int npts = 1e3;
+    
+
+    double *c, *d, *d_c;
+    HIP_API_CHECK(hipHostMalloc(&c, K * M * sizeof(double)));
+    HIP_API_CHECK(hipHostMalloc(&d, K * M * sizeof(double)));
+    HIP_API_CHECK(hipMalloc(&d_c, K * M * sizeof(double)));
+   
+
+    // init rocblas handle
+    rocblas_status rocbStat;
+    rocblas_handle handle;
+    rocblas_create_handle(&handle);
+
+
+    //ps_coeffs_cheby_gpu(handle, c, d_c, K, M);
+    auto t1 = gtod();
+    ps_coeffs_cheby_gpu(handle, 
+                        emax, emin, ef,
+                        kbt,
+                        npts, 
+                        c, 
+                        d_c, 
+                        K, 
+                        M);
+   
+    HIP_API_CHECK(hipDeviceSynchronize());
+    auto t2 = gtod();
+ 
+    // initialize T0 = Id
+    hipLaunchKernelGGL(buildId_dev,blks,thds,0,0,d_T[0],n);
+    // initialize T1 = H
+    HIP_API_CHECK(hipMemcpy(d_T[1],ham, n*n*sizeof(double),hipMemcpyHostToDevice));
+
+
+    // Transform Hamiltonian
+    // so that spectrum inside (-1,1)
+    // (H - avg_eps*I)/delta_eps = H^~
+    double delta_eps = emax-emin;
+    double avg_eps = 0.5*(emax + emin);
+    double alpha = -2*avg_eps/delta_eps;
+    double beta = 2.0/delta_eps;
+
+    // set stream before each rocblas call, cannot pass
+    // into call like with magma, active stream resides
+    // within the handle
+    rocbStat = rocblas_set_stream(handle, stream[0]);   
+                                                  
+    rocbStat = rocblas_dgeam(handle, 
+                             rocblas_operation_none, rocblas_operation_none, 
+                             n, n, 
+                             &alpha, d_T[0], ld, 
+                             &beta, d_T[1], ld, 
+                             d_T[1], ld);
+    //
+
+    long int usec_ps_coeffs = t2 - t1;
+    std::cout << " Time for PS coeffs: time/s = " << (double)usec_ps_coeffs/1e6 << std::endl;
+
+    
+    /////////////////////////
+    /////////////////////////
+    /// COMPUTE THE T_N's ///
+    /////////////////////////
+    /////////////////////////
+            
+    int cnt;
+    int i,j; 
+    int k,kk;
+    int cnt_ops = 0;
+   
+    long int usec_mult;
+    long int usec_sum, usec_temp; 
+    double stream_flops;
+
+   
+    int stages = ceil( log( (double) K ) / log(2.0) );
+    std::cout << "number of stages needed = " << stages << std::endl;
+
+    rocblas_operation no_trans = rocblas_operation_none;
+    
+    // time mults
+    t1 = gtod();
+
+    // Loop over stages
+    for (int i = 1; i <= stages ; i++){
+	    
+	//cnt = 0; 
+    	if (i == 1){
+
+ 
+            alpha = 1.0; beta = 0.0;
+	    rocbStat = rocblas_dgemm(handle,
+                                     no_trans, no_trans,
+                                     n,n,n,
+                                     &alpha,
+                                     d_T[1], ld,
+                                     d_T[1], ld,
+                                     &beta,
+                                     d_T[2], ld);
+
+            alpha = -1.0; beta = 2.0;
+	    rocbStat = rocblas_dgeam(handle,
+                                     no_trans, no_trans,
+                                     n, n,
+	   	     	             &alpha, 
+    		    	             d_T[0], ld, 
+			             &beta, 
+			             d_T[2], ld, 
+			             d_T[2], ld); 
+
+
+            // cnt_ops+=1;
+            #ifdef DEBUG_ON
+	    printf("Compute 2*(T_%d times T_%d)-T_%d = T_%d on queue %d \n", 1, 1, 0, 2, 0);
+	    printf("queue sync %d \n", 0);	    
+	    printf("================================== \n");
+	    #endif
+
+	}
+        else{ 
+		  
+	    k  = pow(2,i-2);
+	    kk = pow(2,i-1);
+
+	    for (j = k+1; j <= pow(2,i-1); j++){
+                if (j+k < K+1){
+
+                    rocbStat = rocblas_set_stream(handle, stream[j-k-1]);   
+	    
+                    alpha = 1.0; beta = 0.0;
+      	            rocbStat = rocblas_dgemm(handle,
+                                             no_trans, no_trans,
+                                             n, n, n,
+                                             &alpha,
+                                             d_T[j], ld,
+                                             d_T[k], ld,
+                                             &beta,
+                                             d_T[j+k], ld);
+
+                    alpha = -1.0; beta = 2.0;
+	            rocbStat = rocblas_dgeam(handle,
+                                             no_trans, no_trans,
+	    	                             n, n,
+		                             &alpha, 
+		                             d_T[abs(j-k)], ld, 
+		                             &beta, 
+				             d_T[j+k], ld,
+				             d_T[j+k], ld);
+	
+		    cnt_ops+=1;		
+
+       		    #ifdef DEBUG_ON
+		    printf("Compute 2*(T_%d times T_%d)-T_%d = T_%d on queue %d \n", j, k, abs(j-k), j+k, j-k-1);
+		    #endif
+		};
+	           	
+	    };	   	
+	
+	    for (j = k+1; j <= pow(2,i-1); j++){
+                if (j+kk < K+1){
+		
+                    rocbStat = rocblas_set_stream(handle, stream[j-1]);   
+                    
+ 	            alpha = 1.0; beta = 0.0;
+      	            rocbStat = rocblas_dgemm(handle,
+                                             no_trans, no_trans,
+                                             n, n, n,
+                                             &alpha,
+                                             d_T[j], ld,
+                                             d_T[kk], ld,
+                                             &beta,
+                                             d_T[j+kk], ld);
+
+                    alpha = -1.0; beta = 2.0;
+	            rocbStat = rocblas_dgeam(handle,
+                                             no_trans, no_trans,
+	    	                             n, n,
+		                             &alpha, 
+		                             d_T[abs(j-kk)], ld, 
+		                             &beta, 
+				             d_T[j+kk], ld,
+				             d_T[j+kk], ld);
+	
+		    cnt_ops+=1;		
+
+		    #ifdef DEBUG_ON		        	
+		    printf("Compute 2*(T_%d times T_%d)-T_%d = T_%d on queue %d \n", j, kk, abs(j-kk), j+kk, j-1);
+		    #endif
+		};
+	    };	
+		
+		
+	    // sync streams for each stage
+	    for (int i_s = 0; i_s < pow(2,i-1); i_s++){
+            
+	        HIP_API_CHECK(hipStreamSynchronize(stream[i_s]));
+                #ifdef DEBUG_ON
+                printf("queue sync %d \n", i_s);	    
+	        #endif
+	    };
+       		
+	    #ifdef DEBUG_ON
+	    printf("================================== \n");
+	    #endif
+
+        };
+
+    };   
+    t2 = gtod();
+    usec_mult = t2 - t1;
+    std::cout << " Time for mults: time/s = " << (double)usec_mult/1e6 << std::endl;
+
+    ////////////////////////
+    /// COMPUTE THE SUMS ///
+    ////////////////////////
+
+    // start timer
+    t1 = gtod();
+
+    for (int k=0; k < K; k++){    
+        for (int j=0; j < M; j++){
+
+	    if(k==(K-1)){
+                    
+                rocbStat = rocblas_set_stream(handle, stream[j]);   
+	         
+                alpha = c[(K*M-1)-(j*K + k)];
+                beta = 1.0;
+                rocbStat = rocblas_dgeam(handle,
+                                         no_trans, no_trans,
+		                         n, n,
+					 &alpha, 
+					 d_T[0], ld, 
+					 &beta, 
+					 d_aux[j], ld, 
+					 d_aux[j], ld); 
+       		#ifdef DEBUG_ON
+		std::cout << c[(K*M-1)-(j*K + k)] << " * I "  
+			  << " + 1 * dev_daux[" << j << "]" 
+			  << " = dev_daux[" << j << "]" 
+			  << " on queue " << j << ". " 
+			  << std::endl;
+ 		#endif
+
+		}
+                else{	
+		    
+                    if (k==0){
+                    
+                        rocbStat = rocblas_set_stream(handle, stream[j]);   
+
+                        alpha = c[(K*M-1)-(j*K + k)];
+                        beta = 0.0;
+                        rocbStat = rocblas_dgeam(handle,
+                                                 no_trans, no_trans,
+                                                 n, n,
+					         &alpha,
+					         d_T[(K-1)-k], ld, 
+					         &beta, 
+                                                 d_aux[j], ld, 
+                                                 d_aux[j], ld); 
+                        #ifdef DEBUG_ON
+	 		
+			std::cout << c[(K*M-1)-(j*K + k)]  
+				  << " * dev_T" << (K-1)-k
+			          << " + 0 * dev_aux[" << j << "]" 
+				  << " = dev_aux[" << j << "]" 
+				  << " on queue " << j << ". " 
+				  << std::endl;
+		        #endif
+		}
+                else{
+                        rocbStat = rocblas_set_stream(handle, stream[j]);   
+                        
+                        alpha = c[(K*M-1)-(j*K + k)];
+                        beta = 1.0;
+                        rocbStat = rocblas_dgeam(handle,
+                                                 no_trans, no_trans,
+                                                 n, n,
+					         &alpha, 
+					         d_T[(K-1)-k], ld, 
+					         &beta, 
+                                                 d_aux[j], ld, 
+                                                 d_aux[j], ld); 
+                        #ifdef DEBUG_ON
+	 		
+		        std::cout << c[(K*M-1)-(j*K + k)]  
+			          << " * d_T" << (K-1)-k
+			          << " + 1 * d_aux[" << j << "]" 
+			          << " = d_aux[" << j << "]" 
+			          << " on queue " << j << ". " 
+		                  << std::endl;
+			#endif
+
+		};
+
+            };
+		
+	};
+
+    };
+   
+    for (int i_s=0; i_s < M; i_s++){
+	    
+         HIP_API_CHECK(hipStreamSynchronize(stream[i_s]));
+
+	 #ifdef DEBUG_ON
+	 std::cout << "hip_stream_sync(" << i_s << ")" << std::endl;
+         #endif
+    };
+
+    // final serial mults and sums on stream 0                     
+    rocbStat = rocblas_set_stream(handle, stream[0]);   
+ 
+    for (int j=0; j < M-1; j++){
+    
+        alpha=1.0; beta=1.0;
+        rocbStat = rocblas_dgemm(handle,
+                                 no_trans, no_trans,
+                                 n, n, n,
+                                 &alpha,
+                                 d_T[K], ld,
+                                 d_aux[j], ld,
+                                 &beta,
+                                 d_aux[j+1], ld);
+
+    		
+        #ifdef DEBUG_ON
+	    std::cout << "d_T_" << K << " * d_aux[" << j << "] + 1 * d_aux[" << j + 1 << "]" 
+	     	      << " = d_aux[" << j + 1 << "]"
+	              << " on queue " << 0 << ". " << std::endl;
+	#endif
+    };
+
+    // sync stream 0
+    HIP_API_CHECK(hipStreamSynchronize(stream[0]));
+
+    t2 = gtod();
+    usec_sum = t2 - t1;
+    std::cout << " Time for sums: time/s = " << (double)usec_sum/1e6 << std::endl;
+
+
+    // copy DM back from device
+    //HIP_API_CHECK(hipMemcpy(dm,d_aux[M-1], n*n*sizeof(double),hipMemcpyDeviceToHost));
+*/
+
+    /*
+
+ 
+
+    ////////////////////////
+    ////////////////////////
+    /// COMPUTE THE SUMS ///
+    ////////////////////////
+    ////////////////////////
+    
+    t1 = gtod();
+    
+  
+    for (int k=0; k < K; k++){    
+        for (int j=0; j < M; j++){
+    
+		if(k==(K-1)){
+			magmablas_dgeadd2(n, n,
+					  d[(K*M-1)-(j*K + k)], 
+					  dev_T[0], ld, 
+					  1.0, 
+					  dev_aux[j], ld, 
+					  queue[j]);
+					  //queue[0]);
+       			#ifdef DEBUG_ON
+			std::cout << d[(K*M-1)-(j*K + k)] << " * I "  
+				  << " + 1 * dev_daux[" << j << "]" 
+				  << " = dev_daux[" << j << "]" 
+				  << " on queue " << j << ". " 
+				  //<< " on queue " << 0 << ". " 
+				  << std::endl;
+ 			#endif
+
+		}else{	
+			if (k==0){
+				magmablas_dgeadd2(n, n, 
+					  d[(K*M-1)-(j*K + k)], 
+					  dev_T[(K-1)-k], ld, 
+					  0.0, dev_aux[j], 
+					  ld, 
+					  queue[j]);
+					  //queue[0]);
+                                #ifdef DEBUG_ON
+	 		
+				std::cout << d[(K*M-1)-(j*K + k)]  
+				          << " * dev_T" << (K-1)-k
+			                  << " + 0 * dev_aux[" << j << "]" 
+				          << " = dev_aux[" << j << "]" 
+				          << " on queue " << j << ". " 
+				          //<< " on queue " << 0 << ". " 
+				          << std::endl;
+			        #endif
+			}else{
+				magmablas_dgeadd2(n, n, 
+					  d[(K*M-1)-(j*K + k)], 
+					  dev_T[(K-1)-k], ld, 
+					  1.0, dev_aux[j], 
+					  ld, 
+					  queue[j]);
+					  //queue[0]);
+                                #ifdef DEBUG_ON
+	 		
+				std::cout << d[(K*M-1)-(j*K + k)]  
+				          << " * dev_T" << (K-1)-k
+			                  << " + 1 * dev_aux[" << j << "]" 
+				          << " = dev_aux[" << j << "]" 
+				          << " on queue " << j << ". " 
+				          //<< " on queue " << 0 << ". " 
+				          << std::endl;
+			        #endif
+
+			};
+
+
+        	};
+		
+	};
+    };
+   
+
+
+    for (int j=0; j < M; j++){
+	    //magma_queue_sync(queue[j]);
+	    magma_queue_sync(queue[0]);
+
+	    #ifdef DEBUG_ON
+	    //std::cout << "magma_queue_sync(" << j << ")" << std::endl;
+	    std::cout << "magma_queue_sync(" << 0 << ")" << std::endl;
+            #endif
+    };
+
+
+    for (int j=0; j < M-1; j++){
+	    magma_dgemm(magma_trans, magma_trans, n, n, n, 1.0,
+                  	    dev_T[K], ld, dev_aux[j], ld, 1.0, dev_aux[j+1], ld, queue[0]);
+	    magma_queue_sync(queue[0]);
+    		
+	    #ifdef DEBUG_ON
+	     	std::cout << "dev_T_" << K << " * dev_aux[" << j << "] + 1 * dev_aux[" << j + 1 << "]" 
+		  	  << " = dev_aux[" << j + 1 << "]"
+	                  << " on queue " << 0 << ". " << std::endl;
+	    #endif
+    };
+
+
+
+
+    magma_queue_sync(queue[0]);
+    
+    t2 = gtod();
+    usec_stream_add = t2 - t1;
+    std::cout << "N = " << n
+              << "M = " << M
+              << "K = " << K
+              << ": time/us for mults = " << (double)usec_stream_mult
+              << ": time/us for additions = " << (double)usec_stream_add
+              << ": time/us for all = " << (double)usec_stream_add + (double)usec_stream_mult
+              << std::endl;
+
+    magma_dgetmatrix(n, n, dev_aux[M-1], n, h_PS, ld, queue[0]);
+
+    // Frobenius norm of difference between recursion and PS
+    
+    // Print cheby plot
+    for (int i=0; i < n; i++){
+        //printf("Ch: %.15f, %.15f, %.15f\n", eval[i], evall[i], h_PS[i+i*n]);
+    }
+
+
+    std::cout << "Num terms = " << K * M 
+	      << ",  "   
+              << "PS speed-up factor over bml diagonalization = " <<  (double)usec_stream_diag / 
+   	                                                    ((double)usec_stream_add + (double)usec_stream_mult) 
+              << std::endl;
+   
+
+    PS = bml_import_from_dense(dense
+  		              ,matrix_precision
+		  	      ,dense_column_major
+		 	      ,n, n
+			      ,h_PS
+			      ,1.0
+			      ,sequential);
+
+    printf("============== PS ===============\n");
+    bml_print_bml_matrix(PS,0,10,0,10);
+    printf("================================\n");
+
+    alpha = 1.0;
+    beta = -1.0;
+    bml_add(D, PS, alpha, beta,0.0);
+    double fnormPSD = bml_fnorm(D);
+    std::cout << K << ": Rel error = " << std::setprecision(15) << fnormPSD / fnormD << std::endl;
+
+
+    ret = magma_free(dev_aux);
+    ret = magma_free(dev_T);
+
+    magma_finalize();*/
+
+};
+
+/*
+int main()
+{
+
+    int n = 1000;
+    int M = 15, K = 15;
+
+    // get ham
+    double *ham, *dm;
+    HIP_API_CHECK(hipHostMalloc(&ham,n*n*sizeof(double)));
+    HIP_API_CHECK(hipHostMalloc(&dm,n*n*sizeof(double)));
+
+    density_mat(ham, dm, 
+                n, 
+                K, 
+                M);
+
+    return 0;
+}
+
+*/
+
+

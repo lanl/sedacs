@@ -74,7 +74,7 @@ SO = libnvda.so
 
 # # Make object directories:
 OBJ_DIRS= $(OBJ_DIR)/lib $(OBJ_DIR)/dnnsp2 $(OBJ_DIR)/diag $(OBJ_DIR)/nlist\
-		 $(OBJ_DIR)/cheby $(OBJ_DIR)/test
+		 $(OBJ_DIR)/fastcheby $(OBJ_DIR)/mlsp2 $(OBJ_DIR)/test
 $(shell   mkdir -p $(OBJ_DIRS)) 
 
 # # Object files:
@@ -85,7 +85,13 @@ OBJDIAG=   $(OBJ_DIR)/diag/*.o\
 
 OBJNLIST=  $(OBJ_DIR)/nlist/*.o\
 
+OBJCHEBY=  $(OBJ_DIR)/fastcheby/*.o\
+
+OBJMLSP2=  $(OBJ_DIR)/mlsp2/*.o\
+
+
 OBJMAIN=   $(OBJ_DIR)/lib/*.o
+
 #OBJSP2=    $(OBJ_DIR)/dnnsp2/linalg_tools.o\
 	   $(OBJ_DIR)/dnnsp2/tcore_hp_emulator.o\
 	   $(OBJ_DIR)/dnnsp2/dnnsp2.o\
@@ -97,7 +103,8 @@ OBJMAIN=   $(OBJ_DIR)/lib/*.o
 
 #OBJMAIN=   $(OBJ_DIR)/lib/libnvda.o
 
-OBJS = $(OBJSP2) $(OBJDIAG) $(OBJNLIST) $(OBJCHEBY) $(OBJMAIN)
+OBJS = $(OBJSP2) $(OBJDIAG) $(OBJNLIST) $(OBJCHEBY) \
+	$(OBJMLSP2) $(OBJMAIN)
 
 
 # ##########################################################
@@ -121,6 +128,14 @@ $(OBJ_DIR)/diag/%.o: $(SRC_DIR)/diag/%.cu
                       $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB)
 
 $(OBJ_DIR)/nlist/%.o: $(SRC_DIR)/nlist/%.cu
+	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR)\
+                      $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB)
+
+$(OBJ_DIR)/fastcheby/%.o: $(SRC_DIR)/fastcheby/%.cu
+	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR)\
+                      $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB)
+
+$(OBJ_DIR)/mlsp2/%.o: $(SRC_DIR)/mlsp2/%.cu
 	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR)\
                       $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB)
 

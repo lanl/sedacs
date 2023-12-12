@@ -10,9 +10,10 @@
 #include <cmath>
 #include <vector>
 #include <cusolverDn.h>
-#include <tcore_hp_emulator.cuh>
-#include <linalg_tools.cuh>
-#include <dnnsp2.cuh>
+//#include <tcore_hp_emulator.cuh>
+//#include <linalg_tools.cuh>
+//#include <dnnsp2.cuh>
+#include <mlsp2.cuh>
 
 __global__ 
 void FtoD(float *X
@@ -44,7 +45,7 @@ void dev_buildIdenity(float* X
 }
 };
 
-void dnnsp2(double* ham, 
+void mlsp2(double* ham, 
             double* dm, 
             size_t N, 
             size_t Nocc,
@@ -65,7 +66,7 @@ void dnnsp2(double* ham,
     cublasHandle_t handle;
     cublasCreate(&handle);
 
-    // Cusolver Handle
+/*    // Cusolver Handle
     cusolverDnHandle_t cusolverH;
     cusolverDnCreate(&cusolverH);
     
@@ -320,7 +321,7 @@ void dnnsp2(double* ham,
     
     // Destroy handle
     cublasDestroy(handle);
-
+*/
 }
 
 

@@ -7,9 +7,6 @@
 #include <boost/random/linear_congruential.hpp>
 #include <boost/random/uniform_real.hpp>
 #include <boost/random/variate_generator.hpp>
-//#include <rocblas.h>
-//#include <hip/hip_runtime.h>
-#include <include/error_check.hpp>
 
 void buildTest_eval(
     double* H, const int n, double* eval)
@@ -401,8 +398,8 @@ void cheby_coeffs_trap(double emax, double emin, double ef, double kbt, int npts
 
 
 };
-
-/*void ps_coeffs_cheby_gpu(rocblas_handle handle, 
+/*
+void ps_coeffs_cheby_gpu(rocblas_handle handle, 
                          double emax, double emin,double ef,
                          double kbt,
                          const int npts, 
@@ -584,8 +581,8 @@ void cheby_coeffs_trap(double emax, double emin, double ef, double kbt, int npts
     //free(A);
     
 };
-
 */
+
 
 
 void construct_ps_coeffs_new(double *ps_c, double *c, const int K, const int M){
