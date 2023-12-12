@@ -68,13 +68,9 @@ def build_nlist_torch(coords,latticeVectors,rcut,device=tc.device('cpu'),rank=0,
 
     for i in range(nats):
         #Index every atom respect to the discretized position on the simulation box.
-        #tranlation = coords[i,:] - origin !For the general case we need to make sure coords are > 0
         ix =  int(coords[i,0]/boxSize) % nx #small box x-index of atom i
         iy =  int(coords[i,1]/boxSize) % ny #small box x-index of atom i
         iz =  int(coords[i,2]/boxSize) % nz #small box x-index of atom i
-#        ix =  int((coords[i,0] - minx + smallReal)/(2.0*rcut)) #small box x-index of atom i
-#        iy =  int((coords[i,1] - miny + smallReal)/(2.0*rcut)) #small box y-index 
-#        iz =  int((coords[i,2] - minz + smallReal)/(2.0*rcut)) #small box z-index
 
         ith =  ix + iy*nx + iz*nx*ny  #Get small box index
         boxOfI[i] = ith
@@ -115,44 +111,16 @@ def build_nlist_torch(coords,latticeVectors,rcut,device=tc.device('cpu'),rank=0,
                         #Get the neigh box index
                         neighbox[i,j] = ithFromXYZ[jxBox,jyBox,jzBox]
                         j += 1
-
+    #Move arrays to device
     tic = time.perf_counter()                        
     neighbox_d = tc.tensor(neighbox,device=device)
     inbox_d = tc.tensor(inbox,device=device)
     boxOfI_d = tc.tensor(boxOfI,device=device)
     latticeVectors_d = tc.tensor(latticeVectors,device=device)
     coords_d = tc.tensor(coords,device=device)
-    toc = time.perf_counter()
-    print("Time for moving arrays to GPU = ",toc-tic," sec")
-    
-    def get_neighs_of_old(i,coords,neighbox,boxOfI,inbox,latticeVectors):    
-        #print("atom",i)
-        cnt = -1
-        #Get the list of all atoms in neighboring boxes
-        boxneighs = inbox[neighbox[boxOfI[i]]]
-        breakpoint()
-        #Shorten the long dimension for speedup on CPU
-        max_nonzero_elems = np.max(np.count_nonzero(boxneighs != -1,axis=1))
-        boxneighs = boxneighs[:,0:max_nonzero_elems].flatten()
-        #Filter and flatten the list
-        #boxneighs = boxneighs[np.where(boxneighs != -1)]
-        #Calculate the distances to all atoms in neighboring boxes
-        dvec = np.zeros((len(boxneighs),3),dtype=np.float64)
-#        dvec = dvec + coords[None,None,i]
-        orthovec = np.diagonal(latticeVectors)
-        for k in range(3):
-            dvec[:,k] = (coords[i,k] - coords[boxneighs,k] + orthovec[k]/2.) % orthovec[k] \
-                - orthovec[k]/2.
-        distance = np.array(np.linalg.norm(dvec,axis=1))
-        #Filter the list according to the threshold
-        nlVect = boxneighs[np.where(distance < rcut)]
-        #nlVect = boxneighs[np.where(np.logical_and(distance < rcut,distance > 1.0E-12))]
-        nlVect = nlVect[nlVect != -1]
-        nlVect = nlVect[nlVect != i]
-        cnt = len(nlVect)
-        #Format and pad the list
-        nlVect = np.pad(nlVect,(1,maxneigh-cnt-1),'constant',constant_values=(cnt,0))
-        return(nlVect)
+    t_copy = time.perf_counter() - tic
+    if rank == 0:
+        print("Time for copying arrays to device = ",t_copy," sec")
 
     def get_neighs_of(i,coords,neighbox,boxOfI,inbox,latticeVectors):    
         #print("atom",i)
@@ -188,86 +156,58 @@ def build_nlist_torch(coords,latticeVectors,rcut,device=tc.device('cpu'),rank=0,
         #print("atom",i)
         cnt = -1
         nats_this = i1 - i0 + 1
+        
         #Get the list of all atoms in neighboring boxes
         tic = time.perf_counter()
         boxneighs = inbox[neighbox[boxOfI[i0:i1+1]]]
-        toc = time.perf_counter()
-        print("Time for building boxneighs = ",toc-tic," sec")
+        t_boxneighs = time.perf_counter() - tic
+        
         #Shorten the long dimension for speedup on CPU
         max_nonzero_elems = tc.max(tc.count_nonzero(boxneighs != -1,axis=1))
         boxneighs = boxneighs[:,0:max_nonzero_elems]
-        #Filter and flatten the list
-        #boxneighs = boxneighs[np.where(boxneighs != -1)]
-        #Calculate the distances to all atoms in neighboring boxes
-        #dvec = np.zeros((boxneighs.shape[0],boxneighs.shape[1],boxneighs.shape[2],3),dtype=np.float64)
-#        dvec = dvec + coords[None,None,i]
         orthovec = tc.diagonal(latticeVectors)
+
+        #Build initial distance vector array from repeating coords rows
         tic = time.perf_counter()
         repeats = tc.tensor([boxneighs.shape[1]*boxneighs.shape[2]],device=coords.get_device()).repeat(nats_this)
-        #print("MPI rank = ",rank,"nats_this =",nats_this,"repeats.shape =",repeats.shape,"coords[i0:i1+1].shape =",coords[i0:i1+1].shape)
         dvec = tc.repeat_interleave(coords[i0:i1+1],repeats,axis=0)
-        toc = time.perf_counter()
-        print("Time for repeating coords = ",toc-tic," sec")
-        #tic = time.perf_counter()
-        #dvec =  dvec.reshape(dvec.shape[0]*dvec.shape[1]*dvec.shape[2],3)
-        #toc = time.perf_counter()
-        tic = time.perf_counter()
+        t_repeat_coords = time.perf_counter() - tic
+
+        #Reshape boxneighs for vectorized distance calc
         boxneighs = boxneighs.reshape(boxneighs.shape[0]*boxneighs.shape[1]*boxneighs.shape[2])
-        toc = time.perf_counter()
-        print("Time for reshape of boxneighs = ",toc-tic," sec")
+
+        #Perform distance calc
         tic = time.perf_counter()
         for k in range(3):
             dvec[:,k] = (dvec[:,k] - coords[boxneighs,k] + orthovec[k]/2.) % orthovec[k] - orthovec[k]/2.
-        toc = time.perf_counter()
-        print("Time for dvec calculation = ",toc-tic," sec")
-        tic = time.perf_counter()
         distance = tc.linalg.norm(dvec,axis=1)
-        toc = time.perf_counter()
-        print("Time for distance norm calculation = ",toc-tic," sec")
+        t_distance = time.perf_counter() - tic
+
+        #Reshape arrays to form neighbor list
         boxneighs = boxneighs.reshape(nats_this,int(len(boxneighs)/nats_this))
         distance = distance.reshape(nats_this,int(len(distance)/nats_this))
+
+        #Build the neighbor list using a distance threshold mask
         tic = time.perf_counter()
         nlMask = distance < rcut
         nlVect = tc.where(nlMask,boxneighs,-1)
-        #print("Before sort: ",tc.count_nonzero(nlVect[0]!= -1),nlVect[0][nlVect[0] != -1])
-        #nlVect = tc.cat((boxneighs[nlMask],boxneighs[~nlMask]),dim=1)
         nlVect,indices = tc.sort(nlVect,axis=1,descending=True)
-        #print("After sort:",tc.count_nonzero(nlVect[0]!= -1),nlVect[0][nlVect[0] != -1])
         nlVect = tf.pad(nlVect,(1,maxneigh-nlVect.shape[1]-1),'constant',value=0)
-        #print("After pad:",tc.count_nonzero(nlVect[0]!= -1),nlVect[0][nlVect[0] != -1])
-        #print(tc.count_nonzero(nlVect != -1,axis=1))
         nlVect[:,0] = tc.count_nonzero(nlMask,axis=1)
-        # nlVect_this = boxneighs[1234]
-        # nlVect_this = nlVect_this[tc.where(distance[1234] < rcut)]
-        #  #nlVect = boxneighs[np.where(np.logical_and(distance < rcut,distance > 1.0E-12))]
-        # nlVect_this = nlVect_this[nlVect_this != -1]
-        # nlVect_this = nlVect_this[nlVect_this != i]
-        # cnt = len(nlVect_this)
-        #  #Format and pad the list
-        # nlVect_this = tf.pad(nlVect_this,(1,maxneigh-cnt-1),'constant',value=-1)
-        # nlVect_this[0] = cnt
-        # if rank==0:
-        #     print(nlVect_this[nlVect_this != -1],nlVect[1234][nlVect[1234]!=-1])
-        #print(nlVect_this[nlVect_this != 0])
-        # nlVect = tc.zeros((nats_this,maxneigh),dtype=tc.int)    
-        # for k in range(nats_this):
-        #  #Filter the list according to the threshold
-        #     nlVect_this = boxneighs[k]
-        #     nlVect_this = nlVect_this[tc.where(distance[k] < rcut)]
-        #  #nlVect = boxneighs[np.where(np.logical_and(distance < rcut,distance > 1.0E-12))]
-        #     nlVect_this = nlVect_this[nlVect_this != -1]
-        #     nlVect_this = nlVect_this[nlVect_this != i]
-        #     cnt = len(nlVect_this)
-        #  #Format and pad the list
-        #     nlVect_this = tf.pad(nlVect_this,(1,maxneigh-cnt-1),'constant',value=0)
-        #     nlVect_this[0] = cnt
-        #     nlVect[k] = nlVect_this
-        toc = time.perf_counter()
-        print("Time for building nlVect = ",toc-tic," sec")
+        t_build_nlvect = time.perf_counter() - tic
+
+        #Copy the neighbor list back to the host
         tic = time.perf_counter()
         nlVect = nlVect.cpu().numpy()
-        toc = time.perf_counter()
-        print("Time for moving nlVect to CPU = ",toc-tic," sec")
+        t_copy_nlvect = time.perf_counter() - tic
+
+        if rank == 0:
+            print("Time for building boxneighs = ",t_boxneighs," sec")
+            print("Time for repeating coords = ",t_repeat_coords," sec")
+            print("Time for distance calculation = ",t_distance," sec")
+            print("Time for building neighbor list vectors = ",t_build_nlvect," sec")
+            print("Time for copying nlVect to host = ",t_copy_nlvect," sec")
+
         return(nlVect)
     
 #    nlChunk = np.empty([natsInRank,maxneigh],dtype=int)
@@ -276,22 +216,17 @@ def build_nlist_torch(coords,latticeVectors,rcut,device=tc.device('cpu'),rank=0,
  #   for i in range(rank-1):
  #       if (i >= nats_left):
  #           firstIdx -= 1
-    #nlChunk = get_neighs_of_range(natsPerRank*rank,natsPerRank*rank+natsInRank-1,coords,boxOfI,inbox,latticeVectors)
+    
     nlChunk = get_neighs_of_range(natsPerRank*rank,natsPerRank*rank+natsInRank-1,coords_d,neighbox_d,boxOfI_d,inbox_d,latticeVectors_d)
- 
-#    for k in range(natsInRank):
-#        i = natsPerRank*(rank) + k 
-#        i = firstIdx + k
-        #nlVect = get_neighs_of_old(i,coords,neighbox,boxOfI,inbox,latticeVectors)
-#        nlVect = get_neighs_of(i,coords_d,neighbox_d,boxOfI_d,inbox_d,latticeVectors_d)
-#        nlChunk[k,:] = nlVect[:] 
 
+    #Gather the neighbor list
     nl = np.empty([nats,maxneigh],dtype=int)
     if(mpiON): 
         tic = time.perf_counter()
         nl = collect_matrix_from_chunks(nlChunk,nats,natsPerRank,rank,numranks,comm)
-        toc = time.perf_counter()
-        print("Time for gathering nl = ",toc-tic," sec")        
+        t_gather_nl = time.perf_counter() - tic
+        if rank == 0:
+            print("Time for gathering nl = ",t_gather_nl," sec")        
     else:
         nl = nlChunk
 
