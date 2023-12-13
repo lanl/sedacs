@@ -89,7 +89,6 @@ void dnnsp2(double* ham,
     float  *d_S0, *d_S02, *d_TrS0, *d_TrS02, *S0, *TrS0, *TrS02, *d_S, 
            *d_Sig, *d_Id, *sbuf1, *sbuf2, *Sig, *Eig; 
 
-    half   *hbuf1, *hbuf2;
     int    *v_sgn;
     
     // Allocate some host memory
@@ -115,8 +114,8 @@ void dnnsp2(double* ham,
     // Allocate Buffers
     CUDA_CHECK_ERR(cudaMalloc(&sbuf1,  N * N * sizeof(float)));
     CUDA_CHECK_ERR(cudaMalloc(&sbuf2,  N * N * sizeof(float)));
-    CUDA_CHECK_ERR(cudaMalloc(&hbuf1,  N * N * sizeof(half)));
-    CUDA_CHECK_ERR(cudaMalloc(&hbuf2,  N * N * sizeof(half)));
+    CUDA_CHECK_ERR(cudaMalloc(&sbuf3,  N * N * sizeof(float)));
+    CUDA_CHECK_ERR(cudaMalloc(&sbuf4,  N * N * sizeof(float)));
     
     // Define grid size
     int num_thds = 512;
@@ -198,8 +197,8 @@ void dnnsp2(double* ham,
             tcoretools::tcoreSPGemmSymm(handle,
                                         N,
                                         d_S0,
-                                        hbuf1, hbuf2
                                         sbuf1, sbuf2
+                                        sbuf3, sbuf4
                                         d_S02);
 
         };
