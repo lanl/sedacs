@@ -6,11 +6,11 @@
 #include <dnnsp2.cuh>
 #include <diag.cuh>
 
-void dm_dnnsp2(double* ham, double* dm){
+void dm_dnnsp2(double* ham, double* dm, int n, int nocc){
 
     printf("berga\n");
 
-    dnnsp2(ham, dm, 100, 10, fp64,full);    
+    dnnsp2(ham, dm, n, nocc, fp32, yes);    
 
 }
 

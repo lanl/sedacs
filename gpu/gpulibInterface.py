@@ -112,7 +112,7 @@ def dmDiag(ham,dm,matSize,nocc,arch,lib):
 # @param nocc Occupation number.
 # @return dm Density matrix that was constructed.
 #
-def dmDNNSP2(ham,dm,matSize,nocc,arch):
+def dmDNNSP2(ham,dm,matSize,nocc,lib):
 
     ## convert to C data types
     array_type1 = ctypes.c_double*matSize
@@ -125,16 +125,10 @@ def dmDNNSP2(ham,dm,matSize,nocc,arch):
     tic = time.perf_counter()
   
     ## call dnn-sp2 from .so lib
-    if (arch=="nvidia"):
-        libnvda.DNNSP2(ham_c,      \
-                       dm_c,       \
-                       matSize_c,  \
-                       nocc_c)   
-    elif (arch=="amd"):
-        libamd.DNNSP2(ham_c,      \
-                      dm_c,       \
-                      matSize_c,  \
-                      nocc_c)   
+    lib.DNNSP2(ham_c,      \
+               dm_c,       \
+               matSize_c,  \
+               nocc_c)   
      
     # end timer
     toc = time.perf_counter()

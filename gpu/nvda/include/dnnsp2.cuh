@@ -1,6 +1,6 @@
 typedef enum {
-    full,
-    none
+    yes,
+    no
 } refine_t; 
 
 

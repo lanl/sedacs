@@ -15,41 +15,52 @@
 #include <dnnsp2.cuh>
 
 __global__ 
-void FtoD(float *X
-         , double *Y
-	 , int N) 
+void DtoF(double* X,
+          float* Y,
+	  int N) 
 {
-  int i = threadIdx.x + blockIdx.x * blockDim.x;
-  while (i < N * N) {
-    Y[i] = double(X[i]);
-    i += blockDim.x * gridDim.x; // add total number of threads to i
-  }
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+  
+    if (i < N * N) {
+        Y[i] = float(X[i]);
+    }
 }
 
 
 __global__ 
-void dev_buildIdenity(float* X
- 		     ,int N)
-{  
-  int i = threadIdx.x + blockIdx.x * blockDim.x; 
-  
-  while (i < N * N) {
-    if ( i % (N+1) == 0) {
-      X[i] = 1.0f;
-    } 
-    else {
-      X[i] = 0.0f;
+void FtoD(float* X, 
+          double* Y, 
+	  int N) 
+{
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+
+    if (i < N * N) {
+        Y[i] = double(X[i]);
     }
-    i += blockDim.x * gridDim.x; // add total number of threads to i
 }
+
+
+__global__ 
+void dev_buildIdenity(float* X, int N)
+{  
+    int i = threadIdx.x + blockIdx.x * blockDim.x; 
+  
+    if (i < N * N) {
+        if ( i % (N+1) == 0) {
+            X[i] = 1.0f;
+        } 
+        else {
+            X[i] = 0.0f;
+        }
+    };
 };
 
 void dnnsp2(double* ham, 
             double* dm, 
             size_t N, 
             size_t Nocc,
-            precision_t prec,
-            refine_t refi)
+            precision_t precision,
+            refine_t refinement)
 {
 
     int Stopp = 0;
@@ -63,15 +74,19 @@ void dnnsp2(double* ham,
 
     // Cublas Handle
     cublasHandle_t handle;
-    cublasCreate(&handle);
+    CUBLAS_CHECK_ERR(cublasCreate(&handle));
 
     // Cusolver Handle
     cusolverDnHandle_t cusolverH;
-    cusolverDnCreate(&cusolverH);
+    CUSOLVER_CHECK_ERR(cusolverDnCreate(&cusolverH));
     
     // Set math mode
-    cublasStatus_t cublasStat \
-            = cublasSetMathMode(handle, CUBLAS_DEFAULT_MATH);
+    if (precision=="fp32"){
+        CUBLAS_CHECK_ERR(cublasSetMathMode(handle, CUBLAS_DEFAULT_MATH));
+    }
+    else if (precision=="fp16_fp32"){
+        CUBLAS_CHECK_ERR(cublasSetMathMode(handle, CUBLAS_TENSOR_OP_MATH));
+    };
 
     // Declare Memory
     double *d_TrD0, *TrD0, *d_ham; 
@@ -92,153 +107,151 @@ void dnnsp2(double* ham,
     Eig    =  (float*) malloc(N * sizeof(float));
    
     // Allocate device memory
-    cudaMalloc(&d_ham,N*N*sizeof(double));
-    cudaMalloc(&d_S,N*N*sizeof(float));
-    cudaMalloc(&d_S0,N*N*sizeof(float));
-    cudaMalloc(&d_S02,N*N*sizeof(float));
-    cudaMalloc(&d_Id,N*N*sizeof(float));
-    cudaMalloc(&d_Sig,sizeof(float));
-    cudaMalloc(&d_TrS0,sizeof(float));
-    cudaMalloc(&d_TrS02,sizeof(float));
-    cudaMalloc(&d_TrD0,sizeof(double));
+    CUDA_CHECK_ERR(cudaMalloc(&d_ham,    N * N * sizeof(double)));
+    CUDA_CHECK_ERR(cudaMalloc(&d_S,      N * N * sizeof(float)));
+    CUDA_CHECK_ERR(cudaMalloc(&d_S0,     N * N * sizeof(float)));
+    CUDA_CHECK_ERR(cudaMalloc(&d_S02,    N * N * sizeof(float)));
+    CUDA_CHECK_ERR(cudaMalloc(&d_Id,     N * N * sizeof(float)));
+    CUDA_CHECK_ERR(cudaMalloc(&d_Sig,    sizeof(float)));
+    CUDA_CHECK_ERR(cudaMalloc(&d_TrS0,   sizeof(float)));
+    CUDA_CHECK_ERR(cudaMalloc(&d_TrS02,  sizeof(float)));
+    CUDA_CHECK_ERR(cudaMalloc(&d_TrD0,   sizeof(double)));
 
     // Allocate Buffers
-    cudaMallocManaged(&sbuf1,  N * N * sizeof(float));
-    cudaMallocManaged(&sbuf2,  N * N * sizeof(float));
-    cudaMallocManaged(&hbuf1,  N * N * sizeof(half));
-    cudaMallocManaged(&hbuf2,  N * N * sizeof(half));
+    cudaMalloc(&sbuf1,  N * N * sizeof(float));
+    cudaMalloc(&sbuf2,  N * N * sizeof(float));
+    cudaMalloc(&hbuf1,  N * N * sizeof(half));
+    cudaMalloc(&hbuf2,  N * N * sizeof(half));
     
     // Define grid size
-    int numThreads = 512;
-    int numBlocks = N*N/numThreads+1; 
+    int num_thds = 512;
+    int num_blks = int(ceil(double(N*N)/double(num_thds))); 
 
     // Initialize Hamiltonian and identity
-    std::cout << "loaded Hamiltonian" << std::endl;
-    cudaMemcpy(d_S0, S0, N * N * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_ham, ham, N * N * sizeof(double), cudaMemcpyHostToDevice);
     
     // build Identity on dev
-    dev_buildIdenity<<< numBlocks, numThreads >>>(d_Id, N);
+    dev_buildIdenity<<< num_blks, num_thds >>>(d_Id, N);
 
-    // cast ham from float to double
-    FtoD<<<numBlocks,numThreads>>>(d_S0, d_ham, N); 
+    // cast d_ham from double to float
+    DtoF<<< numBlocks, numThreads >>>(d_S0, d_ham, N); 
     cudaMemcpy(sbuf1, d_S0, N * N * sizeof(float), cudaMemcpyDeviceToDevice);
-
-    //
-    //
-    //===================================================================
-    // Determine initial spectral bounds using cuSOLVER diagonalization
-    //===================================================================
-    //
-    //      
-      
+    
+    // Determine initial spectral bounds using cuSOLVER diagonalization  
     linalgtools::computeEigs(sbuf1, N, Eig);
     
-   
-    // set extremal eigenvalues
-    
+    // set extremal eigenvalues, add 10% slack
     float h1, hN;
-    
-    h1 = Eig[0]*1.01; 
-    hN = Eig[N-1]*1.01;
-   
+    h1 = Eig[0]; 
+    hN = Eig[N-1];
 
-    //
-    //
-    //===================================================================
-    // Input layer to DNN-SP2
-    //===================================================================
-    //
-    //  
+    if (h1 < 0. and hN > 0){
+        h1*=1.1;
+        hN*=1.1;
+    }
+    else if (h1 > 0. and hN > 0.){
+        h1*=0.9;
+        hN*=1.1;
+    }
+    else if (h1 < 0. and hN < 0.){
+        h1*=1.1;
+        hN*=0.9;
+    }
+    else if (h1 > 0 and hN < 0.){
+        h1*=0.9;
+        hN*=1.1;
+    }
+
+    // input layer to DNN-SP2
       
     // zeroth-order term
     float a = -1/(hN-h1); 
     float b = hN/(hN-h1); 
     float c = 0.;
 
-    cublasStat = cublasSgeam(handle,
-                             CUBLAS_OP_N, CUBLAS_OP_N,
-                             N, N,
-                             &b,
-                             d_Id, N,
-                             &a,
-                             d_S0, N,  
-                             d_S0, N); 
+    CUBLAS_CHECK_ERR(cublasSgeam(handle,
+                                 CUBLAS_OP_N, CUBLAS_OP_N,
+                                 N, N,
+                                 &b,
+                                 d_Id, N,
+                                 &a,
+                                 d_S0, N,  
+                                 d_S0, N)); 
     
 
-    // Compute and copy initial traces
+    // compute and copy initial traces
     linalgtools::GPUSTrace(N,d_S0,d_TrS0);
     cudaMemcpy(TrS0, d_TrS0, sizeof(float), cudaMemcpyDeviceToHost);  
     
 
-    #ifdef SP2_SINGLE
-    float alphaS = 1.0, betaS = 0.0, gammaS = 1.0;
-    #endif
+    if (precision==fp32){
+        float alphaS = 1.0, betaS = 0.0, gammaS = 1.0;
+    }
 
     int BERGA=0;
     while (Stopp == 0) {
         
-        #ifdef SP2_SINGLE 
-        cublasStat = cublasSgemm(handle,
-                             CUBLAS_OP_N, CUBLAS_OP_N,
-                             N, N, N,
-                             &alphaS,
-                             d_S0, N,
-                             d_S0, N,
-                             &betaS,
-                             d_S02, N);
+        if (precision==fp32){
+
+            CUBLAS_CHECK_ERR(cublasSgemm(handle,
+                                         CUBLAS_OP_N, CUBLAS_OP_N,
+                                         N, N, N,
+                                         &alphaS,
+                                         d_S0, N,
+                                         d_S0, N,
+                                         &betaS,
+                                         d_S02, N));
         
-        #else
-        tcoretools::tcoreSPGemmSymm(handle
-                                   ,N
-                                   ,d_S0
-                                   ,hbuf1
-                                   ,hbuf2
-                                   ,sbuf1
-                                   ,sbuf2
-                                   ,d_S02);
-        #endif
+        }
+        else if (precision==fp16_fp32){
+            tcoretools::tcoreSPGemmSymm(handle
+                                       ,N
+                                       ,d_S0
+                                       ,hbuf1, hbuf2
+                                       ,sbuf1, sbuf2
+                                       ,d_S02);
+        };
 	
-	// Trace of S0^2
-          linalgtools::GPUSTrace(N,d_S02,d_TrS02); //only works for N even
-          cudaMemcpy(TrS02, d_TrS02, sizeof(float), cudaMemcpyDeviceToHost); 
+	// trace of S0^2
+        linalgtools::GPUSTrace(N,d_S02,d_TrS02); //only works for N even
+        cudaMemcpy(TrS02, d_TrS02, sizeof(float), cudaMemcpyDeviceToHost); 
 	
         
-	// S0 Idempotency error    
-          Idemp_Error.push_back(TrS0[0]-TrS02[0]);
+	// S0 idempotency error    
+        Idemp_Error.push_back(TrS0[0]-TrS02[0]);
           
-          #ifdef VERBOSE
+        #ifdef VERBOSE
           
-          std::cout << "S0 Idempotency error = " << Idemp_Error[iter] << std::endl;	
+        std::cout << "S0 Idempotency error = " << Idemp_Error[iter] << std::endl;	
 	  
-          
-          #endif
+        #endif
 	 
-        // Convergence control on S0 (what about S1??)
-	  if (TrS0[0]-TrS02[0]<=0){
-              printf("XO converged at iteration = %d \n", iter);
-              break;
-          }
-          else if ( iter>2 && v_sgn[iter-1]!=v_sgn[iter-2]  && Idemp_Error[iter]>= 4.5*Idemp_Error[iter-2]*Idemp_Error[iter-2] ){
-              printf("XO converged at iteration = %d \n", iter);
-              break;
-          };
+        // convergence control on S0
+	if (TrS0[0]-TrS02[0]<=0){
+            printf("XO converged at iteration = %d \n", iter);
+            break;
+        }
+        else if ( iter>2 && v_sgn[iter-1]!=v_sgn[iter-2]  && Idemp_Error[iter]>= 4.5*Idemp_Error[iter-2]*Idemp_Error[iter-2] ){
+            printf("XO converged at iteration = %d \n", iter);
+            break;
+        };
 
         // Compute Sigma (which is determind by S0)
-          linalgtools::computeSigma(Nocc,d_TrS0,d_TrS02,d_Sig);
-          cudaMemcpy(Sig, d_Sig, sizeof(float), cudaMemcpyDeviceToHost); 
+        linalgtools::computeSigma(Nocc,d_TrS0,d_TrS02,d_Sig);
+        cudaMemcpy(Sig, d_Sig, sizeof(float), cudaMemcpyDeviceToHost); 
         
-	  a = Sig[0];
-	  b = 1.0-Sig[0]; 
+	a = Sig[0];
+	b = 1.0-Sig[0]; 
 	
 	// Compute S0_{n+1} = W_n*S0_n^2 + B_n = W_n*S0_n^2 + (1-W_n)S0_n
-        cublasStat = cublasSgeam(handle,
-                                 CUBLAS_OP_N, CUBLAS_OP_N,
-                                 N, N, 
-                                 &a,
-                                 d_S02, N,
-                                 &b,
-                                 d_S0, N,  
-                                 d_S0, N);
+        CUBLAS_CHECK_ERR(cublasSgeam(handle,
+                                     CUBLAS_OP_N, CUBLAS_OP_N,
+                                     N, N, 
+                                     &a,
+                                     d_S02, N,
+                                     &b,
+                                     d_S0, N,  
+                                     d_S0, N));
 
         // Update traces
         TrS0[0] = Sig[0]*TrS02[0] + (1-Sig[0])*TrS0[0];
@@ -256,51 +269,42 @@ void dnnsp2(double* ham,
     }
     
     // Free buffers
-    cudaFree(sbuf1);
-    cudaFree(sbuf2);
-    cudaFree(hbuf1);
-    cudaFree(hbuf2);
+    CUDA_CHECK_ERR(cudaFree(sbuf1));
+    CUDA_CHECK_ERR(cudaFree(sbuf2));
+    CUDA_CHECK_ERR(cudaFree(hbuf1));
+    CUDA_CHECK_ERR(cudaFree(hbuf2));
     
-    exit(0);
-    // Allocate memory for density matrices 
-    double *d_D0, *d_D1, *d_T0, *d_T1, *D0, *D1;
-     
-    
-    cudaMalloc(&d_D0,N*N*sizeof(double));
-    
-    cudaMalloc(&d_T0,N*N*sizeof(double));
-   
+    // allocate memory for density matrices 
+    double *d_T0;
+    CUDA_CHECK_ERR(cudaMalloc(&d_T0,N*N*sizeof(double)));
     D0 = (double*) malloc( N * N * sizeof(double));
-    
-    #ifdef REFINEMENT
-    
-    //
-    // Change density matrix approximation to double-prec
-    //
 
-      FtoD<<<numBlocks, numThreads>>>(d_S0, d_T0, N);   
+    // refinement step
+    if (refinement == "yes"){
     
-    //
-    // Do the refinement 
-    //
+        // change dm approximation to double-prec
+        FtoD<<<numBlocks, numThreads>>>(d_S0, d_T0, N);   
+    
+        // do the refinement 
+        linalgtools::doRefinement(d_T0,d_dm,N,Nocc,handle);
+    
+    }
+    else {
+    
+        // change dm approximation to double-prec
+        FtoD<<<numBlocks, numThreads>>>(d_S0, d_dm, N);
+    
+    };
 
-    linalgtools::doRefinement(d_T0,d_D0,N,Nocc,handle);
-    
-    #endif
-    
-    #ifdef NO_REFINEMENT
-    FtoD<<<numBlocks, numThreads>>>(d_S0, d_D0, N);
-    
-    // copy density matrix back to host
-    cudaMemcpy(dm, d_D0, N * N * sizeof(double), cudaMemcpyDeviceToHost); 
+    // copy dm back to host
+    cudaMemcpy(dm, d_dm, N * N * sizeof(double), cudaMemcpyDeviceToHost); 
     
     // Free device memory thats no longer needed
-    cudaFree(d_S0);
-    cudaFree(d_S02);
-    cudaFree(d_Sig);
-    cudaFree(d_TrS0);
-    cudaFree(d_TrS02);
-    #endif
+    CUDA_CHECK_ERR(cudaFree(d_S0));
+    CUDA_CHECK_ERR(cudaFree(d_S02));
+    CUDA_CHECK_ERR(cudaFree(d_Sig));
+    CUDA_CHECK_ERR(cudaFree(d_TrS0));
+    CUDA_CHECK_ERR(cudaFree(d_TrS02));
 
     
     // deallocate dev memory

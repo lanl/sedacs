@@ -62,16 +62,12 @@ void computeOcc(double *eval,
     // get thread idx
     int i = threadIdx.x + blockIdx.x*blockDim.x;
 
-    // while thread idx less than 
-    //if (i < N){
-    //	occ[i] = pow(exp(beta[0]*(eval[i] - mu[0])) + 1, -1); 
-    //};
-
     while (i < N*N){
 
+        
         if (i % (N+1) == 0){
 
-	    // calculate occupation using Fermi-Dirac
+	    // calculate occupation using Fermi-Dirac, along diagonal
             occ[i] = pow(exp(beta[0]*(eval[i%N] - mu[0])) + 1, -1); 
 	
         }
@@ -80,6 +76,7 @@ void computeOcc(double *eval,
 	    occ[i] = 0.0;
 	}
 	
+        // advance i by the grid size
         i += blockDim.x*gridDim.x;
     }
 
@@ -93,9 +90,8 @@ void  compute_dm(double *occ,
 {
     // create handles
     cublasHandle_t handle;
-    cublasCreate(&handle);	
-    cublasStatus_t cublasStat \
-            = cublasSetMathMode(handle, CUBLAS_TENSOR_OP_MATH);
+    CUBLAS_CHECK_ERR(cublasCreate(&handle));	
+    CUBLAS_CHECK_ERR(cublasSetMathMode(handle, CUBLAS_GEMM_DEFAULT));
 
     // set gemm coeffs
     double a, b;
@@ -106,25 +102,26 @@ void  compute_dm(double *occ,
     CUDA_CHECK_ERR(cudaMalloc(&occ_mat, N * N * sizeof(double)));
 
     // evecs * occ_mat = occ_mat
-    cublasStat = cublasDgemm(handle,
-                             CUBLAS_OP_N, CUBLAS_OP_N,
-                             N, N, N,
-                             &a,
-                             evec, N,
-                             occ_mat, N,
-                             &b,
-                             occ_mat, N);
+    CUBLAS_CHECK_ERR(cublasDgemm(handle,
+                                 CUBLAS_OP_N, CUBLAS_OP_N,
+                                 N, N, N,
+                                 &a,
+                                 evec, N,
+                                 occ_mat, N,
+                                 &b,
+                                 occ_mat, N));
 
     // occ_mat * evecs^T= d_dm
-    cublasStat = cublasDgemm(handle,
-                             CUBLAS_OP_N, CUBLAS_OP_T,
-                             N, N, N,
-                             &a,
-                             occ_mat, N,
-                             evec, N,
-                             &b,
-                             dm, N); 
-    cublasDestroy(handle); 
+    CUBLAS_CHECK_ERR(cublasDgemm(handle,
+                                 CUBLAS_OP_N, CUBLAS_OP_T,
+                                 N, N, N,
+                                 &a,
+                                 occ_mat, N,
+                                 evec, N,
+                                 &b,
+                                 dm, N)); 
+
+    CUBLAS_CHECK_ERR(cublasDestroy(handle)); 
     CUDA_CHECK_ERR(cudaFree(occ_mat));
 }
 
@@ -165,9 +162,12 @@ void diagonalize(double* ham,
     computeEval(d_ham, N, d_eval, d_evec); 
 
     // copy evals,evecs to host
-    // cudaMemcpy(eval, d_eval, N*sizeof(double), cudaMemcpyDeviceToHost); 
+    cudaMemcpy(eval, d_eval, N*sizeof(double), cudaMemcpyDeviceToHost); 
     // cudaMemcpy(evec, d_evec, N*N*sizeof(double), cudaMemcpyDeviceToHost);
-		
+
+    // compute fermi level, mu
+
+
     // compute occupations 
     computeOcc<<<nthds, nblks>>>(d_eval, N, beta, occ, mu);
     
