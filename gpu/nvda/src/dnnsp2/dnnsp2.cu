@@ -82,7 +82,7 @@ void dnnsp2(double* ham,
     
     // Set math mode
     if (precision=="fp32"){
-        CUBLAS_CHECK_ERR(cublasSetMathMode(handle, CUBLAS_DEFAULT_MATH));
+    CUBLAS_CHECK_ERR(cublasSetMathMode(handle, CUBLAS_DEFAULT_MATH));
     }
     else if (precision=="fp16_fp32"){
         CUBLAS_CHECK_ERR(cublasSetMathMode(handle, CUBLAS_TENSOR_OP_MATH));
@@ -118,24 +118,24 @@ void dnnsp2(double* ham,
     CUDA_CHECK_ERR(cudaMalloc(&d_TrD0,   sizeof(double)));
 
     // Allocate Buffers
-    cudaMalloc(&sbuf1,  N * N * sizeof(float));
-    cudaMalloc(&sbuf2,  N * N * sizeof(float));
-    cudaMalloc(&hbuf1,  N * N * sizeof(half));
-    cudaMalloc(&hbuf2,  N * N * sizeof(half));
+    CUDA_CHECK_ERR(cudaMalloc(&sbuf1,  N * N * sizeof(float)));
+    CUDA_CHECK_ERR(cudaMalloc(&sbuf2,  N * N * sizeof(float)));
+    CUDA_CHECK_ERR(cudaMalloc(&hbuf1,  N * N * sizeof(half)));
+    CUDA_CHECK_ERR(cudaMalloc(&hbuf2,  N * N * sizeof(half)));
     
     // Define grid size
     int num_thds = 512;
     int num_blks = int(ceil(double(N*N)/double(num_thds))); 
 
     // Initialize Hamiltonian and identity
-    cudaMemcpy(d_ham, ham, N * N * sizeof(double), cudaMemcpyHostToDevice);
+    CUDA_CHECK_ERR(cudaMemcpy(d_ham, ham, N * N * sizeof(double), cudaMemcpyHostToDevice));
     
     // build Identity on dev
     dev_buildIdenity<<< num_blks, num_thds >>>(d_Id, N);
 
     // cast d_ham from double to float
     DtoF<<< numBlocks, numThreads >>>(d_S0, d_ham, N); 
-    cudaMemcpy(sbuf1, d_S0, N * N * sizeof(float), cudaMemcpyDeviceToDevice);
+    CUDA_CHECK_ERR(cudaMemcpy(sbuf1, d_S0, N * N * sizeof(float), cudaMemcpyDeviceToDevice));
     
     // Determine initial spectral bounds using cuSOLVER diagonalization  
     linalgtools::computeEigs(sbuf1, N, Eig);
@@ -157,10 +157,6 @@ void dnnsp2(double* ham,
         h1*=1.1;
         hN*=0.9;
     }
-    else if (h1 > 0 and hN < 0.){
-        h1*=0.9;
-        hN*=1.1;
-    }
 
     // input layer to DNN-SP2
       
@@ -181,14 +177,13 @@ void dnnsp2(double* ham,
 
     // compute and copy initial traces
     linalgtools::GPUSTrace(N,d_S0,d_TrS0);
-    cudaMemcpy(TrS0, d_TrS0, sizeof(float), cudaMemcpyDeviceToHost);  
+    CUDA_CHECK_ERR(cudaMemcpy(TrS0, d_TrS0, sizeof(float), cudaMemcpyDeviceToHost));  
     
 
     if (precision==fp32){
         float alphaS = 1.0, betaS = 0.0, gammaS = 1.0;
     }
 
-    int BERGA=0;
     while (Stopp == 0) {
         
         if (precision==fp32){
@@ -204,17 +199,19 @@ void dnnsp2(double* ham,
         
         }
         else if (precision==fp16_fp32){
-            tcoretools::tcoreSPGemmSymm(handle
-                                       ,N
-                                       ,d_S0
-                                       ,hbuf1, hbuf2
-                                       ,sbuf1, sbuf2
-                                       ,d_S02);
+
+            tcoretools::tcoreSPGemmSymm(handle,
+                                        N,
+                                        d_S0,
+                                        hbuf1, hbuf2
+                                        sbuf1, sbuf2
+                                        d_S02);
+
         };
 	
 	// trace of S0^2
         linalgtools::GPUSTrace(N,d_S02,d_TrS02); //only works for N even
-        cudaMemcpy(TrS02, d_TrS02, sizeof(float), cudaMemcpyDeviceToHost); 
+        CUDA_CHECK_ERR(cudaMemcpy(TrS02, d_TrS02, sizeof(float), cudaMemcpyDeviceToHost)); 
 	
         
 	// S0 idempotency error    
@@ -238,7 +235,7 @@ void dnnsp2(double* ham,
 
         // Compute Sigma (which is determind by S0)
         linalgtools::computeSigma(Nocc,d_TrS0,d_TrS02,d_Sig);
-        cudaMemcpy(Sig, d_Sig, sizeof(float), cudaMemcpyDeviceToHost); 
+        CUDA_CHECK_ERR(cudaMemcpy(Sig, d_Sig, sizeof(float), cudaMemcpyDeviceToHost)); 
         
 	a = Sig[0];
 	b = 1.0-Sig[0]; 
@@ -258,7 +255,7 @@ void dnnsp2(double* ham,
         
 	
 	// Send traces back to device
-	cudaMemcpy(d_TrS0, TrS0, sizeof(float), cudaMemcpyHostToDevice); 
+	CUDA_CHECK_ERR(cudaMemcpy(d_TrS0, TrS0, sizeof(float), cudaMemcpyHostToDevice)); 
 
         // Update sign vector
         v_sgn[iter]=int(Sig[0]);
@@ -297,7 +294,7 @@ void dnnsp2(double* ham,
     };
 
     // copy dm back to host
-    cudaMemcpy(dm, d_dm, N * N * sizeof(double), cudaMemcpyDeviceToHost); 
+    CUDA_CHECK_ERR(cudaMemcpy(dm, d_dm, N * N * sizeof(double), cudaMemcpyDeviceToHost)); 
     
     // Free device memory thats no longer needed
     CUDA_CHECK_ERR(cudaFree(d_S0));
@@ -305,15 +302,11 @@ void dnnsp2(double* ham,
     CUDA_CHECK_ERR(cudaFree(d_Sig));
     CUDA_CHECK_ERR(cudaFree(d_TrS0));
     CUDA_CHECK_ERR(cudaFree(d_TrS02));
-
-    
-    // deallocate dev memory
-    cudaFree(d_ham);
-    cudaFree(d_T0);
-    cudaFree(d_D0);
-    cudaFree(d_Id);
-    cudaFree(d_TrD0);
-
+    CUDA_CHECK_ERR(cudaFree(d_ham));
+    CUDA_CHECK_ERR(cudaFree(d_T0));
+    CUDA_CHECK_ERR(cudaFree(d_D0));
+    CUDA_CHECK_ERR(cudaFree(d_Id));
+    CUDA_CHECK_ERR(cudaFree(d_TrD0));
 
     // deallocate host memory
     free(v_sgn);
@@ -323,7 +316,7 @@ void dnnsp2(double* ham,
     free(Sig);
     
     // Destroy handle
-    cublasDestroy(handle);
+    CUBLAS_CHECK_ERR(cublasDestroy(handle));
 
 }
 
