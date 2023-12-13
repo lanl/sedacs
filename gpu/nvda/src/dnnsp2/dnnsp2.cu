@@ -81,12 +81,7 @@ void dnnsp2(double* ham,
     CUSOLVER_CHECK_ERR(cusolverDnCreate(&cusolverH));
     
     // Set math mode
-    if (precision=="fp32"){
     CUBLAS_CHECK_ERR(cublasSetMathMode(handle, CUBLAS_DEFAULT_MATH));
-    }
-    else if (precision=="fp16_fp32"){
-        CUBLAS_CHECK_ERR(cublasSetMathMode(handle, CUBLAS_TENSOR_OP_MATH));
-    };
 
     // Declare Memory
     double *d_TrD0, *TrD0, *d_ham; 
