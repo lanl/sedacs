@@ -277,7 +277,7 @@ void dnnsp2(double* ham,
     D0 = (double*) malloc( N * N * sizeof(double));
 
     // refinement step
-    if (refinement == "yes"){
+    if (refinement == yes){
     
         // change dm approximation to double-prec
         FtoD<<<numBlocks, numThreads>>>(d_S0, d_T0, N);   

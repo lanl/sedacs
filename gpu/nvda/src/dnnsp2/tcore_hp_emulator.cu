@@ -47,51 +47,55 @@ void tcoretools::tcoreSPGemmSymm (cublasHandle_t &handle
                                  ,float* B
                                  ,cudaStream_t cuStrm) {
     // Setup kernel launch
-    unsigned MAX_THREADS = 1024;
-    unsigned BLOCKS = ceil(N*N/float(MAX_THREADS));
+    unsigned MAX_THREADS = 512;
+    unsigned BLOCKS = int(ceil(float(N*N)/float(MAX_THREADS)));
     unsigned THREADS = MAX_THREADS;
 
     // Split the floats into the high and low parts
     array_split_single<half><<<BLOCKS, THREADS>>>(A, Ah, Al, N*N);
 
     // Set the math mode to allow cuBLAS to use Tensor Cores:
-    cublasStatus_t cublasStat = cublasSetMathMode(handle, CUBLAS_TENSOR_OP_MATH);
+    //cublasStatus_t cublasStat = cublasSetMathMode(handle, CUBLAS_TENSOR_OP_MATH);
 
-    float alpha (1.0f);
-    float beta  (0.0f);
+    float alpha = 1.0;
+    float beta = 0.0;
 
     // Compute gemm for high
-    cublasStat = cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, N, N, &alpha,
-                              Ah, CUDA_R_16F, N,
-                              Ah, CUDA_R_16F, N,
-                              &beta, B1, CUDA_R_32F, N, CUDA_R_32F, CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+    CUBLAS_CHECK_ERR(cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, N, N, 
+                                  &alpha,
+                                  Ah, CUDA_R_16F, N,
+                                  Ah, CUDA_R_16F, N,
+                                  &beta, B1, CUDA_R_32F, N, 
+                                  CUBLAS_COMPUTE_32F, CUBLAS_DEFAULT_MATH));
 
     // Compute gemm for low
-    cublasStat = cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, N, N, &alpha,
-                              Ah, CUDA_R_16F, N,
-                              Al, CUDA_R_16F, N,
-                              &beta, B2, CUDA_R_32F, N, CUDA_R_32F, CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+    CUBLAS_CHECK_ERR(cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, N, N, 
+                                  &alpha,
+                                  Ah, CUDA_R_16F, N,
+                                  Al, CUDA_R_16F, N,
+                                  &beta, B2, CUDA_R_32F, N, 
+                                  CUBLAS_COMPUTE_32F, CUBLAS_DEFAULT_MATH));
 
-    alpha = 1.0f;
-    beta = 1.0f;
-    cublasStat = cublasSgeam(handle,
-                             CUBLAS_OP_N, CUBLAS_OP_T,
-                             N, N,
-                             &alpha,
-                             B2, N,
-                             &beta,
-                             B2, N,
-                             B, N);
+    alpha = 1.0;
+    beta = 1.0;
+    CUBLAS_CHECK_ERR(cublasSgeam(handle,
+                                 CUBLAS_OP_N, CUBLAS_OP_T,
+                                 N, N,
+                                 &alpha,
+                                 B2, N,
+                                 &beta,
+                                 B2, N,
+                                 B, N));
 
     beta = powf(2,-10);
-    cublasStat = cublasSgeam(handle,
-                             CUBLAS_OP_N, CUBLAS_OP_N,
-                             N, N,
-                             &alpha,
-                             B1, N,
-                             &beta,
-                             B, N,
-                             B, N);
+    CUBLAS_CHECK_ERR(cublasSgeam(handle,
+                                 CUBLAS_OP_N, CUBLAS_OP_N,
+                                 N, N,
+                                 &alpha,
+                                 B1, N,
+                                 &beta,
+                                 B, N,
+                                 B, N));
 };
 
 void tcoretools::tcoreSPGemmSymm1(cublasHandle_t &handle
