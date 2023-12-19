@@ -17,7 +17,7 @@ import ctypes
 # @param N Integer N, converted to a C-int type
 # @return arr2 Numpy array you wrote to
 #
-def nlist(x,y,z,nlist,num_atoms,arch):
+def nlist(x,y,z,nlist,num_atoms,lib):
     size = 32*num_atoms
     array_type1 = ctypes.c_double*num_atoms     
     array_type2 = ctypes.c_int*size 
@@ -29,20 +29,14 @@ def nlist(x,y,z,nlist,num_atoms,arch):
     nats = ctypes.c_int(num_atoms)
     dev = ctypes.c_int(0)
     print("dev=",dev) 
+
     tic = time.perf_counter()
     
-    if (arch=="nvidia"):
-        libnvda.nlist(x_c,     \
-                      y_c,     \
-                      z_c,     \
-                      nlist_c, \
-                      rcut,nats,0)
-    elif (arch=="amd"):
-        libamd.nlist(x_c,     \
-                     y_c,     \
-                     z_c,     \
-                     nlist_c, \
-                     rcut,nats,0)
+    lib.nlist(x_c,     \
+              y_c,     \
+              z_c,     \
+              nlist_c, \
+              rcut,nats,0)
                  
     toc = time.perf_counter()
     print(f"Time = {toc - tic:0.4f} seconds")
@@ -79,20 +73,12 @@ def dmDiag(ham,dm,matSize,nocc,arch,lib):
 
     ## time call
     tic = time.perf_counter()
-  
-    arch = "nvidia"
 
     ## call diag from .so lib
-    if (arch=="nvidia"):
-        lib.dm_diag(ham_c,       \
-                    dm_c,        \
-                    matSize_c,   \
-                    nocc_c)   
-    elif (arch=="amd"):
-        lib.dm_diag(ham_c,       \
-                    dm_c,        \
-                    matSize_c,   \
-                    nocc_c)   
+    lib.dm_diag(ham_c,       \
+                dm_c,        \
+                matSize_c,   \
+                nocc_c)   
      
     # end timer
     toc = time.perf_counter()
@@ -125,10 +111,10 @@ def dmDNNSP2(ham,dm,matSize,nocc,lib):
     tic = time.perf_counter()
   
     ## call dnn-sp2 from .so lib
-    lib.DNNSP2(ham_c,      \
-               dm_c,       \
-               matSize_c,  \
-               nocc_c)   
+    lib.dm_dnnsp2(ham_c,      \
+                  dm_c,       \
+                  matSize_c,  \
+                  nocc_c)   
      
     # end timer
     toc = time.perf_counter()
@@ -146,7 +132,7 @@ def dmDNNSP2(ham,dm,matSize,nocc,lib):
 # @param expOrder Expansion order (largest poly. degree).
 # @return dm Density matrix
 #
-def dmCheby(ham,dm,matSize,N,arch):
+def dmCheby(ham,dm,matSize,N,lib):
 
     ## convert to C data types
     array_type1 = ctypes.c_double*matSize
@@ -159,16 +145,10 @@ def dmCheby(ham,dm,matSize,N,arch):
     tic = time.perf_counter()
   
     ## call cheby from .so lib
-    if (arch=="nvidia"):
-        libnvda.cheby(ham_c,      \
-                      dm_c,       \
-                      matSize_c,  \
-                      expOrder_c)   
-    elif (arch=="amd"):
-        libamd.cheby(ham_c,      \
-                     dm_c,       \
-                     matSize_c,  \
-                     expOrder_c)   
+    lib.dm_cheby(ham_c,      \
+                 dm_c,       \
+                 matSize_c,  \
+                 expOrder_c)   
     # end timer
     toc = time.perf_counter()
     print(f"Time = {toc - tic:0.4f} seconds")
