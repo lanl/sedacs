@@ -6,6 +6,8 @@ Proxya code as explained in the proposal. This proxy code a should
 perform up to a full SCF optimization of the DM. Written in 
 three different languages: python, fortran, and C. 
 
+## gpu
+This is an early implementation of the gpu/AI-solver library.
 
 ## latte 
 
