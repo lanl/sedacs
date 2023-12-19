@@ -5,7 +5,6 @@
 #include <error_check.cuh>
 #include <cusolverDn.h>
 
-
 // diagonalize a matrix
 void computeEval(double *d_ham, int N, 
                  double *d_eval, 
@@ -124,7 +123,6 @@ void  compute_dm(double *occ,
     CUBLAS_CHECK_ERR(cublasDestroy(handle)); 
     CUDA_CHECK_ERR(cudaFree(occ_mat));
 }
-
 
 void diagonalize(double* ham, 
                  double* dm, 

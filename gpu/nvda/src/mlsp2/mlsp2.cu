@@ -12,7 +12,6 @@
 #include <cusolverDn.h>
 //#include <tcore_hp_emulator.cuh>
 //#include <linalg_tools.cuh>
-//#include <dnnsp2.cuh>
 #include <mlsp2.cuh>
 
 __global__ 
@@ -47,8 +46,8 @@ void dev_buildIdenity(float* X
 
 void mlsp2(double* ham, 
             double* dm, 
-            size_t N, 
-            size_t Nocc,
+            int N, 
+            int Nocc,
             precision_t prec,
             refine_t refi)
 {

@@ -11,10 +11,10 @@ typedef enum {
 } precision_t; 
 
 
-void dnnsp2(double*, 
-            double*, 
-            size_t, 
-            size_t,
-            precision_t,
-            refine_t);
+void mlsp2(double*, 
+           double*, 
+           int, 
+           int,
+           precision_t,
+           refine_t);
 
