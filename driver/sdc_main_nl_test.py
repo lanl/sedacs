@@ -62,5 +62,6 @@ print("Time for build_nlist", toc - tic,"(s)")
 if rank == 0:
     with open('neighborinfo.txt','w') as of:
         for kk in range(sy.nats):
-            print("Neighs (x-coords) of {} = ".format(kk),nl[kk,1:nl[kk,0]],"(",sy.coords[nl[kk,1:nl[kk,0]],0],")",file=of)
+            nl_this = np.flip(np.sort(nl[kk,1:nl[kk,0]]))
+            print("Neighs (x-coords) of {0} ({1})= ".format(kk,nl[kk,0]),nl_this,"(",sy.coords[nl_this],")",file=of)
 exit(0)
