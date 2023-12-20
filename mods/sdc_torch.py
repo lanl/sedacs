@@ -119,7 +119,7 @@ def build_nlist_torch(coords,latticeVectors,rcut,device=tc.device('cpu'),rank=0,
     latticeVectors_d = tc.tensor(latticeVectors,device=device)
     coords_d = tc.tensor(coords,device=device)
     t_copy = time.perf_counter() - tic
-    if rank == 0:
+    if rank == 0 and verb:
         print("Time for copying arrays to device = ",t_copy," sec")
 
     def get_neighs_of(i,coords,neighbox,boxOfI,inbox,latticeVectors):    
@@ -198,15 +198,21 @@ def build_nlist_torch(coords,latticeVectors,rcut,device=tc.device('cpu'),rank=0,
 
         #Copy the neighbor list back to the host
         tic = time.perf_counter()
-        nlVect = nlVect.cpu().numpy()
+        nlVect = nlVect.cpu()
         t_copy_nlvect = time.perf_counter() - tic
+        
+        #Convert to a numpy array
+        tic = time.perf_counter()
+        nlVect = nlVect.numpy()
+        t_numpy = time.perf_counter() - tic
 
-        if rank == 0:
+        if rank == 0 and verb:
             print("Time for building boxneighs = ",t_boxneighs," sec")
             print("Time for repeating coords = ",t_repeat_coords," sec")
             print("Time for distance calculation = ",t_distance," sec")
             print("Time for building neighbor list vectors = ",t_build_nlvect," sec")
             print("Time for copying nlVect to host = ",t_copy_nlvect," sec")
+            print("Time for converting nlVect to numpy = ",t_numpy," sec")
 
         return(nlVect)
     
@@ -225,7 +231,7 @@ def build_nlist_torch(coords,latticeVectors,rcut,device=tc.device('cpu'),rank=0,
         tic = time.perf_counter()
         nl = collect_matrix_from_chunks(nlChunk,nats,natsPerRank,rank,numranks,comm)
         t_gather_nl = time.perf_counter() - tic
-        if rank == 0:
+        if rank == 0 and verb:
             print("Time for gathering nl = ",t_gather_nl," sec")        
     else:
         nl = nlChunk
