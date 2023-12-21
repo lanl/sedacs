@@ -1,13 +1,13 @@
 #include <cusolverDn.h>
 #include <cufft.h>
-#include <cublas.h>
+//#include <cublas.h>
 
 #define CUDA_CHECK_ERR(val) check((val), #val, __FILE__, __LINE__)
 #define CUFFT_CHECK_ERR(ans) { cufft_check((ans), __FILE__, __LINE__); }
 #define CUSOLVER_CHECK_ERR(ans) { cusolver_check((ans), __FILE__, __LINE__); }
-#define CUBLAS_CHECK_ERR(ans) { cublas_check((ans), __FILE__, __LINE__); }
+//#define CUBLAS_CHECK_ERR(ans) { cublas_check((ans), __FILE__, __LINE__); }
 
-inline void cublas_check(int code, const char *file, int line, bool abort=true)
+/*inline void cublas_check(int code, const char *file, int line, bool abort=true)
 {
     if (code != CUBLAS_SUCCESS)
     {    
@@ -15,7 +15,7 @@ inline void cublas_check(int code, const char *file, int line, bool abort=true)
         if (abort) exit(code);
     }        
 }
-
+*/
 
 inline void cusolver_check(int code, const char *file, int line, bool abort=true)
 {
