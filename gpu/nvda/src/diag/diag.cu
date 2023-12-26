@@ -58,7 +58,7 @@ void computeEval(double *d_ham, int norb,
 };
 
 
-// Compute the occupation factors using Fermi-Dirac
+/*// Compute the occupation factors using Fermi-Dirac
 // and store along diagonal of a diagonal matrix 
 __global__ 
 void computeOcc(double *eval,
@@ -77,7 +77,7 @@ void computeOcc(double *eval,
 
 	    // calculate occupation using Fermi-Dirac, along diagonal
             occ[i] = 2.0*pow(exp((eval[i%norb] - mu)/kbt) + 1, -1); 
-	
+            //printf("eval[%d] = %.15f\n",i%norb,eval[i%norb]);	
         }
         else{
             // fill in zeros off-diagonal
@@ -86,6 +86,28 @@ void computeOcc(double *eval,
 	
         // advance i by the grid size
         i += blockDim.x*gridDim.x;
+    }
+
+};
+*/
+
+// Compute the occupation factors using Fermi-Dirac
+// as a function of the ham eigenvalues
+__global__ 
+void computeOcc(double *eval,
+                double *occ,
+                const unsigned int norb, 
+                double kbt,
+                double mu)
+{
+    // get thread idx
+    int i = threadIdx.x + blockIdx.x*blockDim.x;
+
+    if (i < norb){
+    
+        // calculate occupation using Fermi-Dirac, along diagonal
+        occ[i] = 2.0/(exp((eval[i] - mu)/kbt) + 1); 
+        //printf("eval[%d] = %.15f\n",i%norb,eval[i%norb]);	
     }
 
 };
@@ -102,26 +124,35 @@ void get_fermilevel(double* eval,
 {
     double nel, mu0, f1, f2, step;
     nel= bndfil*2.0*double(norb);
+   
+    mu = -30.0;
     mu0 = mu;
-    step = 0.1;
+    step = 15.0;
 
+
+    // need to implement gershgorin circle
 
     // wrap occ into a thrust device vector
     thrust::device_ptr<double> thrust_occ;
     thrust_occ = thrust::device_pointer_cast(occ);
 
+    double err=0.;
+    while (err<1e-5){
+
     // compute occupation with guess for mu
     computeOcc<<<nblks, nthds>>>(eval, occ, norb, kbt, mu);
 
-    // sum the eigenvalues after applying Fermi-Dirac
+    // sum the occ factors
     f1 = thrust::reduce(thrust_occ, thrust_occ + norb, 0.0, thrust::plus<double>());
 
-    // calculate error in mu
+    // calculate error in sum of occupations
     f1 = f1 - nel;
+    printf("f1-nel=%.15f\n",f1);
 
-    //
+    // update mu
     mu = mu0 + step;
 
+    // init second sample point of occ as function of mu
     f2 = 0.0;
 
     // compute occupation with updated mu
@@ -132,7 +163,11 @@ void get_fermilevel(double* eval,
 
     // calculate error in mu
     f2 = f2 - nel;
+    printf("f2-nel=%.15f\n",f2);
   
+
+    err=abs(f2-f1);
+
     // set mu0 to previous mu
     mu0 = mu;
 
@@ -142,12 +177,15 @@ void get_fermilevel(double* eval,
     //}
 
     mu = mu0 - f2*step/(f2-f1); // newton-raphson
+    printf("mu=%.15f = %.15f - %.15f * %.15f / (%.15f-%.15f)\n",mu,mu0,f2,step,f2,f1);
+
     f1 = f2;
     step = mu - mu0;
-
+    std::cout << "step = " <<  step << std::endl;
+    }
     for (int m = 0; m < 101; m++){
       if (m == 100){
-        printf("WARNING: norbewton-raphson is not converging ...");
+        printf("WARNING: Newton-raphson is not converging ...");
         //err = .true.;
         mu = mu0;
         return;
@@ -162,19 +200,16 @@ void get_fermilevel(double* eval,
       // sum the occupation factors
       f2 = thrust::reduce(thrust_occ, thrust_occ + norb, 0.0, thrust::plus<double>());
 
-      /*!$omp parallel do default(none) private(i) &
-      !$omp shared(eigenvalues,ef,kbt,norb) &
-      !$omp reduction(+:f2)
-      do i=1,norb
-        f2 = f2 +  2.0_dp*fermi(eigenvalues(i),ef,kbt)
-      enddo
-      !$omp end parallel do*/
-
-      // update f2
+      // update f2 sample point
       f2 = f2-nel;
+      printf("f2-nel=%.15f\n",f2);
+      printf("mu=%.15f\n",mu);
       mu0 = mu;
+  
+      // newton step
       mu = mu0 - f2*step/(f2-f1);
       f1 = f2;
+
       step = mu - mu0;
       //if (abs(f1).lt.tol)then !tolerance control
       //  return
@@ -238,6 +273,10 @@ void diagonalize(double* ham,
     int nthds = 512;
     int nblks = int(ceil(float(norb*norb)/float(nthds))); 
 
+    int nthds2 = 512;
+    int nblks2 = int(ceil(float(norb)/float(nthds))); 
+
+
     // declare vars
     double *eval, *evec, *occ, mu;
     double *d_ham, *d_eval, *d_evec;
@@ -266,11 +305,14 @@ void diagonalize(double* ham,
     //cudaMemcpy(evec, d_evec, norb*norb*sizeof(double), cudaMemcpyDeviceToHost);
 
     // guess mu
-    mu = 1.0;
+    mu = 0.5;
 
     // compute fermi level, mu
-    get_fermilevel(d_eval, d_occ, norb, kbt, bndfil, mu, nblks, nthds);
+    get_fermilevel(d_eval, d_occ, norb, kbt, bndfil, mu, nblks2, nthds2);
     
+
+    exit(0);
+
     // build density matrix
     compute_dm(d_occ, d_evec, d_dm, norb);
 		

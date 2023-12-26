@@ -3,6 +3,7 @@
 void diagonalize(double*, 
                  double*, 
                  double, 
+                 double, 
                  int,
                  int);
 

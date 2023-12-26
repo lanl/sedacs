@@ -4,14 +4,15 @@
 #include <math.h>
 
 #include <cuda.h>
-#include <cublas_v2.h>
+//#include <cublas_v2.h>
+//#include <cublas.h>
 #include <cuda_fp16.h>
 
 #include <random>
 #include <ctime>
 
 #include <tcore_hp_emulator.cuh>
-
+#include <error_check.cuh>
 
 // device function for splitting a float into two halves
 __device__
