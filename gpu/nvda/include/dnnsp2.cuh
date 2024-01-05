@@ -1,29 +1,15 @@
-/*typedef enum {
-    yes,
-    no
+
+/*typedef enum{
+    yes       = 0,
+    no        = 1   
 } refine_t; 
 
-typedef enum {
-    fp64,
-    fp32,
-    fp16_fp32
+typedef enum{
+    fp64      = 0,
+    fp32      = 1, 
+    fp16_fp32 = 2   
 } precision_t; 
 */
-
-extern "C"{
-typedef enum {
-    yes,
-    no
-} refine_t; 
-}
-extern "C"{
-typedef enum {
-    fp64,
-    fp32,
-    fp16_fp32
-} precision_t; 
-}
-
 
 void dnnsp2(double*, 
             double*, 

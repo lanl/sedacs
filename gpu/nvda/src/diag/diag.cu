@@ -6,9 +6,7 @@
 #include <cusolverDn.h>
 #include <thrust/device_vector.h> 
 #include <thrust/host_vector.h> 
-
-
-
+#include <structs.h>
 
 // diagonalize a matrix
 void computeEval(double *d_ham, int norb, 
@@ -91,7 +89,7 @@ void computeOcc(double *eval,
 };
 */
 
-// Compute the occupation factors using Fermi-Dirac
+// Compute the occupation error as
 // as a function of the ham eigenvalues
 __global__ 
 void computeOcc(double *eval,
@@ -107,13 +105,160 @@ void computeOcc(double *eval,
     
         // calculate occupation using Fermi-Dirac, along diagonal
         occ[i] = 2.0/(exp((eval[i] - mu)/kbt) + 1); 
-        //printf("eval[%d] = %.15f\n",i%norb,eval[i%norb]);	
+        //printf("occ[%d] = %.15f\n",i,occ[i]);	
     }
 
 };
 
+// Compute derivative wrt mu of occupation error
+__global__ 
+void compute_dOcc_dmu(double *eval,
+                      double *docc_dmu,
+                      const unsigned int norb, 
+                      double kbt,
+                      double mu)
+{
+    // get thread idx
+    int i = threadIdx.x + blockIdx.x*blockDim.x;
 
-void get_fermilevel(double* eval,
+    if (i < norb){
+    
+        // calculate occupation using Fermi-Dirac, along diagonal
+        docc_dmu[i] = -2.0*exp((eval[i] - mu)/kbt)/pow((exp((eval[i] - mu)/kbt) + 1),2)/kbt; 
+        //printf("%d, %.15f, %.15f, %.15f, %.15f\n",i,mu,eval[i] - mu,exp((eval[i] - mu)/kbt), pow((exp((eval[i] - mu)/kbt) + 1),2));	
+        //printf("docc/dmu[%d] = %.15f\n",i,docc_dmu[i]);	
+    }
+
+};
+
+// Compute derivative wrt mu of occupation error
+__global__ 
+void shift_and_scaleEval(double *eval,int norb)
+{
+    // get thread idx
+    int i = threadIdx.x + blockIdx.x*blockDim.x;
+
+    if (i < norb){
+
+        double emin = -40.0;
+        double emax = 40.0;
+        // calculate occupation using Fermi-Dirac, along diagonal
+        eval[i] = (eval[i] - emin)/(emax-emin);
+        //printf("scaled eval[%d] = %.15f\n",i,eval[i]);	
+    }
+
+};
+
+void get_fermilevel_bisection(double* eval,
+                              double* occ,
+                              int norb, 
+                              double kbt,
+                              double bndfil,
+                              double mu,
+                              int nthds, 
+                              int nblks)   // may need to add error flag      
+{
+    double nel, mu0, mu1, f1, f2, f0, step,err;
+    nel= bndfil*2.0*double(norb);
+    std::cout << "nel = " << nel << std::endl; 
+    mu0 = -40.;
+    mu1 = 40.;
+    // need to implement gershgorin circle
+
+    // wrap occ into a thrust device vector
+    thrust::device_ptr<double> thrust_occ;
+    thrust_occ = thrust::device_pointer_cast(occ);
+
+    // compute occupation with guess for mu
+    computeOcc<<<nblks, nthds>>>(eval, occ, norb, kbt, mu0);
+
+    // sum the occ factors
+    f0 = thrust::reduce(thrust_occ, thrust_occ + norb, 0.0, thrust::plus<double>());
+    
+    // calculate error in sum of occupations
+    f0 = f0 - nel;
+    printf("f0-nel=%.15f\n",f0);
+   
+    // compute occupation with guess for mu
+    computeOcc<<<nblks, nthds>>>(eval, occ, norb, kbt, mu1);
+
+    // sum the occ factors
+    f1 = thrust::reduce(thrust_occ, thrust_occ + norb, 0.0, thrust::plus<double>());
+    
+    // calculate error in sum of occupations
+    f1 = f1 - nel;
+    printf("f1-nel=%.15f\n",f1);
+ 
+    // have baseline error, now go above and below:
+    err = abs(f0-f1);
+    std::cout << "err = " << err << std::endl;
+
+    /*while(err < 1e-5){
+   
+    // change mu
+    mu1 = mu+step
+    
+    // change mu
+    mu2 = mu-step
+
+    }*/
+   
+/*    // compute occupation with guess for mu
+    compute_dOcc_dmu<<<nblks, nthds>>>(eval, occ, norb, kbt, mu);
+
+    f2 = thrust::reduce(thrust_occ, thrust_occ + norb, 0.0, thrust::plus<double>());
+
+
+    //if(abs(f2 - f1) < 1e-5){
+      //err = .true.
+      //return;
+    //}
+    mu0=mu;
+    std::cout << "mu prev = " << mu0 << std::endl;
+    mu = mu0 - f1/f2; // newton-raphson, mu = mu - f(mu)/f'(mu)
+    std::cout << "mu update = " << mu << std::endl;
+
+    err = abs(mu0-mu);
+
+    //printf("mu=%.15f = %.15f - %.15f * %.15f / (%.15f-%.15f)\n",mu,mu0,f2,step,f2,f1);
+
+    std::cout << "mu = " <<  mu << std::endl;
+    }
+    for (int m = 0; m < 101; m++){
+      if (m == 100){
+        printf("WARNING: Newton-raphson is not converging ...");
+        //err = .true.;
+        mu = mu0;
+        return;
+      }
+
+      // compute occupation with updated mu and Fermi-Dirac
+      computeOcc<<<nblks, nthds>>>(eval, occ, norb, kbt, mu);
+
+      // sum the occupation factors
+      f1 = thrust::reduce(thrust_occ, thrust_occ + norb, 0.0, thrust::plus<double>());
+
+      // update f2 sample point
+      f1 = f1-nel;
+      std::cout << "occ err = " << mu << std::endl;
+ 
+      // compute occupation with guess for mu
+      compute_dOcc_dmu<<<nblks, nthds>>>(eval, occ, norb, kbt, mu);
+
+      f2 = thrust::reduce(thrust_occ, thrust_occ + norb, 0.0, thrust::plus<double>());
+
+      mu0 = mu;
+      // newton step
+      mu = mu0 - f1/f2;
+      std::cout << "mu update = " << mu << std::endl;
+
+      //step = mu - mu0;
+      //if (abs(f1).lt.tol)then !tolerance control
+      //  return
+      //endif
+    }*/
+}
+void get_fermilevel_newton(double* eval,
                     double* occ,
                     int norb, 
                     double kbt,
@@ -124,10 +269,8 @@ void get_fermilevel(double* eval,
 {
     double nel, mu0, f1, f2, step;
     nel= bndfil*2.0*double(norb);
-   
-    mu = -30.0;
-    mu0 = mu;
-    step = 15.0;
+    std::cout << "nel = " << nel << std::endl; 
+    mu = 0.5;
 
 
     // need to implement gershgorin circle
@@ -144,44 +287,32 @@ void get_fermilevel(double* eval,
 
     // sum the occ factors
     f1 = thrust::reduce(thrust_occ, thrust_occ + norb, 0.0, thrust::plus<double>());
-
+    
     // calculate error in sum of occupations
     f1 = f1 - nel;
     printf("f1-nel=%.15f\n",f1);
+    
 
-    // update mu
-    mu = mu0 + step;
+    // compute occupation with guess for mu
+    compute_dOcc_dmu<<<nblks, nthds>>>(eval, occ, norb, kbt, mu);
 
-    // init second sample point of occ as function of mu
-    f2 = 0.0;
-
-    // compute occupation with updated mu
-    computeOcc<<<nthds, nblks>>>(eval, occ, norb, kbt, mu);
-
-    // sum the eigenvalues after applying Fermi-Dirac
     f2 = thrust::reduce(thrust_occ, thrust_occ + norb, 0.0, thrust::plus<double>());
 
-    // calculate error in mu
-    f2 = f2 - nel;
-    printf("f2-nel=%.15f\n",f2);
-  
-
-    err=abs(f2-f1);
-
-    // set mu0 to previous mu
-    mu0 = mu;
 
     //if(abs(f2 - f1) < 1e-5){
       //err = .true.
       //return;
     //}
+    mu0=mu;
+    std::cout << "mu prev = " << mu0 << std::endl;
+    mu = mu0 - f1/f2; // newton-raphson, mu = mu - f(mu)/f'(mu)
+    std::cout << "mu update = " << mu << std::endl;
 
-    mu = mu0 - f2*step/(f2-f1); // newton-raphson
-    printf("mu=%.15f = %.15f - %.15f * %.15f / (%.15f-%.15f)\n",mu,mu0,f2,step,f2,f1);
+    err = abs(mu0-mu);
 
-    f1 = f2;
-    step = mu - mu0;
-    std::cout << "step = " <<  step << std::endl;
+    //printf("mu=%.15f = %.15f - %.15f * %.15f / (%.15f-%.15f)\n",mu,mu0,f2,step,f2,f1);
+
+    std::cout << "mu = " <<  mu << std::endl;
     }
     for (int m = 0; m < 101; m++){
       if (m == 100){
@@ -191,26 +322,27 @@ void get_fermilevel(double* eval,
         return;
       }
 
-      // new sum of the occupations
-      f2 = 0.0;
-       
       // compute occupation with updated mu and Fermi-Dirac
       computeOcc<<<nblks, nthds>>>(eval, occ, norb, kbt, mu);
 
       // sum the occupation factors
-      f2 = thrust::reduce(thrust_occ, thrust_occ + norb, 0.0, thrust::plus<double>());
+      f1 = thrust::reduce(thrust_occ, thrust_occ + norb, 0.0, thrust::plus<double>());
 
       // update f2 sample point
-      f2 = f2-nel;
-      printf("f2-nel=%.15f\n",f2);
-      printf("mu=%.15f\n",mu);
-      mu0 = mu;
-  
-      // newton step
-      mu = mu0 - f2*step/(f2-f1);
-      f1 = f2;
+      f1 = f1-nel;
+      std::cout << "occ err = " << mu << std::endl;
+ 
+      // compute occupation with guess for mu
+      compute_dOcc_dmu<<<nblks, nthds>>>(eval, occ, norb, kbt, mu);
 
-      step = mu - mu0;
+      f2 = thrust::reduce(thrust_occ, thrust_occ + norb, 0.0, thrust::plus<double>());
+
+      mu0 = mu;
+      // newton step
+      mu = mu0 - f1/f2;
+      std::cout << "mu update = " << mu << std::endl;
+
+      //step = mu - mu0;
       //if (abs(f1).lt.tol)then !tolerance control
       //  return
       //endif
@@ -266,9 +398,13 @@ void diagonalize(double* ham,
                  double* dm, 
                  double kbt,
                  double bndfil,
+                 precision_t prec,
                  int norb,
                  int nocc)
 {
+    std::cout << "prec = " << prec << std::endl;
+
+
     // kernel launch paramaters
     int nthds = 512;
     int nblks = int(ceil(float(norb*norb)/float(nthds))); 
@@ -276,7 +412,7 @@ void diagonalize(double* ham,
     int nthds2 = 512;
     int nblks2 = int(ceil(float(norb)/float(nthds))); 
 
-
+    std::cout << ham[0] << std::endl;
     // declare vars
     double *eval, *evec, *occ, mu;
     double *d_ham, *d_eval, *d_evec;
@@ -300,6 +436,9 @@ void diagonalize(double* ham,
     // call cusolver diag
     computeEval(d_ham, norb, d_eval, d_evec); 
 
+    // scale eval
+    //shift_and_scaleEval<<<nblks2, nthds2>>>(d_eval,norb);
+
     // copy evals,evecs to host
     //cudaMemcpy(eval, d_eval, norb*sizeof(double), cudaMemcpyDeviceToHost); 
     //cudaMemcpy(evec, d_evec, norb*norb*sizeof(double), cudaMemcpyDeviceToHost);
@@ -308,9 +447,10 @@ void diagonalize(double* ham,
     mu = 0.5;
 
     // compute fermi level, mu
-    get_fermilevel(d_eval, d_occ, norb, kbt, bndfil, mu, nblks2, nthds2);
+    //get_fermilevel_newton(d_eval, d_occ, norb, kbt, bndfil, mu, nblks2, nthds2);
     
-
+    get_fermilevel_bisection(d_eval, d_occ, norb, kbt, bndfil, mu, nblks2, nthds2);
+    
     exit(0);
 
     // build density matrix

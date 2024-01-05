@@ -12,7 +12,7 @@
 #include <cusolverDn.h>
 #include <tcore_hp_emulator.cuh>
 #include <linalg_tools.cuh>
-#include <dnnsp2.cuh>
+#include <structs.h>
 
 __global__ 
 void DtoF(double* X,
