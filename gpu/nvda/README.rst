@@ -1,7 +1,7 @@
 ## To build
 
 Be sure to load the nvhpc module in your cluster environment, or have the nvhpc compilers installed, specifically nvc++. This compiler is needed to build 
-the shared objects required by the ctypes python module. The makefile assumes the following dependencies
+the shared objects required by the ctypes python module. Also load openmpi. The makefile assumes the following dependencies
 
 Dependencies:
 nvc++, compiler 

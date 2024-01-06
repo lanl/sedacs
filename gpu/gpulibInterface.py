@@ -4,8 +4,8 @@ import numpy as np
 import time
 
 # to call cuda/hip
-import ctypes 
-
+from ctypes import *
+import ctypes
 
 ## gpuLib API call to neighborlist build
 # This interface function will accept two numpy arrays along with three integers
@@ -43,6 +43,60 @@ def nlist(x,y,z,nlist,num_atoms,lib):
     return list(nlist)                          
 
 
+
+def dmDiag(ham,dm,matSize,nocc,lib):
+
+    ## convert to flattened array
+    matSize_sq = matSize*matSize
+    ham_temp = np.zeros((matSize_sq,1))
+    dm_temp = np.zeros((matSize_sq,1))
+
+    for i in range(0,matSize):
+        for j in range(0,matSize):
+            ham_temp[i*matSize+j] = ham[i,j]
+    
+    ## time call
+    tic = time.perf_counter()
+    array_type1 = ctypes.c_double*matSize_sq
+
+    ## copies the data to C data structures
+    ham_c = array_type1(*ham_temp)                       
+    dm_c = array_type1(*dm_temp)               
+    matSize_c = ctypes.c_int(matSize)
+    nocc_c = ctypes.c_int(nocc)
+
+    # end timer
+    toc = time.perf_counter()
+    print(f"Time to convert types = {toc - tic:0.4f} seconds")
+
+    ## time call
+    tic = time.perf_counter()
+   
+    # set C function arg types
+    lib.dm_diag.argtypes = [POINTER(c_double), POINTER(c_double), c_double, c_int, c_int]
+    
+    kbt = 0.1;
+    ## call diag from .so lib
+    lib.dm_diag(ham_c,       \
+                dm_c,        \
+                kbt,                \
+                matSize_c,          \
+                nocc_c)   
+     
+    # end timer
+    toc = time.perf_counter()
+
+    for i in range(0,matSize):
+        for j in range(0,matSize):
+            dm[i,j] = dm_c[i*+matSize + j]
+
+
+    print(f"Time from gpuLibInterface = {toc - tic:0.4f} seconds")
+    return list(dm)                          
+
+
+"""
+
 ## gpuLib API call to denisty matrix solver using diagonalization.
 # This interface function will accept two numpy arrays, the hamiltonian, and the density matrix
 # along with two integers, matSize and nocc. Function will build the density matrix from
@@ -62,6 +116,7 @@ def dmDiag(ham,dm,matSize,nocc,arch,lib):
     tic = time.perf_counter()
     matSize_sq = matSize*matSize
     array_type1 = ctypes.c_double*matSize_sq
+    ## copies the data
     ham_c = array_type1(*ham)                       
     dm_c = array_type1(*dm)               
     matSize_c = ctypes.c_int(matSize)
@@ -85,7 +140,7 @@ def dmDiag(ham,dm,matSize,nocc,arch,lib):
     print(f"Time from gpuLibInterface = {toc - tic:0.4f} seconds")
     return list(dm)                          
 
-
+"""
 
 ## gpuLib API call to DNN-SP2 denisty matrix solver.
 # This interface function will accept two numpy arrays, the hamiltonian, and the density matrix

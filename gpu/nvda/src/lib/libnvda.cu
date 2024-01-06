@@ -20,7 +20,6 @@ void dm_dnnsp2(double* ham, double* dm, int n, int nocc){
 
 void dm_diag(double* ham, double* dm, double kbt, int norb, int nocc){
 
-    printf("berga\n");
 
     double bndfil = 0.25;
 
