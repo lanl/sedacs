@@ -12,7 +12,7 @@
 #include <cusolverDn.h>
 #include <tcore_hp_emulator.cuh>
 #include <linalg_tools.cuh>
-#include <dnnsp2.cuh>
+#include <structs.h>
 
 __global__ 
 void DtoF(double* X,
@@ -57,8 +57,8 @@ void dev_buildIdenity(float* X, int N)
 
 void dnnsp2(double* ham, 
             double* dm, 
-            size_t N, 
-            size_t Nocc,
+            int N, 
+            int Nocc,
             precision_t precision,
             refine_t refinement)
 {
@@ -289,7 +289,7 @@ void dnnsp2(double* ham,
 
     // copy dm back to host
     CUDA_CHECK_ERR(cudaMemcpy(dm, d_dm, N * N * sizeof(double), cudaMemcpyDeviceToHost)); 
-    
+     
     // Free device memory thats no longer needed
     CUDA_CHECK_ERR(cudaFree(d_S0));
     CUDA_CHECK_ERR(cudaFree(d_S02));

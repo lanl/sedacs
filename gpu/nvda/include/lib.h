@@ -1,6 +1,6 @@
 extern "C"{
 
-    void dm_diag(double *, double *, int, int);
+    void dm_diag(double *, double *, double, int, int);
 
 }
 

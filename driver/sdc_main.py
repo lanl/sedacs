@@ -20,6 +20,7 @@ from sdc_partition import *
 parser = argparse.ArgumentParser(description='Test driver for sedacs')
 
 parser.add_argument("--use-torch",help="Use pytorch",required=False,action="store_true")
+parser.add_argument("--verbose",help="Verbose output",required=False,action="store_true")
     
 args=parser.parse_args()
 if args.use_torch:
@@ -32,6 +33,7 @@ if args.use_torch:
             print("Using MPS")
             args.device = tc.device('mps')
         else:
+            print("Using CPU")
             args.device = tc.device('cpu')
         from sdc_torch import *
     except ImportError as e:
@@ -52,16 +54,17 @@ sy.nats = len(sy.coords[:,0])
 
 tic = time.perf_counter()
 if args.use_torch:
-    nl = build_nlist_torch(sy.coords,sy.latticeVectors,5.0,rank=rank,numranks=numranks,verb=False)
+    nl = build_nlist_torch(sy.coords,sy.latticeVectors,5.0,device=args.device,rank=rank,numranks=numranks,verb=args.verbose)
 else:    
-    nl,nlTrX,nlTrY,nlTrZ = build_nlist(sy.coords,sy.latticeVectors,5.0,rank=rank,numranks=numranks,verb=False)
+    nl,nlTrX,nlTrY,nlTrZ = build_nlist(sy.coords,sy.latticeVectors,5.0,rank=rank,numranks=numranks,verb=args.verbose)
 comm.Barrier()
 toc = time.perf_counter()
 print("Time for build_nlist", toc - tic,"(s)")
 if rank == 0:
     with open('neighborinfo.txt','w') as of:
         for kk in range(sy.nats):
-            print("Neighs (x-coords) of {} = ".format(kk),nl[kk,1:nl[kk,0]],"(",sy.coords[nl[kk,1:nl[kk,0]],0],")",file=of)
+            nl_this = np.flip(np.sort(nl[kk,1:nl[kk,0]]))
+            print("Neighs (x-coords) of {0} ({1})= ".format(kk,nl[kk,0]),nl_this,"(",sy.coords[nl_this],")",file=of)
 
 #Get the neighbors of atom 1234 
 #subSy = system(nl[1234,0])
