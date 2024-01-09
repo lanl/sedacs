@@ -82,7 +82,7 @@ $(shell   mkdir -p $(OBJ_DIRS))
 
 OBJDIAG    =  $(OBJ_DIR)/diag/diag.o\
 
-OBJSP2     =  $(OBJ_DIR)/dnnsp2/*.o\
+#OBJSP2     =  $(OBJ_DIR)/dnnsp2/*.o\
 
 OBJNLIST   =  $(OBJ_DIR)/nlist/*.o\
 
@@ -92,11 +92,11 @@ OBJCHEBY   =  $(OBJ_DIR)/fastcheby/*.o\
 
 #OBJMLSP2  =  $(OBJ_DIR)/mlsp2/*.o\
 
-OBJMAIN    =  $(OBJ_DIR)/lib/*.o
-
-#OBJSP2=    $(OBJ_DIR)/dnnsp2/linalg_tools.o\
+#OBJSP2=    $(OBJ_DIR)/dnnsp2/dnnsp2.o\
 #	   $(OBJ_DIR)/dnnsp2/tcore_hp_emulator.o\
-#	   $(OBJ_DIR)/dnnsp2/dnnsp2.o\
+#	   $(OBJ_DIR)/dnnsp2/linalg_tools.o\
+
+OBJMAIN    =  $(OBJ_DIR)/lib/*.o
 
 #OBJDIAG=   $(OBJ_DIR)/diag/diag.o\
 
