@@ -116,8 +116,8 @@ def build_nlist_torch(coords,latticeVectors,rcut,device=tc.device('cpu'),rank=0,
     neighbox_d = tc.tensor(neighbox,device=device)
     inbox_d = tc.tensor(inbox,device=device)
     boxOfI_d = tc.tensor(boxOfI,device=device)
-    latticeVectors_d = tc.tensor(latticeVectors,device=device)
-    coords_d = tc.tensor(coords,device=device)
+    latticeVectors_d = tc.tensor(latticeVectors.astype(np.float32),device=device)
+    coords_d = tc.tensor(coords.astype(np.float32),device=device)
     t_copy = time.perf_counter() - tic
     if rank == 0 and verb:
         print("Time for copying arrays to device = ",t_copy," sec")
@@ -169,7 +169,7 @@ def build_nlist_torch(coords,latticeVectors,rcut,device=tc.device('cpu'),rank=0,
 
         #Build initial distance vector array from repeating coords rows
         tic = time.perf_counter()
-        repeats = tc.tensor([boxneighs.shape[1]*boxneighs.shape[2]],device=coords.get_device()).repeat(nats_this)
+        repeats = tc.tensor([boxneighs.shape[1]*boxneighs.shape[2]],device=device).repeat(nats_this)
         dvec = tc.repeat_interleave(coords[i0:i1+1],repeats,axis=0)
         t_repeat_coords = time.perf_counter() - tic
 
