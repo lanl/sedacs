@@ -31,8 +31,14 @@ class sdc_input:
         self.rcut = self.get_a_real("Rcut=",5.0,keyVals,verb)
         ## A threshold read from input 
         self.thresh = self.get_a_real("Threshold=",0.0,keyVals,verb)
+        ## A threshold for the graph 
+        self.gthresh = self.get_a_real("GraphThreshold=",0.0,keyVals,verb)
         ## A field read from input 
         self.field = self.get_a_npFloatVect("Field=",np.zeros((3)),keyVals,verb)
+        ## Number of orbitals 
+        self.orbs = self.get_a_dict("Orbitals=",{"Bl":1},keyVals,verb)
+        ## Number of adaptive graph iterations
+        self.numAdaptIter = self.get_an_int("NumAdaptiveIter=",1,keyVals,verb)
 
     ## Get all the values in the input
     # @brief Will return a dict with key:val, where val is a list
@@ -129,6 +135,22 @@ class sdc_input:
             myVect = default
         if(verb): print("Input: ",key,myVect)
         return myVect
+
+    ## Get a dictionary 
+    # @brief Extract a dictionary from the keyVals dict
+    # @param key Key to search in the dictionary
+    # @param deafult Default value in case it is not in the dict
+    # @param keyVals A dictionary where values are list of characters after the key
+    #
+    def get_a_dict(self,key,default,keyVals,verb=False):
+        if(key in keyVals.keys()):
+            myDict = {}
+            myDict = eval(keyVals[key][0])
+        else:
+            myDict = default
+        if(verb): print("Input: ",key,myDict)
+        return myDict
+
 
 
 if(__name__ == '__main__'):

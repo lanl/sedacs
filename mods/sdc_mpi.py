@@ -1,7 +1,9 @@
+#!/usr/bin/env python3
 """ Some mpi wrappers using MPI4PY
 
 """ 
 import numpy as np
+import sys
 try:
     from mpi4py import MPI
     mpiLib = True
@@ -82,24 +84,110 @@ def collect_matrix_from_chunks(chunk,nDim,rowsPerChunk,rank,numranks,comm):
     return fullMat
 
 
+
+def collect_and_sum_matrices(matOnRank,rank,numranks,comm):
+    if(not mpiLib):
+        print("\nERROR: Consider installing mpi4py")
+        exit(0)
+    nDim = len(matOnRank[:,0])
+    mDim = len(matOnRank[0,:])
+    fullMat = np.zeros([nDim,mDim],dtype=int)
+
+    #Prepare buffers
+    dataSend = np.empty((nDim, mDim), dtype=int)
+    dataRecv = np.empty((nDim, mDim), dtype=int)
+    dataSend[:,:] = matOnRank[:,:]
+
+    #Do the "all gathers" and sum 
+    for i in range(numranks):
+        for j in range(numranks):
+            if(i != j):
+                dataRecv = send_and_receive(dataSend,i,j,rank,comm)
+            else:
+                if(i == rank): #If i = j and rank = i rec = send
+                    dataRecv = dataSend
+                else:
+                    dataRecv = None 
+            if isinstance(dataRecv, type(None)):
+                pass
+            else:
+                fullMat[:,:] = dataRecv[:,:] +  fullMat[:,:]
+
+    return fullMat
+
+
+def collect_matrix_from_chunks_v1(chunk,nDim,rowsPerChunk,rank,numranks,comm):
+
+    if(not mpiLib):
+        print("\nERROR: Consider installing mpi4py")
+        exit(0)
+
+    if(nDim < rowsPerChunk):
+        print("\nERROR: nDim should be larger than rowsPerChunk")
+        exit(0)
+
+    maxChunkDim = nDim - (numranks-1)*rowsPerChunk
+
+    mDim = len(chunk[0,:])
+    chunkDim = len(chunk[:,0])
+    fullMat = np.empty([nDim,mDim],dtype=int)
+
+    comm.Barrier()
+
+    displacements = []
+    for i in range(numranks):
+        displacements.append(i*rowsPerChunk*mDim)
+
+
+    print(displacements)
+
+    comm.Allgatherv(chunk,[fullMat,nDim*mDim,displacements,MPI.INT])
+
+    print("recv",fullMat)
+    exit(0)
+
+    return fullMat
+
 if(__name__ == '__main__'):
     #Small test code
-    
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    numranks = comm.Get_size()
+    n = len(sys.argv)
+    if(n == 1):
+        print("Give the name of the function to be tested. Example: collect_matrix_from_chunks\n")
+        exit(0)
+    else:
+        test = str(sys.argv[1])
 
-    row = [1,2,3,4,5]
-    chunk = np.zeros((5,5),dtype=int)
-    chunk[:,:] = row ; chunk[:,:] = chunk[:,:] + rank
-    nDim = numranks*len(chunk[:,0])
-    rowsPerChunk = len(chunk[:,0])
-    maxChunkDim = rowsPerChunk
+    if(test == "collect_matrix_from_chunks"):
+        comm = MPI.COMM_WORLD
+        rank = comm.Get_rank()
+        numranks = comm.Get_size()
 
-    fullMat = collect_matrix_from_chunks(chunk,nDim,rowsPerChunk,maxChunkDim,rank,numranks,comm)
+        row = [1,2,3,4]
+        chunk = np.zeros((5,4),dtype=int)
+        chunk[:,:] = row ; chunk[:,:] = chunk[:,:] + rank
+        nDim = numranks*len(chunk[:,0])
+        rowsPerChunk = 5
+        maxChunkDim = rowsPerChunk
 
-    if(rank == 0):
-        print(fullMat)
+        fullMat = collect_matrix_from_chunks(chunk,nDim,rowsPerChunk,rank,numranks,comm)
+
+        if(rank == 0):
+            print(fullMat)
+
+    if(test == "collect_and_sum_matrices"):
+        comm = MPI.COMM_WORLD
+        rank = comm.Get_rank()
+        numranks = comm.Get_size()
+        row = [0,0,0,0]
+        mat = np.zeros((5,4),dtype=int)
+        mat[:,:] = row ; mat[:,:] = mat[:,:] + rank 
+        print("Rank, mat",rank,mat)
+        fullMat = collect_and_sum_matrices(mat,rank,numranks,comm) 
+        print("Full mat",fullMat)
+
+
+
+
 
 
 
