@@ -9,17 +9,22 @@ from proxy_a import *
 import time
 try:
     from mpi4py import MPI
-    mpi = True
+    mpiON = True
 except ImportError as e:
-    mpi = False
+    mpiON = False
 from sdc_graph import *
 
 
 def init(args):
 
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    numranks = comm.Get_size()
+    if(mpiON):
+        comm = MPI.COMM_WORLD
+        rank = comm.Get_rank()
+        numranks = comm.Get_size()
+    else:
+        comm = None
+        rank = 0
+        numraks = 1
 
     #Initialize the code by reading the input file
     sdc = sdc_input("input.in",True)

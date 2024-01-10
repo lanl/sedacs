@@ -30,7 +30,7 @@ def get_singlePoit(sdc,rank,numranks,comm,parts,partsCoreHalo,sy,hindex):
 
 
 def get_adaptiveDM(sdc,comm,rank,numranks,sy,hindex,fullGraph):
-    for gsc in range(10):
+    for gsc in range(sdc.numAdaptIter):
         #Partition the graph 
         parts = partition(fullGraph,sdc.partitionType,sdc.nparts,True)
         njumps = 1; partsCoreHalo = []; numCores = []

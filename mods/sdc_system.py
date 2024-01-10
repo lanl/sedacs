@@ -41,7 +41,8 @@ class system:
         self.latticeVectors = np.zeros((3,3))
         ## Symbols for each atom type, e.g, the element symbol of the first atom is symbols[types[0]] 
         self.symbols = ["Bl"] * self.ntypes 
-
+        ## Number of atomic orbital for each type
+        self.orbs = np.ones(self.nats,dtype=int)
 
 ## Transforms the lattice parameters into lattice vectors.
 # @param paramA a parameter
@@ -686,4 +687,28 @@ def build_nlist(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
     return(nl,nlTrX,nlTrY,nlTrZ)
 
 
+## Get hindex
+# @brief hindex will give the orbital index for each atom 
+# in the system. 
+# The orbital indices for orbital i goes from `hindex[i]` to `hindex[i+1]-1`
+# @param orbs A dictionary that give the total orbitals (basis set size) 
+# for each atomic type.
+# @param symbols Symbol for each atom type. Symbol for first atom type = symbols[0]
+# @param types Index type for each atom in the system. Type for first atom = type[0]
+# @return norbs Total number of orbitals
+# @return hindex Orbital index for each atom in the system
+#
+def get_hindex(orbs,symbols,types,verb=False):
 
+    nats = len(types[:])
+    hindex = np.zeros((nats+1),dtype=int)
+    norbs = 0
+    for i in range(nats):
+        hindex[i] = norbs
+        norbs = norbs + orbs[symbols[types[i]]]
+        if(verb):
+            print("index,type,symb,orb",i,types[i],symbols[types[i]],orbs[symbols[types[i]]])
+
+    hindex[nats] = norbs
+
+    return norbs, hindex
