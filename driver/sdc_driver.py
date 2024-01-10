@@ -3,26 +3,15 @@
 
 """
 
-import argparse
-from sdc_parser import *
-from sdc_system import *
-from proxy_a import *
-import time
-try:
-    from mpi4py import MPI
-    mpi = True
-except ImportError as e:
-    mpi = False
-from sdc_graph import *
-from sdc_partition import *
-from sdc_init import *
-from sdc_graphSC import *
+from sdc_loadMods import *
 
+#Pass some command line variables
 parser = argparse.ArgumentParser(description='Test driver for sedacs')
-
 parser.add_argument("--use-torch",help="Use pytorch",required=False,action="store_true")
+parser.add_argument("--input-file",help="Specify input file",required=False,type=str,default="input.in")
 
 args=parser.parse_args()
+
 if args.use_torch:
     try:
         import torch as tc
@@ -38,8 +27,11 @@ if args.use_torch:
     except ImportError as e:
         raise ImportError("Unable to import pytorch")
 
-sdc,comm,rank,numranks,sy,hindex,fullGraph,nl = init(args)
-get_adaptiveDM(sdc,comm,rank,numranks,sy,hindex,fullGraph)
+#Initialize sedacs 
+sdc,comm,rank,numranks,sy,hindex,graphNL,nl = init(args)
+
+#Perform a graph-adaptive calculation of the density matrix
+get_adaptiveDM(sdc,comm,rank,numranks,sy,hindex,graphNL)
 
 
 

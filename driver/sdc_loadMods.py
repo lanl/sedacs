@@ -10,9 +10,11 @@ from proxy_a import *
 import time
 try:
     from mpi4py import MPI
-    mpi = True
+    mpiON = True
 except ImportError as e:
-    mpi = False
+    mpiON = False
 from sdc_graph import *
 from sdc_partition import *
+from sdc_init import *
+from sdc_graphSC import *
 

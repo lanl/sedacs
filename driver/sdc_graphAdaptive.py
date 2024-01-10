@@ -4,6 +4,7 @@
 """
 from sdc_loadMods import *
 from sdc_partition import *
+import time
 
 def get_singlePoit(sdc,rank,numranks,comm,parts,partsCoreHalo,sy,hindex): 
     partsPerRank = int(sdc.nparts/numranks)
@@ -14,14 +15,23 @@ def get_singlePoit(sdc,rank,numranks,comm,parts,partsCoreHalo,sy,hindex):
         print("Rank, part",rank,partIndex)
         subSy = system(len(partsCoreHalo[partIndex]))
         subSy.symbols = sy.symbols
+        tic = time.perf_counter()
         subSy.coords,subSy.types = extract_subsystem(sy.coords,sy.types,sy.symbols,partsCoreHalo[partIndex])
+        toc = time.perf_counter()
+        print("Time for extract_subsystem", toc - tic,"(s)") 
         partFileName = "subSy"+str(rank)+"_"+str(partIndex)+".pdb"
         write_pdb_coordinates(partFileName,subSy.coords,subSy.types,subSy.symbols)
+        tic = time.perf_counter()
         ham = get_hamiltonian(subSy.coords,atomTypes=np.zeros((1),dtype=int),verb=False)
+        toc = time.perf_counter()
+        print("Time for get_hamiltonian", toc - tic,"(s)") 
         norbs = subSy.nats
-        ham = get_hamiltonian(subSy.coords)
+ #       ham = get_hamiltonian(subSy.coords)
         occ = int(float(norbs)/2.0) #Get the total occupied orbitals
+        tic = time.perf_counter()
         rho = get_densityMatrix(ham,occ)
+        toc = time.perf_counter()
+        print("Time for get_densityMatrix", toc - tic,"(s)") 
         #Building a graph from DMs
         graphOnRank = collect_graph_from_rho(graphOnRank,rho,sdc.gthresh,sy.nats,sdc.maxDeg,parts[partIndex],hindex)
     fullGraphRho = collect_and_sum_matrices(graphOnRank,rank,numranks,comm)
@@ -29,7 +39,8 @@ def get_singlePoit(sdc,rank,numranks,comm,parts,partsCoreHalo,sy,hindex):
     return fullGraphRho
 
 
-def get_adaptiveDM(sdc,comm,rank,numranks,sy,hindex,fullGraph):
+def get_adaptiveDM(sdc,comm,rank,numranks,sy,hindex,graphNL):
+    fullGraph = graphNL
     for gsc in range(sdc.numAdaptIter):
         #Partition the graph 
         parts = partition(fullGraph,sdc.partitionType,sdc.nparts,True)

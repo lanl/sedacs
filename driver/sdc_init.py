@@ -27,7 +27,7 @@ def init(args):
         numraks = 1
 
     #Initialize the code by reading the input file
-    sdc = sdc_input("input.in",True)
+    sdc = sdc_input(args.input_file,True)
 
     #Read the coordinates
     sy = system(1)
