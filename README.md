@@ -6,7 +6,7 @@ conda create -n sedacs  pytorch::pytorch torchvision torchaudio openmpi mpi4py s
 ```
 ### Example Linux conda environment with CUDA acceleration
 ```
-conda create -n sedacs torchvision torchaudio pytorch-cuda=11.8 openmpi mpi4py scipy jupyter nb_conda_kernels python=3.10 -c pytorch -c nvidia
+conda create -n sedacs pytorch torchvision torchaudio pytorch-cuda=11.8 openmpi mpi4py scipy jupyter nb_conda_kernels python=3.10 -c pytorch -c nvidia
 ```
 
 ## proxya
