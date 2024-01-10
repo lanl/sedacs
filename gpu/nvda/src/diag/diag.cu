@@ -125,6 +125,7 @@ void compute_dOcc_dmu(double *eval,
 
 };
 
+// gershgorin circle thoerem to compute bandwidth
 void gershgorin(double* mu_a, double *mu_b, double* ham, int n){
    
     double r=0.;
@@ -159,7 +160,8 @@ void gershgorin(double* mu_a, double *mu_b, double* ham, int n){
 }
 
 
-
+// determine chemical potential to use for building 
+// density matrix using diagonalization
 void get_fermilevel_bisection(double* h_eval,
                               double* eval,
                               double* occ,
@@ -178,15 +180,12 @@ void get_fermilevel_bisection(double* h_eval,
     CUDA_CHECK_ERR(cudaMemcpy(h_eval, eval, sizeof(double), cudaMemcpyDeviceToHost));	
     CUDA_CHECK_ERR(cudaMemcpy(h_eval+(norb-1), eval+(norb-1), sizeof(double), cudaMemcpyDeviceToHost));	
 
+    // set these to mu_a and mu_b
     mu_a = h_eval[0];
     mu_b = h_eval[norb-1];
-
     std::cout << mu_a << ", " << mu_b << std::endl;
 
-    // need to implement gershgorin circle
-    // in order to get initial mu_a and mu_b
-
-    // wrap occ into a thrust device vector
+    // wrap occ into a thrust device vector for reductions
     thrust::device_ptr<double> thrust_occ;
     thrust_occ = thrust::device_pointer_cast(occ);
 
@@ -277,6 +276,14 @@ void diagonalize(double* ham,
                  int norb,
                  int nocc)
 {
+    
+    // Create cuda timing events
+    cudaEvent_t start,stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    float elapsedTime;
+
+    cudaEventRecord(start, 0);
     // kernel launch paramaters
     int nthds = 512;
     int nblks = int(ceil(float(norb*norb)/float(nthds))); 
@@ -304,9 +311,8 @@ void diagonalize(double* ham,
     // copy ham to device
     CUDA_CHECK_ERR(cudaMemcpy(d_ham, ham, norb * norb * sizeof(double), cudaMemcpyHostToDevice));	
 
-    // call cusolver diag
+    // do cusolver diag
     computeEval(d_ham, norb, d_eval, d_evec); 
-
 
     // compute fermi level, mu
     get_fermilevel_bisection(eval, d_eval, d_occ, norb, kbt, bndfil, mu, nblks2, nthds2);
@@ -317,15 +323,6 @@ void diagonalize(double* ham,
     // send dm back to host
     CUDA_CHECK_ERR(cudaMemcpy(dm, d_dm, norb * norb * sizeof(double), cudaMemcpyDeviceToHost));
 
-    /*for (int i=0;i<10;i++){
-    for (int j=0;j<10;j++){
-  
-        printf("%.5f  ",dm[i*norb+j]);
-    }
-    printf("\n");;
-    }*/
-   
-
     // free memory
     free(eval); 
     free(evec); 
@@ -334,5 +331,11 @@ void diagonalize(double* ham,
     CUDA_CHECK_ERR(cudaFree(d_evec)); 
     CUDA_CHECK_ERR(cudaFree(d_eval)); 
     CUDA_CHECK_ERR(cudaFree(d_occ)); 
-    CUDA_CHECK_ERR(cudaFree(d_dm));	
+    CUDA_CHECK_ERR(cudaFree(d_dm));
+
+    cudaEventRecord(stop, 0);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&elapsedTime, start, stop);
+    std::cout << "Time for building DM with diag = " << elapsedTime << " ms " << std::endl;
+       	
 }
