@@ -125,7 +125,45 @@ void compute_dOcc_dmu(double *eval,
 
 };
 
-void get_fermilevel_bisection(double* eval,
+// gershgorin circle thoerem to compute bandwidth
+void gershgorin(double* mu_a, double *mu_b, double* ham, int n){
+   
+    double r=0.;
+    double e=0., min_e=0.,max_e=0.;
+
+    for (int i = 0;i<n;i++){
+
+        // Gershgorin eigenvalue circle center
+        e = ham[i*n+i]; 
+        r = 0.;
+
+        // compute sum of abs. val of components in row i
+        for (int j=0;j<n;j++){
+           r += abs(ham[i*n+i]);
+        }
+
+        // Gershgorin eigenvalue circle radius
+        r-=abs(e);
+
+        //update min and max eigenvalues as you loop over rows
+        if (e-r < mu_a[0]){
+            min_e = e-r;
+        }
+        else if ( e+r > max_e){
+            max_e = e+r;
+        }
+    }
+
+    mu_a[0] = min_e; 
+    mu_b[0] = max_e; 
+
+}
+
+
+// determine chemical potential to use for building 
+// density matrix using diagonalization
+void get_fermilevel_bisection(double* h_eval,
+                              double* eval,
                               double* occ,
                               int norb, 
                               double kbt,
@@ -137,19 +175,22 @@ void get_fermilevel_bisection(double* eval,
     double mu_a, mu_b, f;
     double err = 1.0;  
     double nel = bndfil*2.0*double(norb);
-    mu_a = -40.;
-    mu_b = 10.;
+    
+    // copy extremal eignavlues to host
+    CUDA_CHECK_ERR(cudaMemcpy(h_eval, eval, sizeof(double), cudaMemcpyDeviceToHost));	
+    CUDA_CHECK_ERR(cudaMemcpy(h_eval+(norb-1), eval+(norb-1), sizeof(double), cudaMemcpyDeviceToHost));	
 
-    // need to implement gershgorin circle
-    // in order to get initial mu_a and mu_b
+    // set these to mu_a and mu_b
+    mu_a = h_eval[0];
+    mu_b = h_eval[norb-1];
+    std::cout << mu_a << ", " << mu_b << std::endl;
 
-    // wrap occ into a thrust device vector
+    // wrap occ into a thrust device vector for reductions
     thrust::device_ptr<double> thrust_occ;
     thrust_occ = thrust::device_pointer_cast(occ);
 
 
     while( abs(err) > 1e-6 ){
-    //for (int i = 0; i<20;i++){
 
         // take new mu to be average of old ones
         mu[0] = (mu_b+mu_a)/2;
@@ -162,7 +203,8 @@ void get_fermilevel_bisection(double* eval,
     
         // calculate error in sum of occupations
         err = f - nel;
-         
+        std::cout << err<< std::endl;
+        
         // halve the interval [mu_a,mu_b]
         if ( err < 0. ){
 
@@ -179,97 +221,6 @@ void get_fermilevel_bisection(double* eval,
 
     }
 }
-
-
-void get_fermilevel_newton(double* eval,
-                    double* occ,
-                    int norb, 
-                    double kbt,
-                    double bndfil,
-                    double mu,
-                    int nthds, 
-                    int nblks)   // may need to add error flag      
-{
-    double nel, mu0, f1, f2, step;
-    nel= bndfil*2.0*double(norb);
-
-
-    // need to implement gershgorin circle
-
-    // wrap occ into a thrust device vector
-    thrust::device_ptr<double> thrust_occ;
-    thrust_occ = thrust::device_pointer_cast(occ);
-
-    double err=0.;
-    while (err<1e-5){
-
-    // compute occupation with guess for mu
-    computeOcc<<<nblks, nthds>>>(eval, occ, norb, kbt, mu);
-
-    // sum the occ factors
-    f1 = thrust::reduce(thrust_occ, thrust_occ + norb, 0.0, thrust::plus<double>());
-    
-    // calculate error in sum of occupations
-    f1 = f1 - nel;
-    printf("f1-nel=%.15f\n",f1);
-    
-
-    // compute occupation with guess for mu
-    compute_dOcc_dmu<<<nblks, nthds>>>(eval, occ, norb, kbt, mu);
-
-    f2 = thrust::reduce(thrust_occ, thrust_occ + norb, 0.0, thrust::plus<double>());
-
-
-    //if(abs(f2 - f1) < 1e-5){
-      //err = .true.
-      //return;
-    //}
-    mu0=mu;
-    std::cout << "mu prev = " << mu0 << std::endl;
-    mu = mu0 - f1/f2; // newton-raphson, mu = mu - f(mu)/f'(mu)
-    std::cout << "mu update = " << mu << std::endl;
-
-    err = abs(mu0-mu);
-
-    //printf("mu=%.15f = %.15f - %.15f * %.15f / (%.15f-%.15f)\n",mu,mu0,f2,step,f2,f1);
-
-    std::cout << "mu = " <<  mu << std::endl;
-    }
-    for (int m = 0; m < 101; m++){
-      if (m == 100){
-        printf("WARNING: Newton-raphson is not converging ...");
-        //err = .true.;
-        mu = mu0;
-        return;
-      }
-
-      // compute occupation with updated mu and Fermi-Dirac
-      computeOcc<<<nblks, nthds>>>(eval, occ, norb, kbt, mu);
-
-      // sum the occupation factors
-      f1 = thrust::reduce(thrust_occ, thrust_occ + norb, 0.0, thrust::plus<double>());
-
-      // update f2 sample point
-      f1 = f1-nel;
-      std::cout << "occ err = " << mu << std::endl;
- 
-      // compute occupation with guess for mu
-      compute_dOcc_dmu<<<nblks, nthds>>>(eval, occ, norb, kbt, mu);
-
-      f2 = thrust::reduce(thrust_occ, thrust_occ + norb, 0.0, thrust::plus<double>());
-
-      mu0 = mu;
-      // newton step
-      mu = mu0 - f1/f2;
-      std::cout << "mu update = " << mu << std::endl;
-
-      //step = mu - mu0;
-      //if (abs(f1).lt.tol)then !tolerance control
-      //  return
-      //endif
-    }
-}
-
 
 
 //Compute a density matrix from eigenvectors
@@ -325,6 +276,14 @@ void diagonalize(double* ham,
                  int norb,
                  int nocc)
 {
+    
+    // Create cuda timing events
+    cudaEvent_t start,stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    float elapsedTime;
+
+    cudaEventRecord(start, 0);
     // kernel launch paramaters
     int nthds = 512;
     int nblks = int(ceil(float(norb*norb)/float(nthds))); 
@@ -341,7 +300,6 @@ void diagonalize(double* ham,
     mu   = (double*)malloc( sizeof(double) );
     eval = (double*)malloc( norb * sizeof(double) );
     evec = (double*)malloc( norb * norb * sizeof(double) );
-    //occ  = (double*)malloc( norb * norb * sizeof(double) );
 
     // allocate device memory
     CUDA_CHECK_ERR(cudaMalloc(&d_ham,  norb * norb * sizeof(double)  ));
@@ -353,26 +311,17 @@ void diagonalize(double* ham,
     // copy ham to device
     CUDA_CHECK_ERR(cudaMemcpy(d_ham, ham, norb * norb * sizeof(double), cudaMemcpyHostToDevice));	
 
-    // call cusolver diag
+    // do cusolver diag
     computeEval(d_ham, norb, d_eval, d_evec); 
 
     // compute fermi level, mu
-    get_fermilevel_bisection(d_eval, d_occ, norb, kbt, bndfil, mu, nblks2, nthds2);
+    get_fermilevel_bisection(eval, d_eval, d_occ, norb, kbt, bndfil, mu, nblks2, nthds2);
     
     // build density matrix
     compute_dm(d_occ, d_evec, d_dm, norb);
 		
     // send dm back to host
     CUDA_CHECK_ERR(cudaMemcpy(dm, d_dm, norb * norb * sizeof(double), cudaMemcpyDeviceToHost));
-
-    /*for (int i=0;i<10;i++){
-    for (int j=0;j<10;j++){
-  
-        printf("%.5f  ",dm[i*norb+j]);
-    }
-    printf("\n");;
-    }*/
-   
 
     // free memory
     free(eval); 
@@ -382,5 +331,11 @@ void diagonalize(double* ham,
     CUDA_CHECK_ERR(cudaFree(d_evec)); 
     CUDA_CHECK_ERR(cudaFree(d_eval)); 
     CUDA_CHECK_ERR(cudaFree(d_occ)); 
-    CUDA_CHECK_ERR(cudaFree(d_dm));	
+    CUDA_CHECK_ERR(cudaFree(d_dm));
+
+    cudaEventRecord(stop, 0);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&elapsedTime, start, stop);
+    std::cout << "Time for building DM with diag = " << elapsedTime << " ms " << std::endl;
+       	
 }

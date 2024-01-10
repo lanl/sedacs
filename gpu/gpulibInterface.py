@@ -6,6 +6,7 @@ import time
 # to call cuda/hip
 from ctypes import *
 import ctypes
+import numpy.ctypeslib as ctl
 
 ## gpuLib API call to neighborlist build
 # This interface function will accept two numpy arrays along with three integers
@@ -46,22 +47,12 @@ def nlist(x,y,z,nlist,num_atoms,lib):
 
 def dmDiag(ham,dm,matSize,nocc,lib):
 
-    ## convert to flattened array
-    matSize_sq = matSize*matSize
-    ham_temp = np.zeros((matSize_sq,1))
-    dm_temp = np.zeros((matSize_sq,1))
-
-    for i in range(0,matSize):
-        for j in range(0,matSize):
-            ham_temp[i*matSize+j] = ham[i,j]
-    
     ## time call
     tic = time.perf_counter()
-    array_type1 = ctypes.c_double*matSize_sq
 
-    ## copies the data to C data structures
-    ham_c = array_type1(*ham_temp)                       
-    dm_c = array_type1(*dm_temp)               
+    ## copies scalar data to C data structures
+    kbt = 0.1;
+    kbt_c = ctypes.c_double(kbt)
     matSize_c = ctypes.c_int(matSize)
     nocc_c = ctypes.c_int(nocc)
 
@@ -73,25 +64,24 @@ def dmDiag(ham,dm,matSize,nocc,lib):
     tic = time.perf_counter()
    
     # set C function arg types
-    lib.dm_diag.argtypes = [POINTER(c_double), POINTER(c_double), c_double, c_int, c_int]
+    lib.dm_diag.argtypes = [ctl.ndpointer(np.float64,flags='aligned, c_contiguous'), \
+                            ctl.ndpointer(np.float64,flags='aligned, c_contiguous'), \
+                            c_double, c_int, c_int]
     
-    kbt = 0.1;
-    ## call diag from .so lib
-    lib.dm_diag(ham_c,       \
-                dm_c,        \
-                kbt,                \
-                matSize_c,          \
-                nocc_c)   
-     
     # end timer
     toc = time.perf_counter()
+    print(f"Time for setting args = {toc - tic:0.4f} seconds")
+    
+    ## time call
+    tic = time.perf_counter()
+    lib.dm_diag(ham,                \
+                dm,                 \
+                kbt_c,              \
+                matSize_c,          \
+                nocc_c)
+    toc = time.perf_counter()
 
-    for i in range(0,matSize):
-        for j in range(0,matSize):
-            dm[i,j] = dm_c[i*+matSize + j]
-
-
-    print(f"Time from gpuLibInterface = {toc - tic:0.4f} seconds")
+    print(f"Time for lib call = {toc - tic:0.4f} seconds")
     return list(dm)                          
 
 
