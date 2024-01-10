@@ -2,7 +2,8 @@
 """ Graph self-consistent solver
 
 """
-import sdc_loadMods
+from sdc_loadMods import *
+from sdc_partition import *
 
 def get_singlePoit(sdc,rank,numranks,comm,parts,partsCoreHalo,sy,hindex): 
     partsPerRank = int(sdc.nparts/numranks)
@@ -28,31 +29,32 @@ def get_singlePoit(sdc,rank,numranks,comm,parts,partsCoreHalo,sy,hindex):
     return fullGraphRho
 
 
-for gsc in range(10):
-    #Partition the graph 
-    parts = partition(fullGraph,sdc.partitionType,sdc.nparts,True)
-    njumps = 1; partsCoreHalo = []; numCores = []
-    print("\nCore and halos indices for every part:")
-    for i in range(sdc.nparts):
-        coreHalo,nc,nh = get_coreHaloIndices(parts[i],fullGraph,njumps)
-        partsCoreHalo.append(coreHalo)
-        numCores.append(nc)
-        print("coreHalo for part",i,"=",coreHalo)
+def get_adaptiveDM(sdc,comm,rank,numranks,sy,hindex,fullGraph):
+    for gsc in range(10):
+        #Partition the graph 
+        parts = partition(fullGraph,sdc.partitionType,sdc.nparts,True)
+        njumps = 1; partsCoreHalo = []; numCores = []
+        print("\nCore and halos indices for every part:")
+        for i in range(sdc.nparts):
+            coreHalo,nc,nh = get_coreHaloIndices(parts[i],fullGraph,njumps)
+            partsCoreHalo.append(coreHalo)
+            numCores.append(nc)
+            print("coreHalo for part",i,"=",coreHalo)
 
-    fullGraphRho = get_singlePoit(sdc,rank,numranks,comm,parts,partsCoreHalo,sy,hindex)
+        fullGraphRho = get_singlePoit(sdc,rank,numranks,comm,parts,partsCoreHalo,sy,hindex)
 
-    fullGraph = add_graphs(fullGraphRho,graphNL) 
+        fullGraph = add_graphs(fullGraphRho,graphNL) 
 
-#Get the neighbors of atom 1234 (by the graph) 
-subSy = system(fullGraphRho[1234,0])
-subSy.symbols = sy.symbols
-subSy.coords,subSy.types = extract_subsystem(sy.coords,sy.types,sy.symbols,fullGraph[1234,1:fullGraph[1234,0]])
+    #Get the neighbors of atom 1234 (by the graph) 
+    subSy = system(fullGraphRho[1234,0])
+    subSy.symbols = sy.symbols
+    subSy.coords,subSy.types = extract_subsystem(sy.coords,sy.types,sy.symbols,fullGraph[1234,1:fullGraph[1234,0]])
 
-if rank == 0:
-    write_pdb_coordinates("subSyG.pdb",subSy.coords,subSy.types,subSy.symbols)
-exit(0)
-if(rank == 0):
-    print_graph(graphOnRank)
+    if rank == 0:
+        write_pdb_coordinates("subSyG.pdb",subSy.coords,subSy.types,subSy.symbols)
+    exit(0)
+    if(rank == 0):
+        print_graph(graphOnRank)
 
 
 

@@ -5,3 +5,4 @@ LATTE_PATH=$THIS_PATH/../latte
 PROXYA_PATH=$THIS_PATH/../proxya/python_proxy
 export PYTHONPATH=$PYTHONPATH:$MOD_PATH:$LATTE_PATH:$PROXYA_PATH
 export PYTHONWARNINGS="ignore:Unverified HTTPS request"
+
