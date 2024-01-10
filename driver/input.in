@@ -3,9 +3,12 @@
 Threshold= 1.0E-5
 #CoordsFile= coords.pdb
 CoordsFile= coords_2955.pdb
-MaxDeg= 200 #Max graph degree
+GraphThreshold= 0.001 
+MaxDeg= 2000 #Max graph degree
 Rcut= 5.0 #Radius cutoff
 PartitionType= Regular
-NumParts= 4
+NumParts= 8
+Orbitals= {"H":1,"O":1} #This has to be know for each engine
+NumAdaptiveIter= 10 #Number of graph adaptive iterations
 
 
