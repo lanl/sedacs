@@ -39,6 +39,15 @@ class sdc_input:
         self.orbs = self.get_a_dict("Orbitals=",{"Bl":1},keyVals,verb)
         ## Number of adaptive graph iterations
         self.numAdaptIter = self.get_an_int("NumAdaptiveIter=",1,keyVals,verb)
+        ## Engine interface type
+        self.engineInterfaceType = self.get_a_string("EngineInterfaceType=","Files",keyVals,verb)
+        ## Engine name
+        self.engineName = self.get_a_string("EngineName=","ProxyA",keyVals,verb)
+        ## Engine data 
+        self.engine = self.get_a_dict("Engine=",{"Name":"MyEngine","InterfaceType":"Files",
+            "EngineFilesPath":"/tmp/","Executable":"/tmp/run"},keyVals,verb)
+        ## Verbosity switch
+        self.verb = self.get_a_bool("Verbosity=",False,keyVals,verb=False) 
 
     ## Get all the values in the input
     # @brief Will return a dict with key:val, where val is a list
@@ -112,7 +121,7 @@ class sdc_input:
     # @param deafult Default value in case it is not in the dict
     # @param keyVals A dictionary where values are list of characters after the key
     # 
-    def get_an_bool(self,key,default,keyVals,verb=False):
+    def get_a_bool(self,key,default,keyVals,verb=False):
         if(key in keyVals.keys()):
             myBool = bool(keyVals[key][0])
         else:

@@ -85,7 +85,7 @@ def get_random_coordinates(nats):
 # @return H 2D numpy array of Hamiltonian elements
 # @param verb Verbosity. If True is passed, information is printed
 #
-def get_hamiltonian(coords,atomTypes=np.zeros((1),dtype=int),verb=False):
+def proxyA_get_hamiltonian(coords,atomTypes=np.zeros((1),dtype=int),verb=False):
   """Construct simple toy s-Hamiltonian """
   N = len(coords[:,1]); Nocc = int(N/4); eps = 1e-9; decay_min = 0.1; m = 78;
   a = 3.817632; c = 0.816371; x = 1.029769; n = 13;

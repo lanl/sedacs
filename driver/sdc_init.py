@@ -2,19 +2,51 @@
 """ Initialize sedac driver
 
 """
-import argparse
-from sdc_parser import *
-from sdc_system import *
-from proxy_a import *
-import time
-try:
-    from mpi4py import MPI
-    mpiON = True
-except ImportError as e:
-    mpiON = False
-from sdc_graph import *
 
+from sdc_loadMods import * 
+from sdc_engine import *
 
+## Getting arguments
+# @brief This will get some arguments from command line. WARNING!!! This makes the code depending
+# on the argparse library... 
+# @return args The argparse object (https://docs.python.org/3/library/argparse.html)
+#
+def get_args():
+    parser = argparse.ArgumentParser(description='Test driver for sedacs')
+    parser.add_argument("--use-torch",help="Use pytorch",required=False,action="store_true")    
+    parser.add_argument("--input-file",help="Specify input file",required=False,type=str,default="input.in")
+
+    args=parser.parse_args()
+
+    if args.use_torch:
+        if(tcAvail):
+            if tc.cuda.is_available():
+                print("Using CUDA")
+                args.device = tc.device('cuda')
+            elif tc.backends.mps.is_available():
+                print("Using MPS")
+                args.device = tc.device('mps')
+            else:
+                args.device = tc.device('cpu')
+        else:
+            print("Pytorch is not available")
+            exit(0)
+    return args 
+
+## Initialize the driver 
+# @brief This will initialize all the input variables needed by the driver
+# @param args The argparse object (https://docs.python.org/3/library/argparse.html)
+# @return sdc SEDACS input variables. Example: sdc.threshold : Threshold vlue for the matrices. 
+# These variables are read from the input file.
+# @return comm MPI communicator
+# @return rank Current rank (= 0 if MPI is off)
+# @return numranks Number of ranks (= 1 if MPI is off)
+# @return sy System object (see `/mods/sdc_system.py`)
+# @return hindex hindex Orbital index for each atom in the system 
+# @return fullGraph Initial atomic connectivity graph
+# @return nl Neighbor list `nl[i,0]` = total number of neighbors.
+# `nl[i,1:nl[i,0]]` = neigbors of i. Self neighbor i to i is not included explicitly.
+#
 def init(args):
 
     if(mpiON):
@@ -28,6 +60,11 @@ def init(args):
 
     #Initialize the code by reading the input file
     sdc = sdc_input(args.input_file,True)
+
+    #Initialize the engine (quantum chemistry code)
+    eng = engine(rank)
+    eng.name = sdc.engine["Name"] ; eng.path = sdc.engine["Path"]
+    eng.run = sdc.engine["Executable"] ; eng.interface = sdc.engine["InterfaceType"] 
 
     #Read the coordinates
     sy = system(1)
@@ -64,5 +101,5 @@ def init(args):
     fullGraph = np.zeros((sy.nats,sdc.maxDeg+1),dtype=int)
     fullGraph[:,:] = graphNL[:,:]
 
-    return sdc,comm,rank,numranks,sy,hindex,fullGraph,nl
+    return sdc,eng,comm,rank,numranks,sy,hindex,fullGraph,nl
 

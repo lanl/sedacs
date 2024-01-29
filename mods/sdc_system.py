@@ -396,20 +396,23 @@ def write_pdb_coordinates(fileName,coords,types,symbols,molIds=np.zeros((0),dtyp
 
 ## Write coordinates into an xyz file
 # 
+# @param fileName File name 
 # @param coords Position for every atoms. z-coordinate of atom 1 = coords[0,2]
 # @param types list of types for every atom in the system. 
 # @param symbols Symbols for every atom type
 # 
-def write_xyz_coordinates(coords,types,symbols):
+def write_xyz_coordinates(fileName,coords,types,symbols):
     """Writes coordinates in simple pdb format
     """
     nats = len(coords[:,1])
-    myFileOut = open("coords.xyz","w")
+    myFileOut = open(fileName,"w")
     print(nats,file=myFileOut)
-    print("coords.xyz",file=myFileOut)
+    print("xyz format",file=myFileOut)
     for i in range(nats):
         symb = symbols[types[i]]
         print(symb,coords[i,0],coords[i,1],coords[i,2],file=myFileOut)
+
+    myFileOut.close()
 
 ## Extract subsystem
 # @brief Extracs a chemical subsystem (coordinates and atomic types) 

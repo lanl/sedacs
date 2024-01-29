@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
-""" Graph self-consistent solver
+""" Graph adaptive solver
 
 """
 from sdc_loadMods import *
 from sdc_partition import *
+from sdc_hamiltonian import *
 import time
 
-def get_singlePoit(sdc,rank,numranks,comm,parts,partsCoreHalo,sy,hindex): 
+## Single point calculation 
+# @brief Construct a connectivity graph based on constructing density matrices 
+# of parts of the system.
+#
+def get_singlePoit(sdc,eng,rank,numranks,comm,parts,partsCoreHalo,sy,hindex): 
     partsPerRank = int(sdc.nparts/numranks)
     partIndex1 = rank*partsPerRank 
     partIndex2 = (rank+1)*partsPerRank 
@@ -22,11 +27,10 @@ def get_singlePoit(sdc,rank,numranks,comm,parts,partsCoreHalo,sy,hindex):
         partFileName = "subSy"+str(rank)+"_"+str(partIndex)+".pdb"
         write_pdb_coordinates(partFileName,subSy.coords,subSy.types,subSy.symbols)
         tic = time.perf_counter()
-        ham = get_hamiltonian(subSy.coords,atomTypes=np.zeros((1),dtype=int),verb=False)
+        ham = sdc_get_hamiltonian(eng,subSy.coords,subSy.types,subSy.symbols,verb=False)
         toc = time.perf_counter()
         print("Time for get_hamiltonian", toc - tic,"(s)") 
         norbs = subSy.nats
- #       ham = get_hamiltonian(subSy.coords)
         occ = int(float(norbs)/2.0) #Get the total occupied orbitals
         tic = time.perf_counter()
         rho = get_densityMatrix(ham,occ)
@@ -39,20 +43,20 @@ def get_singlePoit(sdc,rank,numranks,comm,parts,partsCoreHalo,sy,hindex):
     return fullGraphRho
 
 
-def get_adaptiveDM(sdc,comm,rank,numranks,sy,hindex,graphNL):
+def get_adaptiveDM(sdc,eng,comm,rank,numranks,sy,hindex,graphNL):
     fullGraph = graphNL
     for gsc in range(sdc.numAdaptIter):
         #Partition the graph 
-        parts = partition(fullGraph,sdc.partitionType,sdc.nparts,True)
+        parts = partition(fullGraph,sdc.partitionType,sdc.nparts,sdc.verb)
         njumps = 1; partsCoreHalo = []; numCores = []
         print("\nCore and halos indices for every part:")
         for i in range(sdc.nparts):
             coreHalo,nc,nh = get_coreHaloIndices(parts[i],fullGraph,njumps)
             partsCoreHalo.append(coreHalo)
             numCores.append(nc)
-            print("coreHalo for part",i,"=",coreHalo)
+            #print("coreHalo for part",i,"=",coreHalo)
 
-        fullGraphRho = get_singlePoit(sdc,rank,numranks,comm,parts,partsCoreHalo,sy,hindex)
+        fullGraphRho = get_singlePoit(sdc,eng,rank,numranks,comm,parts,partsCoreHalo,sy,hindex)
 
         fullGraph = add_graphs(fullGraphRho,graphNL) 
 
