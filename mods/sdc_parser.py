@@ -48,6 +48,9 @@ class sdc_input:
             "EngineFilesPath":"/tmp/","Executable":"/tmp/run"},keyVals,verb)
         ## Verbosity switch
         self.verb = self.get_a_bool("Verbosity=",False,keyVals,verb=False) 
+        ## StopAt : stop at a given point
+        self.stopAt = self.get_a_string("StopAt=","",keyVals,verb)
+
 
     ## Get all the values in the input
     # @brief Will return a dict with key:val, where val is a list

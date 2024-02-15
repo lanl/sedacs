@@ -56,7 +56,7 @@ def init(args):
     else:
         comm = None
         rank = 0
-        numraks = 1
+        numranks = 1
 
     #Initialize the code by reading the input file
     sdc = sdc_input(args.input_file,True)
@@ -80,7 +80,8 @@ def init(args):
         nl = build_nlist_torch(sy.coords,sy.latticeVectors,5.0,rank=rank,numranks=numranks,verb=False)
     else:    
         nl,nlTrX,nlTrY,nlTrZ = build_nlist(sy.coords,sy.latticeVectors,5.0,rank=rank,numranks=numranks,verb=False)
-    comm.Barrier()
+    if mpiON:
+        comm.Barrier()
     toc = time.perf_counter()
     print("Time for build_nlist", toc - tic,"(s)")
     if rank == 0:

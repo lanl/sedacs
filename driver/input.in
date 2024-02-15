@@ -12,4 +12,4 @@ NumParts= 8
 Orbitals= {"H":1,"O":1} #This has to be know for each engine
 NumAdaptiveIter= 10 #Number of graph adaptive iterations
 Engine= {"Name":"ProxyA","InterfaceType":"File","Path":"/home/cnegre/SEDACS/generalcodes/proxya/python_proxy/","Executable":"/home/cnegre/SEDACS/generalcodes/proxya/python_proxy/server.py"} #The name of the external code
-
+StopAt= Init
