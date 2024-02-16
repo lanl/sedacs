@@ -66,7 +66,7 @@ def get_adaptiveDM(sdc,eng,comm,rank,numranks,sy,hindex,graphNL):
     #subSy.coords,subSy.types = extract_subsystem(sy.coords,sy.types,sy.symbols,fullGraph[1234,1:fullGraph[1234,0]])
 
     #if(rank == 0):
-    #    print_graph(graphOnRank)
+    #    print_graph(fullGraph)
     #if rank == 0:
     #    write_pdb_coordinates("subSyG.pdb",subSy.coords,subSy.types,subSy.symbols)
     #exit(0)
