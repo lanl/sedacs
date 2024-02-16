@@ -7,6 +7,8 @@ fortlibFileName = os.environ['PROXYA_FORTRAN_PATH'] + '/proxya_fortran.so'
 try:
     fortlib = ct.CDLL(fortlibFileName) 
     f = fortlib.proxya_get_hamiltonian
+except:
+    fortlib = None
 
 def sdc_get_hamiltonian_module(eng,coords,atomTypes,symbols,verb):
     
