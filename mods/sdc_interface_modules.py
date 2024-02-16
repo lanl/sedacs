@@ -3,8 +3,10 @@ import ctypes as ct
 import os 
 # import the shared library
 fortlibFileName = os.environ['PROXYA_FORTRAN_PATH'] + '/proxya_fortran.so'
-fortlib = ct.CDLL(fortlibFileName) 
-f = fortlib.proxya_get_hamiltonian
+
+try:
+    fortlib = ct.CDLL(fortlibFileName) 
+    f = fortlib.proxya_get_hamiltonian
 
 def sdc_get_hamiltonian_module(eng,coords,atomTypes,symbols,verb):
     
