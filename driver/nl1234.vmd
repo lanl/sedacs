@@ -333,7 +333,7 @@ display aodirect 0.300000
 display dof off
 display dof_fnumber 64.000000
 display dof_focaldist 0.700000
-mol new subSy.pdb type pdb first 0 last -1 step 1 filebonds 1 autobonds 1 waitfor all
+mol new subSyNL.pdb type pdb first 0 last -1 step 1 filebonds 1 autobonds 1 waitfor all
 mol delrep 0 top
 mol representation VDW 1.000000 12.000000
 mol color Name
@@ -557,7 +557,9 @@ color scale colors WBlk {1.0 1.0 1.0} {0.5 0.5 0.5} {0.0 0.0 0.0}
     {color Segname {} blue}
     {color Conformation {all} blue}
     {color Molecule {0} blue}
+    {color Molecule {subSy.pdb} blue}
     {color Molecule {1} red}
+    {color Molecule {coords_2955.pdb} red}
     {color Structure {3_10_Helix} blue}
     {color Surface {Grasp} gray}
     {color Labels {Springs} orange}
