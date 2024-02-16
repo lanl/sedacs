@@ -61,15 +61,15 @@ def get_adaptiveDM(sdc,eng,comm,rank,numranks,sy,hindex,graphNL):
         fullGraph = add_graphs(fullGraphRho,graphNL) 
 
     #Get the neighbors of atom 1234 (by the graph) 
-    subSy = system(fullGraphRho[1234,0])
-    subSy.symbols = sy.symbols
-    subSy.coords,subSy.types = extract_subsystem(sy.coords,sy.types,sy.symbols,fullGraph[1234,1:fullGraph[1234,0]])
+    #subSy = system(fullGraphRho[1234,0])
+    #subSy.symbols = sy.symbols
+    #subSy.coords,subSy.types = extract_subsystem(sy.coords,sy.types,sy.symbols,fullGraph[1234,1:fullGraph[1234,0]])
 
-    if rank == 0:
-        write_pdb_coordinates("subSyG.pdb",subSy.coords,subSy.types,subSy.symbols)
-    exit(0)
-    if(rank == 0):
-        print_graph(graphOnRank)
+    #if(rank == 0):
+    #    print_graph(graphOnRank)
+    #if rank == 0:
+    #    write_pdb_coordinates("subSyG.pdb",subSy.coords,subSy.types,subSy.symbols)
+    #exit(0)
 
 
 
