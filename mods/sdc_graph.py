@@ -34,14 +34,17 @@ def get_initial_graph(coords,nl,radius,maxDeg,verb=False):
     for i in range(nats):
         ik = 0
         degi = 0
-        for j in range(nl[i,0]):
+        for j in range(1, nl[i,0]+1):
             jj = nl[i,j]
+
             distance = np.linalg.norm(coords[i,:] - coords[jj,:])
             if(distance < radius):
                 ik = ik + 1
                 if(ik < maxDeg + 1):
                     graph[i,ik] = jj
                     degi = degi + 1
+                    # if i == 0:
+                    #     print(nl[i,j])
                 else:
                     print("!!!WARNING: at get_initial_graph. maxDeg exceeded. Consider increasing this number")
                     break
@@ -89,6 +92,9 @@ def get_nx_graph(graph,w):
             j = graph[i,k]
             if((j != -1) and (j != i)):
                 nxGraph.add_edge(i,j,weight=w)
+
+    print('graph', graph)
+    print('nxGraph',nxGraph)
     return nxGraph
 
 
@@ -138,6 +144,7 @@ def collect_graph_from_rho(graph,rho,thresh,nnodes,maxDeg,indices,hindex=None,ve
         for j in range(1,graph[ii,0]): 
             jj = graph[ii,j] 
             weights[jj] = thresh
+
         #Computing the new weights by rho 
         for oi in range(hindex[ii],hindex[ii+1]):
             kj = 0
@@ -147,10 +154,11 @@ def collect_graph_from_rho(graph,rho,thresh,nnodes,maxDeg,indices,hindex=None,ve
                     weights[jj] = weights[jj] + abs(rho[ki,kj])
                     kj = kj + 1
             ki = ki + 1
+
         #Reasigning the connections to ii by the merged weights (the ones computed 
         #from rho and the ones already existing.
         k = 0
-        for jj in range(nnodes):
+        for jj in range(nnodes): # $$$ ??? this cycle could be interrupted ???
             if((ii != jj) and (weights[jj] >= thresh)):
                 k = k + 1
                 graph[ii,k] = jj
@@ -189,19 +197,20 @@ def add_graphs(graphA, graphB):
     vectC = np.zeros((nnodes),dtype=bool)
 
     graphC = np.zeros((nnodes,maxDeg),dtype=int)
+    graphC[:,:] = -1
     for i in range(nnodes):
         #Create a logical row from the neighbors of i in adj A
         vectA[:] = False
-        for j in range(1,graphA[i,0]):
+        for j in range(1,graphA[i,0]+1):
             vectA[graphA[i,j]] = True
         #Create a logical row from the neighbors of i in adj B
         vectB[:] = False
-        for j in range(1,graphB[i,0]):
+        for j in range(1,graphB[i,0]+1):
             vectB[graphB[i,j]] = True
         vectC[:] = vectA[:] + vectB[:]
-
+        
         k = 0
-        for j in range(1,nnodes):
+        for j in range(0,nnodes):
             if(vectC[j]):
                 k = k + 1
                 graphC[i,k] = j

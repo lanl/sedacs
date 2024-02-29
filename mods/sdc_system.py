@@ -384,12 +384,12 @@ def write_pdb_coordinates(fileName,coords,types,symbols,molIds=np.zeros((0),dtyp
 
     myFileOut = open(fileName,"w")
     print("TITLE ",fileName,file=myFileOut)
-    print("CRYST1   10.000   10.000   10.000  90.00  90.00  90.00 P 1           1 ",file=myFileOut)
+    print("CRYST1   10.000   10.000   10.000  90.00  90.00  90.00 P 1           1 ",file=myFileOut) # $$$ ??? Maybe adaptive vectors ???
     print("MODEL",file=myFileOut)
     for i in range(nats):
         symb = symbols[types[i]]
         print("ATOM",'{:6d}'.format(i+1)," "+symb,"  MOL",'{:5d}'.format(molIds[i]),"    ", '{:05.3f}'.format(coords[i,0]),"", '{:05.3f}'.format(coords[i,1]), \
-               "",'{:05.3f}'.format(coords[i,2])," 0.00  0.00          ",symb,file=myFileOut)
+               "",'{:05.3f}'.format(coords[i,2])," 1.00  0.00          ",symb,file=myFileOut)
     print("TER",file=myFileOut)
     print("END",file=myFileOut)
 
@@ -582,7 +582,7 @@ def build_nlist(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
         nlTrVectY = np.zeros((maxneigh),dtype=int)
         nlTrVectZ = np.zeros((maxneigh),dtype=int)
         translation = np.zeros((3))
-        cnt = -1
+        cnt = 0
         #Which box it beongs to
         ibox = boxOfI[i]
         #Look inside the box and the neighboring boxes
@@ -620,6 +620,7 @@ def build_nlist(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
                         tz = 1
                         tr = True
                     
+                    
                     #Get the neigh box index
                     jbox = ithFromXYZ[jxBox,jyBox,jzBox]
                     #if (tr):
@@ -648,7 +649,7 @@ def build_nlist(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
 
                         distance = float((cx[i] - cnx)**2 + (cy[i] - cny)**2 \
                                 + (cz[i] - cnz)**2) * dr**2
-
+                        
                         if ((distance < rcut2) and (distance > 1.0E-12)):
                             cnt = cnt + 1
                             nlVect[cnt] = jj # jj is a neighbor of i by some translation

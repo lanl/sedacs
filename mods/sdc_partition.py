@@ -105,25 +105,25 @@ def get_coreHaloIndices(core,graph,njumps):
     nch = nc
     nnodes = len(graph[:,0])
     nx = np.zeros((nnodes),dtype=bool)
-    nx[:] = False
+    nx[:] = False # $$$ ??? what is nx ???
 
     for k in range(nc):
         i = coreHalo[k]
         if(i != -1): nx[i] = True
-
     #Add halos from graph
     for jump in range(njumps):
         nc1 = nch 
         for k in range(nc1):
             i = coreHalo[k]
             degI = len(graph[i,:])
-            for kk in range(degI):
+            for kk in range(1, degI):
+                                      # $$$ also this cycles needs to be interrupted when reaching -1 ???
                 j = graph[i,kk]
                 if((j != -1) & (nx[j] == False)):
+                    #print(i,j)
                     nch = nch + 1
                     coreHalo.append(j)
                     nx[j] = True
-    
     return coreHalo, nc, nch
 
 

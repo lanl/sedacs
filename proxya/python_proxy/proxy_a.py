@@ -115,6 +115,45 @@ def proxyA_get_hamiltonian(coords,atomTypes=np.zeros((1),dtype=int),verb=False):
 #
 # @return D Density matrix
 #
+
+# def get_densityMatrix(H,Nocc,verb=False): WITH Tel (Camel Notation)
+# compute d_i = <Qi | Qi> (the inner product)
+
+# def get_densityMatrix(H, mu0, occ, T, Ncores): -> eig_vals, f_i, d_i
+# d_i is a partial trail through cores
+
+'''
+def get_densityMatrix(H,Nocc, Tel, mu0, verb=False):
+  """Calcualted the full density matrix from H"""
+  if(verb): print("Computing the Density matrix")
+  
+  # mu0 with Newton-Raph (same as in PySEQM)
+  
+  return DM, mu0, eigen_vals, 
+  
+
+'''
+
+'''
+def get_densityMatrix_renormalized_????(H,Nocc, Tel, mu0, m, verb=False):
+  # start FROM THIS!!!!!
+  # m - limit of a partial trace
+  
+  if(verb): print("Computing the Density matrix")
+  
+  # diagonalize hamilt to get eigenvecs (Q) and eigenvals
+  # get f_i
+  # DM = Q@f@Q.T
+  
+  # compute d (sum goes up to m, m < H.shape[0])
+  # d_i = SUM^m_j Q_ij^2
+  
+  return DM, eigvals, d
+  ######## d < 1
+'''
+
+
+
 def get_densityMatrix(H,Nocc,verb=False):
   """Calcualted the full density matrix from H"""
   if(verb): print("Computing the Density matrix")

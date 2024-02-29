@@ -3,13 +3,13 @@
 Verbsity= True
 Threshold= 1.0E-5
 #CoordsFile= coords.pdb
-CoordsFile= coords_2955.pdb
-GraphThreshold= 0.001 
-MaxDeg= 2000 #Max graph degree
-Rcut= 5.0 #Radius cutoff
-PartitionType= Regular
-NumParts= 8
+CoordsFile= coords_16w.pdb
+GraphThreshold= 0.01 
+MaxDeg= 15 #Max graph degree
+Rcut= 4.0 #Radius cutoff
+PartitionType= Metis
+NumParts= 4
 Orbitals= {"H":1,"O":1} #This has to be know for each engine
-NumAdaptiveIter= 10 #Number of graph adaptive iterations
-Engine= {"Name":"ProxyA","InterfaceType":"File","Path":"/home/cnegre/SEDACS/generalcodes/proxya/python_proxy/","Executable":"/home/cnegre/SEDACS/generalcodes/proxya/python_proxy/server.py"} #The name of the external code
-StopAt= Init
+NumAdaptiveIter= 1 #Number of graph adaptive iterations
+Engine= {"Name":"ProxyA","InterfaceType":"Module","Path":"/home/maxim/Projects/SEDACS_proxi/generalcodes-main/generalcodes-main/proxya/python_proxy/","Executable":"/home/maxim/Projects/SEDACS_proxi/generalcodes-main/generalcodes-main/proxya/python_proxy/server.py"} #The name of the external code
+
