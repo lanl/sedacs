@@ -20,7 +20,7 @@ class ptable:
 
         ## Element symbols for every atom type (atomic number)
         # The Bl (Bolonium) is added to have index = atomic number
-        self.symbols = [ "Bl" ,                               
+        self.symbols = np.array([ "Bl" ,                               
         "H" ,          "He" ,         "Li" ,         "Be" ,         \
         "B" ,          "C" ,          "N" ,          "O" ,          \
         "F" ,          "Ne" ,         "Na" ,         "Mg" ,         \
@@ -47,12 +47,12 @@ class ptable:
         "Np" ,         "Pu" ,         "Am" ,         "Cm" ,         \
         "Bk" ,         "Cf" ,         "Es" ,         "Fm" ,         \
         "Md" ,         "No" ,         "Lr"                          \
-        ]
+                                 ],dtype=str)
 
 
         ## Element name
         #
-        self.names = ["Bolonium", \
+        self.names = np.array(["Bolonium", \
         "Hydrogen" ,     "Helium" ,       "Lithium" ,      "Beryllium" ,    \
         "Boron" ,        "Carbon" ,       "Nitrogen" ,     "Oxygen" ,       \
         "Fluorine" ,     "Neon" ,         "Sodium" ,       "Magnesium" ,    \
@@ -79,7 +79,7 @@ class ptable:
         "Neptunium" ,    "Plutonium" ,    "Americium" ,    "Curium" ,       \
         "Berkelium" ,    "Californium" ,  "Einsteinium" ,  "Fermium" ,      \
         "Mendelevium" ,  "Nobelium" ,     "Lawrencium"                      \
-        ]
+                               ],dtype=str)
 
         ## Element mass in atomic mass units (1.66 x 10-27 kg)
         #
@@ -339,7 +339,7 @@ class ptable:
 
         ## The electronic configuration
         #
-        self.econf = ['0s',
+        self.econf = np.array(['0s',
         "1s" ,              "1s2" ,             "1s22s" ,           "1s22s2" ,          \
         "1s22s22p" ,        "1s22s22p2" ,       "1s22s22p3" ,       "1s22s22p4" ,       \
         "1s22s22p5" ,       "1s22s22p6" ,       "[Ne]3s" ,          "[Ne]3s2" ,         \
@@ -366,7 +366,7 @@ class ptable:
         "[Rn]5f46d7s2" ,    "[Rn]5f67s2" ,      "[Rn]5f77s2" ,      "[Rn]5f76d7s2" ,    \
         "[Rn]5f97s2" ,      "[Rn]5f107s2" ,     "[Rn]5f117s2" ,     "[Rn]5f127s2" ,     \
         "[Rn]5f137s2" ,     "[Rn]5f147s2" ,     "[Rn]5f147s27p"                         \
-        ]
+                               ],dtype=str)
 
     ## Get the atomic number of a paerticular element    
     def get_atomic_number(self,symb):
