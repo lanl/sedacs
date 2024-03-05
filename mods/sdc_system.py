@@ -1,13 +1,21 @@
 """system
 Some functions to create, read, and manupulate coordinates of a chemical system
- 
+
 So far: Creates random coordinates; reads and writes xyz and pdb files;
 creates a neighbor list.
 """
 import numpy as np
+
 global aseLib
 try: import ase1.io; aseLib = True
 except: aseLib = False
+
+global mdtrajLib
+try: import mdtraj as md; mdtrajLib=True
+except: mdtrajLib=False
+
+from sdc_ptable import ptable
+
 #from sdc_out import *
 try:
     from mpi4py import MPI
@@ -35,15 +43,41 @@ class system:
         ## Type for each atom, e.g., the first atom is of type "types[0]"
         self.types = np.zeros(self.nats,dtype=int) 
         ## Coordinates for each atom, e.g., z-coordinate of the frist atom is coords[0,2]
-        self.coords = np.zeros((self.nats,3))
+        self.coords = np.zeros((self.nats,3),dtype=float)
         ## LatticeVectors. 3x3 matrix containing the lattice vectors for the simulation box.
         # latticeVectors[1,:] = first lattice vector.
-        self.latticeVectors = np.zeros((3,3))
-        ## Symbols for each atom type, e.g, the element symbol of the first atom is symbols[types[0]] 
-        self.symbols = ["Bl"] * self.ntypes 
+        self.latticeVectors = np.zeros((3,3),dtype=float)
+        ## Symbols for each atom type, e.g, the element symbol of the first atom is symbols[types[0]]
+        self.symbols = ptable().symbols[self.types] 
         ## Number of atomic orbital for each type
         self.orbs = np.ones(self.nats,dtype=int)
 
+    def print_summary(self):
+        s = """nats = {nats}
+ncores = {ncores}
+ntypes = {ntypes}
+coords[0] = {coords}
+latticeVectors[0] = {latticeVectors}
+symbols = {symbols}
+orbs = {orbs}"""        
+        print(s.format(nats=self.nats,ncores=self.ncores,ntypes=self.ntypes, \
+                        coords=self.coords[0], \
+                        latticeVectors=self.latticeVectors[0], \
+                        symbols=self.symbols, \
+                        orbs=self.orbs))
+    if mdtrajLib:
+        def from_mdtraj(self,traj,frame_idx=0):
+            table,bonds = traj.topology.to_dataframe()
+            self.symbols = table['element'].to_numpy().tolist()
+            self.nats = len(self.symbols)
+            self.ncores = self.nats
+            self.ntypes = self.nats
+            #multiply the following two by 10. to convert to Angstroms
+            self.coords = 10.*traj.xyz[frame_idx].astype(float)
+            self.latticeVectors = 10.*traj.unitcell_vectors.astype(float)
+            self.orbs = np.ones(self.nats,dtype=int)
+            
+            
 ## Transforms the lattice parameters into lattice vectors.
 # @param paramA a parameter
 # @param paramB b parameter
