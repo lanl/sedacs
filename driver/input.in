@@ -1,6 +1,6 @@
 #Input file for SEDACS
 
-Verbsity= True
+Verbosity= True
 Threshold= 1.0E-5
 #CoordsFile= coords.pdb
 CoordsFile= coords_16w.pdb
