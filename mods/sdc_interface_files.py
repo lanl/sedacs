@@ -1,7 +1,6 @@
-#We need H and other stuff 
-
 #Import the proper engine
 from proxy_a import *
+
 global engineUp
 engineUp = False
 import os
@@ -9,16 +8,21 @@ import subprocess
 from sdc_system import *
 from tempfile import TemporaryFile
 
-## Print a matrix
+## Write a matrix
 # @brief Writes a numpy 2D array (a matrix)
-# @param mat 2D numpy array
 # @param fileName Name of the file to be written
+# @return mat 2D numpy array
 #
 def read_matrix(fileName):
     mat = np.load(fileName+".npy",allow_pickle=True)
     open(fileName+".npy","r").close()
     return mat
 
+## Read instruction
+# @brief Reads an instruction from the instruction file
+# @param fileName Name of the instructions file 
+# @return instr String containing instruction 
+# 
 def get_instruction(fileName):
     instrFile = open(fileName,"r")
     for lines in instrFile:
@@ -26,9 +30,13 @@ def get_instruction(fileName):
     instrFile.close()
     return instr
 
+## Send instruction
+# @brief This will write an instruction into the instruction file
+# @param fileName The name of the instruction file 
+# 
 def send_instruction(instruction,fileName):
     if(fileName == None):
-        fileName = "/tmp/actions.act"
+        fileName = "/tmp/instructions.dat"
 
     haveFile = os.path.exists(fileName)
 
@@ -39,24 +47,34 @@ def send_instruction(instruction,fileName):
     #Hold the execution until START is in the file!
     go = False
     while (not go):
-        actionFile = open(fileName,"r")
-        for lines in actionFile:
+        instructionFile = open(fileName,"r")
+        for lines in instructionFile:
             print(lines.split()[0])
-            action = lines.split()[0]
-        actionFile.close()
-        if(action == "START"): go = True
+            instruction = lines.split()[0]
+        instructionFile.close()
+        if(instruction == "START"): go = True
 
-    actionFile = open(fileName,"w")
+    instructionFile = open(fileName,"w")
     print("Action File",fileName,"Instruction:",instruction)
-    print(instruction,file=actionFile)
-    actionFile.close()
+    print(instruction,file=instructionFile)
+    instructionFile.close()
 
 
+## Get Hamiltonian
+# @brief Get a Hamiltonian using a file type of interface
+# @param eng Engine object containing the description of the engine
+# @param A 2D Nx3 numpy array that stores the position for every atom.
+# Example: z-coordinate of atom 1 = `coords[0,2]`. It can be initialized
+# as `coords = np.zeros((nats,3))` where `nats` is the number of atoms. 
+# @param atomTypes for each atom, e.g., the first atom is of type `atomTypes[0]`. This can be initialized as `atomTypes = np.zeros((nats),dtype=int)` 
+# @param symbols Symbols for each atom type, e.g, the element symbol of the first atom is `symbols[types[0]]`
+# @param verb Verbosity level
+#
 def sdc_get_hamiltonian_files(eng,coords,atomTypes,symbols,verb):
             
     #Write coordinates in a file
     dataFileName = eng.path + "/data.dat"
-    instrFileName = eng.path + "/actions.act"
+    instrFileName = eng.path + "/instructions.dat"
     #Run the server and keep it running
     if(not eng.up):
         cmd = eng.run 
@@ -73,14 +91,14 @@ def sdc_get_hamiltonian_files(eng,coords,atomTypes,symbols,verb):
     #Hold the execution until START is in the file!
     go = False
     while (not go):
-        actionFile = open(instrFileName,"r")
-        for lines in actionFile:
+        instructionFile = open(instrFileName,"r")
+        for lines in instructionFile:
             print(lines.split()[0])
-            action = lines.split()[0]
-        actionFile.close()
-        if(action == "START"): go = True
-        if(action == "STOP"): exit(0)
-    actionFile.close()
+            instruction = lines.split()[0]
+        instructionFile.close()
+        if(instruction == "START"): go = True
+        if(instruction == "STOP"): exit(0)
+    instructionFile.close()
 
     print("INSTRUCTION",instr)
     if(go):
