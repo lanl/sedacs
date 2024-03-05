@@ -105,7 +105,7 @@ def get_coreHaloIndices(core,graph,njumps):
     nch = nc
     nnodes = len(graph[:,0])
     nx = np.zeros((nnodes),dtype=bool)
-    nx[:] = False # $$$ ??? what is nx ???
+    nx[:] = False # Logical mask 
 
     for k in range(nc):
         i = coreHalo[k]
