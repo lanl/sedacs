@@ -33,7 +33,7 @@ import time
 class system:
     """A prototype for the system type.
     """
-    def __init__(self,nats):
+    def __init__(self,nats=1):
         ## Number of atoms
         self.nats = nats
         ## Number of core atoms 
@@ -74,10 +74,108 @@ orbs = {orbs}"""
             self.ntypes = self.nats
             #multiply the following two by 10. to convert to Angstroms
             self.coords = 10.*traj.xyz[frame_idx].astype(float)
-            self.latticeVectors = 10.*traj.unitcell_vectors.astype(float)
+            if traj.unitcell_vectors is not None:
+                self.latticeVectors = 10.*traj.unitcell_vectors[frame_idx].astype(float)
+            else:
+                import warnings
+                warnings.warn("No unit cell information in this mdtraj trajectory. If unit cell information is desired, it can be obtained by loading a .pdb file as a trajectory.")
             self.orbs = np.ones(self.nats,dtype=int)
             
+## Trajectory type 
+# @brief To handle simulation results
+# @param system The system description with topology info
+# @param coords Coordinates at each snapshot (Angstrom)
+# @param latticeVectors Simulation box vectors (Angstrom)
+# @param value Generic atom value (e.g. electron population) at each time point
+# @param timestep Time difference between frames, for uniform sampling (ps)
+# @param time Time at each frame (ps)
+
+class trajectory:
+    """A prototype for the trajectory type.
+    """
+    
+    def __init__(self,sys=None,nats=1,nframes=1,timestep=0.00025):
+        if sys is None:
+            self.system = system(nats)
+        else:
+            self.system = sys
+            nats=sys.nats
+        self.coords = np.zeros((nframes,nats,3),dtype=float)
+        self.latticeVectors = None
+        self.value = None
+        self.timestep = timestep
+        self.time = np.ones(nframes,dtype=float)*self.timestep
+
+    def from_mdtraj(self,traj):
+        self.system = system()
+        self.system.from_mdtraj(traj)
+        self.coords = 10.*traj.xyz.astype(float)
+        if traj.unitcell_vectors is not None:
+            self.latticeVectors = 10.*traj.unitcell_vectors.astype(float)
+        self.time = traj.time.astype(float)
+        if traj.n_frames >=2:
+            self.timestep = traj.timestep
+
+    def slice(self,first=0,last=None,skip=1):
+        if last is None:
+            last = len(self.coords)
+        self.coords = self.coords[first:last+1:skip]
+        self.time = self.time[first:last+1:skip]
+        if self.value is not None:
+            self.value = self.value[first:last+1:skip]
+        if self.latticeVectors is not None:
+            self.latticeVectors = self.latticeVectors[first:last+1:skip]
+        self.timestep = self.timestep * skip
             
+
+    def load_prg_xyz(self,fname):
+        with open(fname) as f:
+            lines = np.array(f.readlines())
+            nats = int(lines[0])
+            if nats != self.system.nats:
+                raise Exception("Number of atoms must be same as that in system")
+            mask = np.ones(len(lines),dtype=bool)
+            mask[np.arange(0,len(lines),nats+2)] = False
+            mask[np.arange(1,len(lines),nats+2)] = False
+            lines = lines[mask]
+            xyzc = np.loadtxt(lines.tolist(),usecols=range(1,5)).astype(float)
+            nframes = int(len(xyzc)/nats)
+            xyzc = np.reshape(xyzc,(nframes,nats,4))
+            self.coords = xyzc[:,:,0:3]
+            self.value = xyzc[:,:,3:4]
+
+    if mdtrajLib:
+        def save_xtc(self,fname):
+            from mdtraj.formats import XTCTrajectoryFile
+            with XTCTrajectoryFile(fname, 'w') as f:
+                if self.latticeVectors is not None:
+                    f.write(self.coords/10.,box=self.latticeVectors/10.)
+                else:
+                    f.write(self.coords/10.,box=np.repeat(self.system.latticeVectors[np.newaxis,:,:]/10.,len(self.coords),axis=0))
+
+        def save_dcd(self,fname):
+            from mdtraj.formats import DCDTrajectoryFile
+            with DCDTrajectoryFile(fname, 'w') as f:
+                if self.latticeVectors is not None:
+                    latticeVectors = self.latticeVectors
+                else:
+                    latticeVectors=np.repeat(self.system.latticeVectors[np.newaxis,:,:]/10.,len(self.coords),axis=0)                    
+                latticeParams=vectors_to_parameters(latticeVectors)
+                f.write(self.coords,cell_lengths= \
+                        latticeParams[:,0:3], \
+                        cell_angles=latticeParams[:,3:6])
+
+        def save_netcdf(self,fname):
+            from mdtraj.formats import NetCDFTrajectoryFile
+            with NetCDFTrajectoryFile(fname, 'w') as f:
+                if self.latticeVectors is not None:
+                    latticeVectors=self.latticeVectors
+                else:
+                    latticeVectors=np.repeat(self.system.latticeVectors[np.newaxis,:,:]/10.,len(self.coords),axis=0)
+                latticeParams=vectors_to_parameters(latticeVectors)
+                f.write(self.coords,cell_lengths= \
+                        latticeParams[:,0:3], \
+                        cell_angles=latticeParams[:,3:6])
 ## Transforms the lattice parameters into lattice vectors.
 # @param paramA a parameter
 # @param paramB b parameter
@@ -93,7 +191,8 @@ def parameters_to_vectors(paramA,paramB,paramC,angleAlpha,angleBeta,angleGamma,\
         latticeVectors,verb=False):
     """Transforms parameters to vectors"""
 
-    pi = 3.1415926535897932384626433832795
+    #pi = 3.1415926535897932384626433832795
+    pi = np.pi
 
     angleAlpha = 2.0*pi*angleAlpha/360.0
     angleBeta = 2.0*pi*angleBeta/360.0
@@ -113,6 +212,42 @@ def parameters_to_vectors(paramA,paramB,paramC,angleAlpha,angleBeta,angleGamma,\
     latticeVectors[2,2] = np.sqrt(paramC**2 - latticeVectors[2,0]**2 - latticeVectors[2,1]**2)
 
     return latticeVectors
+
+## Transforms the lattice vectors to lattice parameters
+# @param latticeVectors 3x3 array containing the lattice vectors
+# @param verb Verbosity level.
+#
+def vectors_to_parameters(Amat,verb=False):
+    if Amat.ndim == 3:
+        a = np.sqrt(np.einsum('ij,ij->i',Amat[:,0],Amat[:,0]))
+        b = np.sqrt(np.einsum('ij,ij->i',Amat[:,1],Amat[:,1]))
+        c = np.sqrt(np.einsum('ij,ij->i',Amat[:,2],Amat[:,2]))
+        adotb = np.einsum('ij,ij->i',Amat[:,0],Amat[:,1])
+        adotc = np.einsum('ij,ij->i',Amat[:,0],Amat[:,2])
+        bdotc = np.einsum('ij,ij->i',Amat[:,1],Amat[:,2])
+        alpha = np.arccos(bdotc/b/c)*180./np.pi
+        beta = np.arccos(adotc/a/c)*180./np.pi
+        gamma = np.arccos(adotb/a/b)*180./np.pi
+        alpha[np.abs(alpha-90.) <= 1.e-5] = 90.
+        beta[np.abs(alpha-90.) <= 1.e-5] = 90.
+        gamma[np.abs(alpha-90.) <= 1.e-5] = 90.
+    else:
+        a = np.sqrt(np.inner(Amat[0],Amat[0]))
+        b = np.sqrt(np.inner(Amat[1],Amat[1]))
+        c = np.sqrt(np.inner(Amat[2],Amat[2]))
+        adotb = np.inner(Amat[0],Amat[1])
+        adotc = np.inner(Amat[0],Amat[2])
+        bdotc = np.inner(Amat[1],Amat[2])
+        alpha = np.arccos(bdotc/b/c)*180./np.pi
+        beta = np.arccos(adotc/a/c)*180./np.pi
+        gamma = np.arccos(adotb/a/b)*180./np.pi
+        if abs(alpha-90.) <= 1.e-5:
+            alpha = 90.
+        if abs(beta-90.) <= 1.e-5:
+            beta = 90.
+        if abs(gamma-90.) <= 1.e-5:
+            gamma = 90.
+    return np.transpose(np.array((a,b,c,alpha,beta,gamma)))
 
 ## Simple random number generator
 # This is important in order to compare across codes 
