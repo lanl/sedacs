@@ -276,7 +276,7 @@ class ptable:
         ## The maximum expected number of bonds to this element
         #
         self.maxbonds = np.zeros(self.ntypes,dtype=int)
-        self.maxbonds[:] =  0,                                   
+        self.maxbonds[:] =  0,  \
         1 ,            0 ,            1 ,            2 ,            \
         4 ,            4 ,            4 ,            2 ,            \
         1 ,            0 ,            1 ,            2 ,            \
@@ -370,18 +370,58 @@ class ptable:
 
     ## Get the atomic number of a paerticular element    
     def get_atomic_number(self,symb):
-        return self.symbols.index(symb) 
+        return np.where(self.symbols == symb)[0][0] 
 
-if(__name__ == '__main__'):
 
-    n = len(sys.argv)
-    if(n == 1):
-      print("Give any element symbol as input. Example:\n")
-      print("./ptable C\n")
-      exit(0)
+def test(name):
+    """ Quick test for this module """
+    #Get values for Carbon
+    pt = ptable()
+    atnum = pt.get_atomic_number("C")
+    err = False
+
+    if atnum != 6: 
+        err = True
+        print("0",err,atnum)
+    if(pt.names[atnum] != "Carbon"):
+        err = True
+        print("1",err)
+    if(abs(pt.mass[atnum] - 12.0) > 1.0E-4):
+        err = True
+        print("2",err)
+    if(abs(pt.vdwr[atnum] - 1.7) > 1.0E-4):
+        err = True
+        print("3",err)
+    if(abs(pt.covr[atnum] - 0.76 ) > 1.0E-4):
+        err = True
+        print("4",err)
+    if(abs(pt.ip[atnum] - 11.2603) > 1.0E-4):
+        err = True
+        print("5",err)
+    if(abs(pt.ea[atnum] - 1.262118) > 1.0E-4):
+        err = True
+        print("6",err)
+    if(abs(pt.en[atnum] - 2.55) > 1.0E-4):
+        err = True 
+        print("7",err)
+    if(pt.maxbonds[atnum] != 4):
+        err = True
+        print("8",err)
+    if(pt.numel[atnum] != 4):
+        err = True 
+        print("9",err)
+    if(pt.econf[atnum] != "1s22s22p2"):
+        err = True
+        print("10",err)
+#    
+    if(err):
+        print("Test for ",name,"... Failed")
+        exit(0)
     else:
-      elementSymbol = sys.argv[1]
+        print("Test for ",name,"... Passed")
 
+def print_element_data(elementSymbol):
+    """ Prints element data """
     pt = ptable()
     if(elementSymbol != "Bl"):
         atnum = pt.get_atomic_number(elementSymbol)
@@ -396,3 +436,28 @@ if(__name__ == '__main__'):
         print("Element number of electrons = ",pt.numel[atnum])
         print("Element electron configuration = ",pt.econf[atnum])
         print("Element atomic number = ",pt.get_atomic_number(elementSymbol))
+
+if(__name__ == '__main__'):
+    
+    n = len(sys.argv)
+    if(n == 1):
+      print("Give a task name (test or info). Example:\n")
+      print("./ptable test\n")
+      exit(0)
+    else:
+      task = sys.argv[1]
+        
+    if task == "test":
+        test(name="ptable")
+
+    elif task == "info":
+        if (n < 3):
+          print("Give any element symbol as input. Example:\n")
+          print("./ptable info C\n")
+          exit(0)
+        else:
+          elementSymbol = sys.argv[2]
+          print_element_data(elementSymbol)
+
+
+    
