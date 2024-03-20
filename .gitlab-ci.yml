@@ -25,9 +25,10 @@ before_install:
   stage: build
   # Install the latest version of Miniconda
   script:
-    - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
+    - wget http://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
     - chmod +x miniconda.sh
     - ./miniconda.sh -b
+    - source /root/miniconda3/etc/profile.d/conda.sh
     - conda update --yes conda  # Update CONDA without command line prompt
   
 build-job:       # This job runs in the build stage, which runs first.
