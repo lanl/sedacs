@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 """system
 Some functions to create, read, and manupulate coordinates of a chemical system
 
@@ -15,6 +17,8 @@ try: import mdtraj as md; mdtrajLib=True
 except: mdtrajLib=False
 
 from sdc_ptable import ptable
+from sdc_message import *
+from sdc_utils import *
 
 #from sdc_out import *
 try:
@@ -176,6 +180,7 @@ class trajectory:
                 f.write(self.coords,cell_lengths= \
                         latticeParams[:,0:3], \
                         cell_angles=latticeParams[:,3:6])
+
 ## Transforms the lattice parameters into lattice vectors.
 # @param paramA a parameter
 # @param paramB b parameter
@@ -213,6 +218,26 @@ def parameters_to_vectors(paramA,paramB,paramC,angleAlpha,angleBeta,angleGamma,\
 
     return latticeVectors
 
+def test_parameters_to_vectors(exit1):
+    passed = False
+    try:
+        paramA, paramB, paramC = 2.0, 3.0, 4.0
+        angleAlpha, angleBeta, angleGamma = 90.0, 90.0, 90.0
+        latticeVectors = np.zeros((3, 3))
+        latticeVectors = parameters_to_vectors(paramA, paramB, paramC, angleAlpha, angleBeta, angleGamma, latticeVectors)
+        expected_result = np.array([[2.0, 0.0, 0.0], [0.0, 3.0, 0.0], [0.0, 0.0, 4.0]])
+        if(np.allclose(latticeVectors, expected_result)):
+            sdc_test_pass("parameters_to_vectors")
+            passed = True
+        else:
+            sdc_test_fail("parameters_to_vectors")
+            if(exit1): exit(1)
+    except:
+            sdc_test_fail("parameters_to_vectors")
+            if(exit1): exit(1)
+    return passed
+
+
 ## Transforms the lattice vectors to lattice parameters
 # @param latticeVectors 3x3 array containing the lattice vectors
 # @param verb Verbosity level.
@@ -248,6 +273,31 @@ def vectors_to_parameters(Amat,verb=False):
         if abs(gamma-90.) <= 1.e-5:
             gamma = 90.
     return np.transpose(np.array((a,b,c,alpha,beta,gamma)))
+
+def test_vectors_to_parameters(exit1):
+    latticeVectors = np.zeros((3,3))
+    latticeVectors[0,:] = [1.0,2.0,3.0]
+    latticeVectors[1,:] = [1.0,0.0,0.0]
+    latticeVectors[2,:] = [3.0,2.0,1.0]
+    paramsRef = np.zeros((6))
+    paramsRef = [3.74165739,  1.0, 3.74165739, 36.6992252,  44.4153086,  74.49864043]
+    try:
+        params = vectors_to_parameters(latticeVectors,verb=False)
+        if(np.allclose(paramsRef,params)):
+            passed = True
+        else:
+            passed = False
+
+    except:
+        passed = False
+
+    if(passed):
+        sdc_test_pass("vectors_to_parameters")
+    else:
+        sdc_test_fail("vectors_to_parameters")
+        if(exit1): exit(1)
+    return passed
+    
 
 ## Simple random number generator
 # This is important in order to compare across codes 
@@ -321,7 +371,7 @@ def get_random_coordinates(length):
 ## Coordinates main reader
 # @brief This will read the coodinates of a chemical system (so far only xyz and pdb
 # are available).
-
+#
 def read_coords_file(fileName,lib="None",verb=True):
     """coords file main parser: Reads in an xyz/pdb file with lattice informations.
     """
@@ -368,7 +418,7 @@ def read_coords_file(fileName,lib="None",verb=True):
 def read_xyz_file(fileName,lib="None",verb=True):
     """xyz file parser: Reads in an xyz file with lattice informations.
     """
-    if(lib == "None"):
+    if((lib == "None") or (lib == None)):
         fileIn = open(fileName,"r") 
         count = -1 
         latticeVectors = np.zeros((3,3))
@@ -377,6 +427,12 @@ def read_xyz_file(fileName,lib="None",verb=True):
         typesIndex = -1
         for lines in fileIn:
             linesSplit = lines.split()
+
+            #Adding an exception in case there is a blank second line
+            if((len(linesSplit) == 0) and (count == 0)):
+                noBox = True
+                count = count + 1
+
             if(len(linesSplit) != 0): 
                 count = count + 1
                 if(count == 0):
@@ -454,6 +510,39 @@ def read_xyz_file(fileName,lib="None",verb=True):
 
     return latticeVectors,symbols,types,coords
 
+def test_read_xyz_file(exit1):
+    passed = True
+    xyz_file_content = "4\nTest\nH 0.0 0.0 0.0\nHe 1.0 1.0 1.0\nC 2.0 2.0 2.0\nC 3.0 3.0 3.0"
+    coordsRef = np.zeros((4,3))
+    coordsRef[1,:] = [1.0 , 1.0, 1.0]
+    coordsRef[2,:] = [2.0 , 2.0, 2.0]
+    coordsRef[3,:] = [3.0 , 3.0, 3.0]
+    typesRef = np.zeros((4),dtype=int)
+    typesRef = [0,1,2,2]
+    fname= "test_xyz.xyz"
+    with open(fname, "w") as f:
+        f.write(xyz_file_content)
+    try:
+        latticeVectors,symbols,types,coords= read_xyz_file(fname,lib=None,verb=False)
+        if(symbols != ["H","He","C"]):
+            passed = False
+        if(not np.allclose(coords, coordsRef)):
+            passed = False
+        if(not np.allclose(types,typesRef)):
+            passed = False
+    except:
+        passed = False
+
+    if(passed):
+        sdc_test_pass("read_xyz_file")
+    else:
+        sdc_test_fail("read_xyz_file")
+        passed = False
+        if(exit1): exit(1)
+
+    return passed
+
+
 ## Read a pdb file 
 #  Reads in an pdb file with lattice informations.
 #
@@ -482,11 +571,13 @@ def read_xyz_file(fileName,lib="None",verb=True):
 # NumberOfAtomTypes = len(symbols)
 # NumberOfAtoms = len(coordinates[:,0])
 # @endcode
+# 
+# @todo Add test!
 #
 def read_pdb_file(fileName,lib="None",verb=False):
     """Reads a pdb file"""
     if(verb):print("\nIn read_pdb_file...\n")
-    if(lib == "None"):
+    if((lib == "None") or (lib == None)):
         fileIn = open(fileName,"r")
         count = 0
         latticeVectors = np.zeros((3,3))
@@ -536,12 +627,61 @@ def read_pdb_file(fileName,lib="None",verb=False):
     
     return latticeVectors,symbols,types,coords 
 
+def test_read_pdb_file(exit1):
+    passed = True
+    pdb_file_content = "TITLE test\nREMARK This is a test file \
+    \nCRYST1   31.230   31.230   31.230  90.00  90.00  90.00 P 1           1 \
+    \nMODEL        1 \
+    \nATOM      1  O   HOH     1      15.427  15.434  15.615  1.00  0.00           O \
+    \nATOM      2  H   HOH     0      15.009  16.295  15.615  1.00  0.00           H \
+    \nATOM      3  H   HOH     0      16.408  15.115  15.615  1.00  0.00           H \
+    \nATOM      4  OW  SOL     1       5.690  12.751  11.651  1.00  0.00           O \
+    \nATOM      5  HW1 SOL     1       4.760  12.681  11.281  1.00  0.00           H \
+    \nATOM      6  HW2 SOL     1       5.800  13.641  12.091  1.00  0.00           H \
+    \nTER \
+    \nENDMDL"
+
+    coordsRef = np.zeros((6,3))
+    coordsRef[0,:] = [ 15.427,  15.434,  15.615]
+    coordsRef[1,:] = [ 15.009,  16.295,  15.615]
+    coordsRef[2,:] = [ 16.408,  15.115,  15.615]
+    coordsRef[3,:] = [  5.690,  12.751,  11.651]
+    coordsRef[4,:] = [  4.760,  12.681,  11.281]
+    coordsRef[5,:] = [  5.800,  13.641,  12.091]
+    typesRef = np.zeros((6),dtype=int)
+    typesRef[:] = [0,1,1,0,1,1]
+    symbRef = ["O","H"]
+    fname= "test_pdb.pdb"
+    with open(fname, "w") as f:
+        f.write(pdb_file_content)
+    try:
+        latticeVectors,symbols,types,coords= read_pdb_file(fname,lib=None,verb=False)
+        if(symbols != symbRef):
+            passed = False
+        if(not np.allclose(coords, coordsRef)):
+            passed = False
+        if(not np.allclose(types,typesRef)):
+            passed = False
+    except:
+        passed = False
+
+    if(passed):
+        sdc_test_pass("read_pdb_file")
+    else:
+        sdc_test_fail("read_pdb_file")
+        passed = False
+        if(exit1): exit(1)
+
+    return passed
+
+
 ## Write coordinates into a pdb file
 # 
 # @param coords Position for every atoms. z-coordinate of atom 1 = coords[0,2]
 # @param symbols Symbols for every atom type
 # @types list of types for every atom in the system. 
 # 
+# @todo Add lattice parameters!
 def write_pdb_coordinates(fileName,coords,types,symbols,molIds=np.zeros((0),dtype=int)):
     """Writes coordinates in simple pdb format
     """
@@ -552,8 +692,8 @@ def write_pdb_coordinates(fileName,coords,types,symbols,molIds=np.zeros((0),dtyp
         molIds[:] = 1
 
     myFileOut = open(fileName,"w")
-    print("TITLE ",fileName,file=myFileOut)
-    print("CRYST1   10.000   10.000   10.000  90.00  90.00  90.00 P 1           1 ",file=myFileOut) # $$$ ??? Maybe adaptive vectors ???
+    print("TITLE ","PDB written by SEDACS",file=myFileOut)
+    print("CRYST1   10.000   10.000   10.000  90.00  90.00  90.00 P 1           1",file=myFileOut) # $$$ ??? Maybe adaptive vectors ???
     print("MODEL",file=myFileOut)
     for i in range(nats):
         symb = symbols[types[i]]
@@ -561,6 +701,52 @@ def write_pdb_coordinates(fileName,coords,types,symbols,molIds=np.zeros((0),dtyp
                "",'{:05.3f}'.format(coords[i,2])," 1.00  0.00          ",symb,file=myFileOut)
     print("TER",file=myFileOut)
     print("END",file=myFileOut)
+    myFileOut.close()
+
+def test_write_pdb_file(exit1):
+    passed = True
+    pdb_file_content = "TITLE  PDB written by SEDACS\n\
+CRYST1   10.000   10.000   10.000  90.00  90.00  90.00 P 1           1\n\
+MODEL\n\
+ATOM      1  O   MOL     1      15.427  15.434  15.615  1.00  0.00           O\n\
+ATOM      2  H   MOL     1      15.009  16.295  15.615  1.00  0.00           H\n\
+ATOM      3  H   MOL     1      16.408  15.115  15.615  1.00  0.00           H\n\
+ATOM      4  O   MOL     1      5.690  12.751  11.651  1.00  0.00           O\n\
+ATOM      5  H   MOL     1      4.760  12.681  11.281  1.00  0.00           H\n\
+ATOM      6  H   MOL     1      5.800  13.641  12.091  1.00  0.00           H\n\
+TER\n\
+END"
+
+    coords = np.zeros((6,3))
+    coords[0,:] = [ 15.427,  15.434,  15.615]
+    coords[1,:] = [ 15.009,  16.295,  15.615]
+    coords[2,:] = [ 16.408,  15.115,  15.615]
+    coords[3,:] = [  5.690,  12.751,  11.651]
+    coords[4,:] = [  4.760,  12.681,  11.281]
+    coords[5,:] = [  5.800,  13.641,  12.091]
+    types = np.zeros((6),dtype=int)
+    types[:] = [0,1,1,0,1,1]
+    symb = ["O","H"]
+    with open("ref.pdb", "w") as f:
+        f.write(pdb_file_content)
+    try:
+        write_pdb_coordinates("actual.pdb",coords,types,symb,molIds=np.zeros((0),dtype=int))
+        f = open("actual.pdb", "r")
+        f.close()
+        filesAreEqual = sdc_files_are_equal("actual.pdb","ref.pdb")
+        if(not filesAreEqual):
+            passed = False
+    except:
+        passed = False
+
+    if(passed):
+        sdc_test_pass("write_pdb_file")
+    else:
+        sdc_test_fail("write_pdb_file")
+        passed = False
+        if(exit1): exit(1)
+
+    return passed
 
 
 ## Write coordinates into an xyz file
@@ -583,6 +769,36 @@ def write_xyz_coordinates(fileName,coords,types,symbols):
 
     myFileOut.close()
 
+def test_write_xyz_coordinates(exit1):
+    passed = True
+    try:
+        pt = ptable()
+        nats = len(pt.symbols)
+        nsymb = int(8)
+        symbols = [] * nsymb
+        symbols[:] = pt.symbols[0:nsymb]
+        coords = np.zeros((nats,3))
+        types = np.zeros((nats),dtype=int)
+        for i in range(len(pt.symbols)):
+            coords[i,0] = float(i)
+            coords[i,1] = float(i)*2.0
+            coords[i,2] = float(i)*3.0
+            types[i] = i%(nsymb-1)
+
+        write_xyz_coordinates("actual.xyz",coords,types,symbols)
+        filesAreEqual = sdc_files_are_equal("actual.xyz","ref.xyz")
+        if(not filesAreEqual):
+            passed = False
+    except:
+        passed = False
+
+    if(passed):
+        sdc_test_pass("write_xyz_coordinates")
+    else:
+        sdc_test_fail("write_xyz_coordinates")
+        if(exit1): exit(1)
+    return passed
+
 ## Extract subsystem
 # @brief Extracs a chemical subsystem (coordinates and atomic types) 
 # from a larger system using a set of indices. 
@@ -593,6 +809,7 @@ def write_xyz_coordinates(fileName,coords,types,symbols):
 # @return subSyCoords Subsystem atomic coordinates
 # @return subSyTypes Subsystem atomic types
 #
+# @todo Add test!
 def extract_subsystem(coords,types,symbols,part):
     subSyNats = len(part)
     subSyCoords = np.zeros((subSyNats,3))
@@ -635,6 +852,31 @@ def get_volBox(latticeVectors,verb=False):
 
     return volBox
 
+def test_get_volBox(exit1):
+
+    volBoxRef = 4.1
+    latticeVectors = np.zeros((3,3))
+    latticeVectors[0,:] = [1.0,2.0,3.0]
+    latticeVectors[1,:] = [1.0,0.0,0.0]
+    latticeVectors[2,:] = [3.0,2.0,1.0]
+    try:
+        volBox = get_volBox(latticeVectors,verb=False)
+        if(abs(volBox - volBoxRef) == 0.0):
+            passed = True 
+        else:
+            passed = False
+
+    except:
+        passed = False
+
+    if(passed):
+        sdc_test_pass("get_volBox")
+    else:
+        sdc_test_fail("get_volBox")
+        if(exit1): exit(1)
+
+    return passed
+
 ## Neighbor list 
 # @brief It will bild a neighbor list using an "all to all" approach
 # @param coords System coordinates. coords[7,1]: y-coordinate of atom 7.
@@ -642,6 +884,7 @@ def get_volBox(latticeVectors,verb=False):
 # @param nl neighbor list type: a simple 2D array indicating the neighbors of each atom.
 # @param rank MPI rank
 #
+# @todo Add test!
 def build_nlist(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
     if(verb): print("Building neighbor list ...")
     
@@ -870,6 +1113,7 @@ def build_nlist(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
 # @param types Index type for each atom in the system. Type for first atom = type[0]
 # @return norbs Total number of orbitals
 # @return hindex Orbital index for each atom in the system
+# @todo Add test!
 #
 def get_hindex(orbs,symbols,types,verb=False):
 
@@ -885,3 +1129,46 @@ def get_hindex(orbs,symbols,types,verb=False):
     hindex[nats] = norbs
 
     return norbs, hindex
+
+
+## Main to execute tests
+if __name__ == '__main__': 
+#Main starts here
+    n = len(sys.argv)
+    if(n == 1):
+      print("Give a test name. Example:\n")
+      print("./sdc_system.py test read_xyz_file\n")
+      print("Available tests are:")
+      print("- parameters_to_vectors")
+      print("- system_class")
+      print("- read_xyz_file \n")
+      exit(0)
+    else:
+      task = sys.argv[1]
+
+    if task == "test":
+
+        #Get the test name
+        tname = sys.argv[2]
+
+        if(tname == "parameters_to_vectors"):
+            test_parameters_to_vectors(True)
+        elif(tname == "vectors_to_parameters"):
+            test_vectors_to_parameters(True)
+        elif(tname == "write_xyz_coordinates"):
+            test_write_xyz_coordinates(True)
+        elif(tname == "read_xyz_file"):
+            test_read_xyz_file(True)
+        elif(tname == "get_volBox"):
+            test_get_volBox(True)
+        elif(tname == "read_pdb_file"):
+            test_read_pdb_file(True)
+        elif(tname == "write_pdb_file"):
+            test_write_pdb_file(True)
+        else:
+            sdc_fail_at("main of sdc_system")
+
+
+
+
+

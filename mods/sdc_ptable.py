@@ -10,6 +10,7 @@
 
 import numpy as np
 import sys
+from sdc_message import *
 
 class ptable:
     """A simple periodic table.
@@ -373,52 +374,61 @@ class ptable:
         return np.where(self.symbols == symb)[0][0] 
 
 
-def test(name):
+def test_ptable(exit1):
     """ Quick test for this module """
-    #Get values for Carbon
-    pt = ptable()
-    atnum = pt.get_atomic_number("C")
-    err = False
+    passed = False
+    try:
+        #Get values for Carbon
+        pt = ptable()
+        atnum = pt.get_atomic_number("C")
+        passed = True
 
-    if atnum != 6: 
-        err = True
-        print("0",err,atnum)
-    if(pt.names[atnum] != "Carbon"):
-        err = True
-        print("1",err)
-    if(abs(pt.mass[atnum] - 12.0) > 1.0E-4):
-        err = True
-        print("2",err)
-    if(abs(pt.vdwr[atnum] - 1.7) > 1.0E-4):
-        err = True
-        print("3",err)
-    if(abs(pt.covr[atnum] - 0.76 ) > 1.0E-4):
-        err = True
-        print("4",err)
-    if(abs(pt.ip[atnum] - 11.2603) > 1.0E-4):
-        err = True
-        print("5",err)
-    if(abs(pt.ea[atnum] - 1.262118) > 1.0E-4):
-        err = True
-        print("6",err)
-    if(abs(pt.en[atnum] - 2.55) > 1.0E-4):
-        err = True 
-        print("7",err)
-    if(pt.maxbonds[atnum] != 4):
-        err = True
-        print("8",err)
-    if(pt.numel[atnum] != 4):
-        err = True 
-        print("9",err)
-    if(pt.econf[atnum] != "1s22s22p2"):
-        err = True
-        print("10",err)
-#    
-    if(err):
-        print("Test for ",name,"... Failed")
-        exit(0)
-    else:
-        print("Test for ",name,"... Passed")
+        if atnum != 6: 
+            passed = False
+            #print("0")
+        if(pt.names[atnum] != "Carbon"):
+            passed = False
+            #print("1")
+        if(abs(pt.mass[atnum] - 12.0) > 1.0E-4):
+            passed = False
+            #print("2")
+        if(abs(pt.vdwr[atnum] - 1.7) > 1.0E-4):
+            err = True
+            passed = False
+            #print("3")
+        if(abs(pt.covr[atnum] - 0.76 ) > 1.0E-4):
+            passed = False
+            #print("4")
+        if(abs(pt.ip[atnum] - 11.2603) > 1.0E-4):
+            passed = False
+            #print("5")
+        if(abs(pt.ea[atnum] - 1.262118) > 1.0E-4):
+            passed = False
+            #print("6")
+        if(abs(pt.en[atnum] - 2.55) > 1.0E-4):
+            passed = False
+            #print("7")
+        if(pt.maxbonds[atnum] != 4):
+            passed = False
+            #print("8")
+        if(pt.numel[atnum] != 4):
+            passed = False
+            #print("9")
+        if(pt.econf[atnum] != "1s22s22p2"):
+            passed = False
+            #print("10")
+#        
+        if(passed):
+            sdc_test_pass("test_ptable")
+        else:
+            sdc_test_fail("test_ptable")
+            if(exit1): exit(1)
+    except:
+        sdc_test_fail("test_ptable")
+        if(exit1): exit(1)
+
+    return passed
+
 
 def print_element_data(elementSymbol):
     """ Prints element data """
@@ -448,7 +458,9 @@ if(__name__ == '__main__'):
       task = sys.argv[1]
         
     if task == "test":
-        test(name="ptable")
+        tname = sys.argv[2]
+        if(tname == "ptable"):
+            passed = test_ptable(True)
 
     elif task == "info":
         if (n < 3):
