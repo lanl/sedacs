@@ -30,6 +30,8 @@ before_install:
     - ./miniconda.sh -b
     - source /root/miniconda3/etc/profile.d/conda.sh
     - conda update --yes conda  # Update CONDA without command line prompt
+    - conda activate
+    - conda install openmpi mpi4py scipy mdtraj python=3.10
   
 build-job:       # This job runs in the build stage, which runs first.
   stage: build
