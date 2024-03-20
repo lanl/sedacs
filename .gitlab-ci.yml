@@ -38,6 +38,7 @@ unit-test-job:   # This job runs in the test stage.
     - conda activate
     - conda install openmpi mpi4py scipy mdtraj cmake python=3.10 -c conda-forge -y
     - echo "Setting up the SEDACS environment..."
+    - export OMPI_MCA_mca_base_component_show_load_errors=0
     - pushd $CI_PROJECT_DIR
     - cd driver; source vars; cd -
     - cd test

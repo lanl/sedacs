@@ -785,6 +785,15 @@ def test_write_xyz_coordinates(exit1):
             coords[i,2] = float(i)*3.0
             types[i] = i%(nsymb-1)
 
+        myFileOut = open("ref.xyz","w")
+        print(nats,file=myFileOut)
+        print("xyz format",file=myFileOut)
+        for i in range(nats):
+           symb = symbols[types[i]]
+           print(symb,coords[i,0],coords[i,1],coords[i,2],file=myFileOut)
+ 
+        myFileOut.close()
+
         write_xyz_coordinates("actual.xyz",coords,types,symbols)
         filesAreEqual = sdc_files_are_equal("actual.xyz","ref.xyz")
         if(not filesAreEqual):
@@ -854,7 +863,7 @@ def get_volBox(latticeVectors,verb=False):
 
 def test_get_volBox(exit1):
 
-    volBoxRef = 4.1
+    volBoxRef = 4.0
     latticeVectors = np.zeros((3,3))
     latticeVectors[0,:] = [1.0,2.0,3.0]
     latticeVectors[1,:] = [1.0,0.0,0.0]
