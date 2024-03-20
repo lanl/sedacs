@@ -21,6 +21,14 @@ stages:          # List of stages for jobs, and their order of execution
   - test
   - deploy
 
+before_install:
+  stage: build
+  # Install the latest version of Miniconda
+  - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
+  - chmod +x miniconda.sh
+  - ./miniconda.sh -b
+  - conda update --yes conda  # Update CONDA without command line prompt
+  
 build-job:       # This job runs in the build stage, which runs first.
   stage: build
   script:
