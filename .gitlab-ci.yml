@@ -20,31 +20,32 @@ stages:          # List of stages for jobs, and their order of execution
   - build
   - test
   - deploy
-
-before_install:
+    
+build-job:       # This job runs in the build stage, which runs first.
   stage: build
-  # Install the latest version of Miniconda
   script:
+    - echo "Compile complete."
+
+unit-test-job:   # This job runs in the test stage.
+  stage: test    # It only starts when the job in the build stage completes successfully.
+  script:
+    - echo "Building a conda environment"
     - wget http://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
     - chmod +x miniconda.sh
     - ./miniconda.sh -b
     - source /root/miniconda3/etc/profile.d/conda.sh
     - conda update --yes conda  # Update CONDA without command line prompt
     - conda activate
-    - conda install openmpi mpi4py scipy mdtraj python=3.10 -c conda-forge
-  
-build-job:       # This job runs in the build stage, which runs first.
-  stage: build
-  script:
-    - echo "Compiling the code..."
-    - echo "Compile complete."
-
-unit-test-job:   # This job runs in the test stage.
-  stage: test    # It only starts when the job in the build stage completes successfully.
-  script:
-    - echo "Running unit tests... This will take about 60 seconds."
-    - sleep 60
-    - echo "Code coverage is 90%"
+    - conda install openmpi mpi4py scipy mdtraj cmake python=3.10 -c conda-forge -y
+    - echo "Setting up the SEDACS environment..."
+    - pushd $CI_PROJECT_DIR
+    - cd driver; source vars; cd -
+    - cd test
+    - echo "Running unit tests via ctest"
+    - bash build_and_run_tests.sh ctest
+    - echo "Running unit tests via python"
+    - bash build_and_run_tests.sh python
+    - cd -
 
 lint-test-job:   # This job also runs in the test stage.
   stage: test    # It can run at the same time as unit-test-job (in parallel).
