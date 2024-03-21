@@ -10,6 +10,7 @@
 
 import numpy as np
 import sys
+from sdc_message import *
 
 class ptable:
     """A simple periodic table.
@@ -276,7 +277,7 @@ class ptable:
         ## The maximum expected number of bonds to this element
         #
         self.maxbonds = np.zeros(self.ntypes,dtype=int)
-        self.maxbonds[:] =  0,                                   
+        self.maxbonds[:] =  0,  \
         1 ,            0 ,            1 ,            2 ,            \
         4 ,            4 ,            4 ,            2 ,            \
         1 ,            0 ,            1 ,            2 ,            \
@@ -370,18 +371,67 @@ class ptable:
 
     ## Get the atomic number of a paerticular element    
     def get_atomic_number(self,symb):
-        return self.symbols.index(symb) 
+        return np.where(self.symbols == symb)[0][0] 
 
-if(__name__ == '__main__'):
 
-    n = len(sys.argv)
-    if(n == 1):
-      print("Give any element symbol as input. Example:\n")
-      print("./ptable C\n")
-      exit(0)
-    else:
-      elementSymbol = sys.argv[1]
+def test_ptable(exit1):
+    """ Quick test for this module """
+    passed = False
+    try:
+        #Get values for Carbon
+        pt = ptable()
+        atnum = pt.get_atomic_number("C")
+        passed = True
 
+        if atnum != 6: 
+            passed = False
+            #print("0")
+        if(pt.names[atnum] != "Carbon"):
+            passed = False
+            #print("1")
+        if(abs(pt.mass[atnum] - 12.0) > 1.0E-4):
+            passed = False
+            #print("2")
+        if(abs(pt.vdwr[atnum] - 1.7) > 1.0E-4):
+            err = True
+            passed = False
+            #print("3")
+        if(abs(pt.covr[atnum] - 0.76 ) > 1.0E-4):
+            passed = False
+            #print("4")
+        if(abs(pt.ip[atnum] - 11.2603) > 1.0E-4):
+            passed = False
+            #print("5")
+        if(abs(pt.ea[atnum] - 1.262118) > 1.0E-4):
+            passed = False
+            #print("6")
+        if(abs(pt.en[atnum] - 2.55) > 1.0E-4):
+            passed = False
+            #print("7")
+        if(pt.maxbonds[atnum] != 4):
+            passed = False
+            #print("8")
+        if(pt.numel[atnum] != 4):
+            passed = False
+            #print("9")
+        if(pt.econf[atnum] != "1s22s22p2"):
+            passed = False
+            #print("10")
+#        
+        if(passed):
+            sdc_test_pass("test_ptable")
+        else:
+            sdc_test_fail("test_ptable")
+            if(exit1): exit(1)
+    except:
+        sdc_test_fail("test_ptable")
+        if(exit1): exit(1)
+
+    return passed
+
+
+def print_element_data(elementSymbol):
+    """ Prints element data """
     pt = ptable()
     if(elementSymbol != "Bl"):
         atnum = pt.get_atomic_number(elementSymbol)
@@ -396,3 +446,30 @@ if(__name__ == '__main__'):
         print("Element number of electrons = ",pt.numel[atnum])
         print("Element electron configuration = ",pt.econf[atnum])
         print("Element atomic number = ",pt.get_atomic_number(elementSymbol))
+
+if(__name__ == '__main__'):
+    
+    n = len(sys.argv)
+    if(n == 1):
+      print("Give a task name (test or info). Example:\n")
+      print("./ptable test\n")
+      exit(0)
+    else:
+      task = sys.argv[1]
+        
+    if task == "test":
+        tname = sys.argv[2]
+        if(tname == "ptable"):
+            passed = test_ptable(True)
+
+    elif task == "info":
+        if (n < 3):
+          print("Give any element symbol as input. Example:\n")
+          print("./ptable info C\n")
+          exit(0)
+        else:
+          elementSymbol = sys.argv[2]
+          print_element_data(elementSymbol)
+
+
+    
