@@ -61,12 +61,12 @@ class system:
 ncores = {ncores}
 ntypes = {ntypes}
 coords[0] = {coords}
-latticeVectors[0] = {latticeVectors}
+latticeVectors = {latticeVectors}
 symbols = {symbols}
 orbs = {orbs}"""        
         print(s.format(nats=self.nats,ncores=self.ncores,ntypes=self.ntypes, \
                         coords=self.coords[0], \
-                        latticeVectors=self.latticeVectors[0], \
+                        latticeVectors=self.latticeVectors, \
                         symbols=self.symbols, \
                         orbs=self.orbs))
     if mdtrajLib:
@@ -106,31 +106,31 @@ class trajectory:
             nats=sys.nats
         self.coords = np.zeros((nframes,nats,3),dtype=float)
         self.latticeVectors = None
-        self.value = None
+        self.values = None
         self.timestep = timestep
         self.time = np.ones(nframes,dtype=float)*self.timestep
 
-    def from_mdtraj(self,traj):
-        self.system = system()
-        self.system.from_mdtraj(traj)
-        self.coords = 10.*traj.xyz.astype(float)
-        if traj.unitcell_vectors is not None:
-            self.latticeVectors = 10.*traj.unitcell_vectors.astype(float)
-        self.time = traj.time.astype(float)
-        if traj.n_frames >=2:
-            self.timestep = traj.timestep
+    if mdtrajLib:
+        def from_mdtraj(self,traj):
+            self.system = system()
+            self.system.from_mdtraj(traj)
+            self.coords = 10.*traj.xyz.astype(float)
+            if traj.unitcell_vectors is not None:
+                self.latticeVectors = 10.*traj.unitcell_vectors.astype(float)
+                self.time = traj.time.astype(float)
+            if traj.n_frames >=2:
+                self.timestep = traj.timestep
 
     def slice(self,first=0,last=None,skip=1):
         if last is None:
             last = len(self.coords)
         self.coords = self.coords[first:last+1:skip]
         self.time = self.time[first:last+1:skip]
-        if self.value is not None:
-            self.value = self.value[first:last+1:skip]
+        if self.values is not None:
+            self.values = self.values[first:last+1:skip]
         if self.latticeVectors is not None:
             self.latticeVectors = self.latticeVectors[first:last+1:skip]
         self.timestep = self.timestep * skip
-            
 
     def load_prg_xyz(self,fname):
         with open(fname) as f:
@@ -146,7 +146,7 @@ class trajectory:
             nframes = int(len(xyzc)/nats)
             xyzc = np.reshape(xyzc,(nframes,nats,4))
             self.coords = xyzc[:,:,0:3]
-            self.value = xyzc[:,:,3:4]
+            self.values = xyzc[:,:,3]
 
     if mdtrajLib:
         def save_xtc(self,fname):
@@ -387,7 +387,6 @@ def read_coords_file(fileName,lib="None",verb=True):
         raise_error("read_coords_file",msg)
 
     return latticeVectors,symbols,types,coords
-
 
 ## xyz file parser
 #  Reads in an xyz file with lattice informations.
@@ -828,6 +827,114 @@ def extract_subsystem(coords,types,symbols,part):
         subSyCoords[k,:] = coords[i,:]
         subSyTypes[k] = types[i]
     return subSyCoords, subSyTypes
+
+## xyz trajectory parser
+#  Reads in an xyz file trajectory.
+#
+#     Example xyz file format as follows: 
+#        
+# \verbatim
+#8
+#frame 0
+#Bl 0.0 0.0 0.0 0.0
+#H 1.0 2.0 3.0 0.09
+#He 2.0 4.0 6.0 0.18
+#Li 3.0 6.0 9.0 0.27
+#Be 4.0 8.0 12.0 0.36
+#B 5.0 10.0 15.0 0.44999999999999996
+#C 6.0 12.0 18.0 0.54
+#N 7.0 14.0 21.0 0.63
+#8
+#frame 1
+#Bl 0.1 0.1 0.1 0.0
+#H 1.1 2.1 3.1 0.08
+#He 2.1 4.1 6.1 0.16
+#Li 3.1 6.1 9.1 0.24
+#Be 4.1 8.1 12.1 0.32
+#B 5.1 10.1 15.1 0.4
+#C 6.1 12.1 18.1 0.48
+#N 7.1 14.1 21.1 0.56
+# \endverbatim
+#
+# @param fileName File name of the xyz trajectorey. Example: "traj.xyz"
+# @param lib If using a particular library. Default is "None"
+# @param verb Verbosity. If set to True will output relevant information.
+# @return elems Symbol for each atom type. Symbol for first atom type = symbols[0]
+# @return coords Position for every atoms. z-coordinate of atom 1 = coords[0,2]
+# @return values Index type for each atom in the system. Values (e.g. charges) for atoms
+#
+def read_xyz_trajectory(fileName,lib="None",verb=True):
+    """trajectory file parser: Reads in an xyz trajectory file
+    """
+    with open(fileName) as f:
+        ext = fileName[len(fileName)-3:len(fileName)]
+        lines = np.array(f.readlines())
+        nats = int(lines[0])
+        mask = np.ones(len(lines),dtype=bool)
+        mask[np.arange(0,len(lines),nats+2)] = False
+        mask[np.arange(1,len(lines),nats+2)] = False
+        lines = lines[mask]
+        lines = lines.tolist()
+        xyzc = np.loadtxt(lines,usecols=range(1,5)).astype(float)
+        nframes = int(len(xyzc)/nats)
+        elems = np.loadtxt(lines,usecols=0,dtype='U2')
+        xyzc = np.reshape(xyzc,(nframes,nats,4))
+        coords = xyzc[:,:,0:3]
+        values = xyzc[:,:,3]
+            
+        return elems[:nats],coords,values
+
+def test_read_xyz_trajectory(exit1):
+    passed = True
+    try:
+        pt = ptable()
+        nsymb = int(8)
+        symbols = [] * nsymb
+        symbols[:] = pt.symbols[0:nsymb]
+        nats = len(symbols)
+        coords = np.zeros((2,nats,3))
+        types = np.zeros((nats),dtype=int)
+        values = np.zeros((2,nats))
+        for i in range(nats):
+            coords[0,i,0] = float(i)
+            coords[0,i,1] = float(i)*2.0
+            coords[0,i,2] = float(i)*3.0
+            values[0,i] = 0.09*i%10
+            coords[1,:,:] = coords[0,:,:] + 0.1
+            values[1,i] = 0.08*i%10
+
+        myFileOut = open("ref.xyz","w")
+        for j in range(2):
+            print(nats,file=myFileOut)
+            print("frame {}".format(j),file=myFileOut)
+            for i in range(nats):
+                print(symbols[i],coords[j,i,0],coords[j,i,1],coords[j,i,2],values[j,i],file=myFileOut)
+        myFileOut.close()
+
+        import pdb; pdb.set_trace()
+        e,c,v = read_xyz_trajectory("ref.xyz")
+        print(e,symbols)
+        if(np.any(e != symbols)):
+            print("Symbols failed")
+            passed = False
+        if(not np.allclose(coords, c)):
+            print("Coords failed")
+            passed = False
+        if(not np.allclose(values,v)):
+            Print("Values failed")
+            passed = False
+    except:
+        print("Exception")
+        passed = False
+
+    if(passed):
+        sdc_test_pass("read_xyz_trajectory")
+    else:
+        sdc_test_fail("read_xyz_trajectory")
+        passed = False
+        if(exit1): exit(1)
+
+    return passed
 
 ## Gets the volume of the simulation box
 # @brief Given an array of lattice vectors, it return the box volume
