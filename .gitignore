@@ -1,0 +1,11 @@
+*~
+**/*.indented
+*.mod
+*.in
+*.dat
+*.pdb
+*.xyz
+*.so
+*.a
+*.o
+*.vscode
