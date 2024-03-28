@@ -911,20 +911,14 @@ def test_read_xyz_trajectory(exit1):
                 print(symbols[i],coords[j,i,0],coords[j,i,1],coords[j,i,2],values[j,i],file=myFileOut)
         myFileOut.close()
 
-        import pdb; pdb.set_trace()
         e,c,v = read_xyz_trajectory("ref.xyz")
-        print(e,symbols)
         if(np.any(e != symbols)):
-            print("Symbols failed")
             passed = False
         if(not np.allclose(coords, c)):
-            print("Coords failed")
             passed = False
         if(not np.allclose(values,v)):
-            Print("Values failed")
             passed = False
     except:
-        print("Exception")
         passed = False
 
     if(passed):
