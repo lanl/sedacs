@@ -30,7 +30,7 @@ unit-test-job:   # This job runs in the test stage.
   stage: test    # It only starts when the job in the build stage completes successfully.
   script:
     - echo "Building a conda environment"
-    - wget http://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
+    - wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh  -O miniconda.sh
     - chmod +x miniconda.sh
     - ./miniconda.sh -b
     - source /root/miniconda3/etc/profile.d/conda.sh
