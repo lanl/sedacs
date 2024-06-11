@@ -780,8 +780,8 @@ def test_write_xyz_coordinates(exit1):
         types = np.zeros((nats),dtype=int)
         for i in range(len(pt.symbols)):
             coords[i,0] = float(i)
-            coords[i,1] = float(i)*2.0
-            coords[i,2] = float(i)*3.0
+            coords[i,1] = float(i)+2.0
+            coords[i,2] = float(i)+3.0
             types[i] = i%(nsymb-1)
 
         myFileOut = open("ref.xyz","w")
@@ -897,8 +897,8 @@ def test_read_xyz_trajectory(exit1):
         values = np.zeros((2,nats))
         for i in range(nats):
             coords[0,i,0] = float(i)
-            coords[0,i,1] = float(i)*2.0
-            coords[0,i,2] = float(i)*3.0
+            coords[0,i,1] = float(i)+2.0
+            coords[0,i,2] = float(i)+3.0
             values[0,i] = 0.09*i%10
             coords[1,:,:] = coords[0,:,:] + 0.1
             values[1,i] = 0.08*i%10
@@ -987,6 +987,161 @@ def test_get_volBox(exit1):
 
     return passed
 
+def coords_cart_to_frac(cart_coords,latticeVectors):
+    A_transpose = latticeVectors
+    A_transpose_inv = np.linalg.inv(A_transpose)
+    frac_coords = np.matmul(cart_coords,A_transpose_inv)
+    return frac_coords
+
+def test_coords_cart_to_frac(exit1):
+    passed = True
+    try:
+        pt = ptable()
+        nats = len(pt.symbols)
+        coords = np.zeros((nats,3))
+        for i in range(len(pt.symbols)):
+            coords[i,0] = float(i)
+            coords[i,1] = float(i)+2.0
+            coords[i,2] = float(i)+3.0
+        latticeVectors = np.array([[(np.max(coords[:,0])+2.0)/2.0,0.0,0.0], \
+                                   [0.0,(np.max(coords[:,1])+2.0)/2.0,0.0], \
+                                   [0.0,0.0,(np.max(coords[:,2])+2.0)/2.0]])
+        ref_coords = np.matmul(coords,np.linalg.inv(latticeVectors))
+        test_coords = coords_cart_to_frac(coords,latticeVectors)
+        if(not np.allclose(test_coords, ref_coords)):
+            passed = False
+    except:
+        passed = False
+
+    if(passed):
+        sdc_test_pass("coords_cart_to_frac")
+    else:
+        sdc_test_fail("coords_cart_to_frac")
+        if(exit1): exit(1)
+    return passed
+
+def coords_frac_to_cart(frac_coords,latticeVectors):
+    A_transpose = latticeVectors
+    cart_coords = np.matmul(frac_coords,A_transpose)
+    return cart_coords
+    
+def test_coords_frac_to_cart(exit1):
+    passed = True
+    try:
+        pt = ptable()
+        nats = len(pt.symbols)
+        coords = np.zeros((nats,3))
+        for i in range(len(pt.symbols)):
+            coords[i,0] = float(i)
+            coords[i,1] = float(i)+2.0
+            coords[i,2] = float(i)+3.0
+        latticeVectors = np.array([[(np.max(coords[:,0])+2.0)/2.0,0.0,0.0], \
+                                   [0.0,(np.max(coords[:,1])+2.0)/2.0,0.0], \
+                                   [0.0,0.0,(np.max(coords[:,2])+2.0)/2.0]])
+        coords = np.matmul(coords,np.linalg.inv(latticeVectors))
+        ref_coords = np.matmul(coords,latticeVectors)
+        test_coords = coords_frac_to_cart(coords,latticeVectors)
+        if(not np.allclose(test_coords, ref_coords)):
+            passed = False
+    except:
+        passed = False
+
+    if(passed):
+        sdc_test_pass("coords_frac_to_cart")
+    else:
+        sdc_test_fail("coords_frac_to_cart")
+        if(exit1): exit(1)
+    return passed
+
+def coords_dvec_nlist(coords_in,nn,nl,nlTr,latticeVectors,rank=0,numranks=1,api='include_dr'):
+    mpiON = False
+    if(mpiLib and (numranks > 1)): mpiON = True 
+
+    nats = len(coords_in[:,0])
+    if(mpiON): comm = MPI.COMM_WORLD
+    natsPerRank = int(nats/numranks)
+    if(rank == numranks - 1):
+        natsInRank = nats - natsPerRank*(numranks - 1)
+    else:
+        natsInRank = natsPerRank
+
+    if np.allclose(np.diag(np.diagonal(latticeVectors)), latticeVectors) == False:
+        coords = coords_cart_to_frac(coords_in,latticeVectors)
+        method='nonortho'
+    else:
+        coords = coords_in
+        latticeLengths = np.diagonal(latticeVectors)
+        method='ortho'
+
+    dvecChunk = np.zeros([natsInRank,nl.shape[1],3],dtype=coords.dtype)
+    drChunk = np.zeros([natsInRank,nl.shape[1]],dtype=coords.dtype)
+    dvec = np.zeros((nl.shape[0],nl.shape[1],3),dtype=coords_in.dtype)
+    dr = np.zeros(nl.shape,dtype=coords_in.dtype)
+    for j in range(natsInRank):
+        i = natsPerRank*rank + j
+        for k in range(3):
+            if method=='ortho':
+                dvecChunk[i,0:nn[i],k] = (coords[i,k] - coords[nl[i,0:nn[i]],k]) - nlTr[i,0:nn[i],k]*latticeLengths[k]
+            else:
+                dvecChunk[i,0:nn[i],k] = (coords[i,k] - coords[nl[i,0:nn[i]],k]) - nlTr[i,0:nn[i],k]
+        if method == 'nonortho':
+            dvecChunk[i,0:nn[i]] = coords_frac_to_cart(dvecChunk[i,0:nn[i]],latticeVectors)
+        drChunk[i,0:nn[i]] = np.linalg.norm(dvecChunk[i,0:nn[i]],axis=1)
+    if(mpiON): 
+        dr = collect_matrix_from_chunks(drChunk,nats,natsPerRank,rank,numranks,comm)
+        dvec[:,:,0] = collect_matrix_from_chunks(dvecChunk[:,:,0],nats,natsPerRank,rank,numranks,comm)
+        dvec[:,:,1] = collect_matrix_from_chunks(dvecChunk[:,:,1],nats,natsPerRank,rank,numranks,comm)
+        dvec[:,:,2] = collect_matrix_from_chunks(dvecChunk[:,:,2],nats,natsPerRank,rank,numranks,comm)
+            
+    else:
+        dr = drChunk
+        dvec = dvecChunk
+    if api == 'include_dr':
+        return dvec,dr
+    else:
+        return dvec
+
+def test_coords_dvec_nlist(exit1):
+    passed = True
+    try:
+        pt = ptable()
+        nats = len(pt.symbols)
+        coords = np.zeros((nats,3))
+        for i in range(len(pt.symbols)):
+            coords[i,0] = float(i)
+            coords[i,1] = float(i)+2.0
+            coords[i,2] = float(i)+3.0
+        latticeVectors = np.array([[(np.max(coords[:,0])+2.0)/2.0,0.0,0.0], \
+                                   [0.0,(np.max(coords[:,1])+2.0)/2.0,0.0], \
+                                   [0.0,0.0,(np.max(coords[:,2])+2.0)/2.0]])
+        latticeLengths = latticeVectors.diagonal()
+        rcut = 4.0
+        nn,nl,nlTr = build_nlist(coords,latticeVectors,rcut=rcut,api='new')
+        dvec = np.zeros((nl.shape[0],nl.shape[1],3),dtype=coords.dtype)
+        for i in range(coords.shape[0]):
+            for k in range(3):
+                dvec[i,0:nn[i],k] = (coords[i,k] - coords[nl[i,0:nn[i]],k]) - nlTr[i,0:nn[i],k]*latticeLengths[k]
+
+        dr = np.zeros(nl.shape,dtype=coords.dtype)
+        for i in range(dvec.shape[0]):
+            dr[i,0:nn[i]] = np.linalg.norm(dvec[i,0:nn[i],:],axis=1)
+            #dr[i,0:nn[i]] = np.sqrt(np.sum(dvec[:,i,0:nn[i]]**2,axis=0))
+        ref_dr = dr
+        ref_dvec = dvec
+        test_dvec, test_dr = coords_dvec_nlist(coords,nn,nl,nlTr,latticeVectors)
+        if(not np.allclose(test_dr,ref_dr) and np.allclose(test_dvec,ref_dvec)):
+            passed = False
+    except:
+        print("test_coords_dvec_nlist failed to execute")
+        passed = False
+
+    if(passed):
+        sdc_test_pass("coords_dvec_nlist")
+    else:
+        sdc_test_fail("coords_dvec_nlist")
+        if(exit1): exit(1)
+    return passed
+
 ## Neighbor list 
 # @brief It will bild a neighbor list using an "all to all" approach
 # @param coords System coordinates. coords[7,1]: y-coordinate of atom 7.
@@ -995,7 +1150,7 @@ def test_get_volBox(exit1):
 # @param rank MPI rank
 #
 # @todo Add test!
-def build_nlist(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
+def build_nlist_integer(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
     if(verb): print("Building neighbor list ...")
     
     mpiON = False
@@ -1014,7 +1169,7 @@ def build_nlist(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
     #A very large atomic density could be 1 atom per (1.0 Ang)^3 = 1 atoms per Ang^3
     volBox = get_volBox(latticeVectors,verb=False)
     density = 1.0
-    maxneigh = int(3.14592 * (4.0/3.0) * density * rcut**3)
+    maxneigh = np.min([int(3.14592 * (4.0/3.0) * density * rcut**3),nats])
 
     #We assume the box is orthogonal
     maxx = np.max(coords[:,0])
@@ -1212,6 +1367,269 @@ def build_nlist(coords,latticeVectors,rcut,rank=0,numranks=1,verb=False):
 
     return(nl,nlTrX,nlTrY,nlTrZ)
 
+## Vectorized neighbor list 
+# @brief It will bild a neighbor list using an "all to all" approach
+# @param coords System coordinates. coords[7,1]: y-coordinate of atom 7.
+# @param latticeVectors. Lattice vectors of the system box. latticeVectors[1,2]: z-coordinate of vector 1.
+# @param rcut Distance cutoff
+# @param nl neighbor list type: a simple 2D array indicating the neighbors of each atom.
+# @param rank MPI rank
+#
+# @todo Add test!
+def build_nlist(coords_cart,latticeVectors,rcut,rank=0,numranks=1,verb=False,api='old'):
+
+    #Use fractional coords for everything before the distance cutoff
+
+    coords = coords_cart_to_frac(coords_cart,latticeVectors)
+
+    if(verb): print("Building neighbor list ...")
+    
+    mpiON = False
+    if(mpiLib and (numranks > 1)): mpiON = True 
+
+    nats = len(coords[:,0])
+    if(mpiON): comm = MPI.COMM_WORLD
+    natsPerRank = int(nats/numranks)
+    if(rank == numranks - 1):
+        natsInRank = nats - natsPerRank*(numranks - 1)
+    else:
+        natsInRank = natsPerRank
+
+    #We will have approximatly [(4/3)*pi * rcut^3 * atomic density] number of neighbors.
+    #A very large atomic density could be 1 atom per (1.0 Ang)^3 = 1 atoms per Ang^3
+    volBox = get_volBox(latticeVectors,verb=False)
+    density = 1.0
+    maxneigh = np.min([int(3.14592 * (4.0/3.0) * density * rcut**3),nats])
+    boxSize = rcut
+
+    latticeLength = np.linalg.norm(latticeVectors,axis=1)    
+
+    boxVectors = rcut*np.array([latticeVectors[0]/latticeLength[0],latticeVectors[1]/latticeLength[1],latticeVectors[2]/latticeLength[2]])
+
+    nx = int(latticeLength[0]/boxSize)
+    ny = int(latticeLength[1]/boxSize)
+    nz = int(latticeLength[2]/boxSize)
+    nBox = nx*ny*nz+1 # Box Zero will be null box with no neighbors 
+    maxInBox = int(density*get_volBox(boxVectors,verb=False)) #Upper bound for the max number of atoms per box
+    inbox = -np.ones((nBox,maxInBox),dtype=int)
+    totPerBox = -np.ones((nBox),dtype=int)
+    boxOfI = np.zeros((nats),dtype=int)
+    xBox = np.zeros((nBox),dtype=int)
+    yBox = np.zeros((nBox),dtype=int)
+    zBox = np.zeros((nBox),dtype=int)
+    ithFromXYZ = np.zeros((nx,ny,nz),dtype=int) # Null box (= 0) unless there are atoms
+    neighbox = np.zeros((nBox,27),dtype=int) 
+
+    #Search for the box coordinate and index of every atom
+
+    for i in range(nats):
+        #Index every atom respect to the discretized position on the simulation box.
+        ix =  int(coords[i,0]*nx) % nx #small box x-index of atom i
+        iy =  int(coords[i,1]*ny) % ny #small box x-index of atom i
+        iz =  int(coords[i,2]*nz) % nz #small box x-index of atom i
+
+        ith =  ix + iy*nx + iz*nx*ny + 1  #Get small box index, leave zero for null box
+        boxOfI[i] = ith
+
+        #From index to box coordinates
+        xBox[ith] = ix
+        yBox[ith] = iy
+        zBox[ith] = iz
+
+        #From box coordinates to index  
+        ithFromXYZ[ix,iy,iz] = ith
+
+        totPerBox[ith] = totPerBox[ith] + 1 #For now this is the atom index in the box
+        if(totPerBox[ith] >= maxInBox): 
+            print("Exceeding the max in box allowed")
+            exit(0)
+        inbox[ith,totPerBox[ith]] = i #Who is in box ith
+
+    for i in range(nBox): #Now this array will hold the total number of atoms in each box
+        totPerBox[i] = totPerBox[i] + 1
+
+    #For each box get a flat list of neighboring boxes (including self)
+    for i in range(nBox):
+        neighbox[i,0] = i
+        j = 1
+        for ix in range(-1,2):
+            for iy in range(-1,2):
+                for iz in range(-1,2):
+                    if not (ix == 0 and iy == 0 and iz == 0):
+                        #Get neigh box coordinate
+                        neighx = xBox[i] + ix
+                        neighy = yBox[i] + iy
+                        neighz = zBox[i] + iz
+                        jxBox = neighx % nx
+                        jyBox = neighy % ny
+                        jzBox = neighz % nz
+                        
+                        #Get the neigh box index
+                        neighbox[i,j] = ithFromXYZ[jxBox,jyBox,jzBox]
+                        j += 1
+    # Vectorized neighbor list calc for atom i                    
+    def get_neighs_of(i,coords,neighbox,boxOfI,inbox,latticeVectors):
+        cnt = -1
+        #Get the list of all atoms in neighboring boxes
+        boxneighs = inbox[neighbox[boxOfI[i]]]
+        #Shorten the long dimension for speedup on CPU
+        #max_nonzero_elems = np.max(np.count_nonzero(boxneighs != -1,axis=1))
+        #boxneighs = boxneighs[:,0:max_nonzero_elems].flatten()
+        boxneighs = boxneighs[boxneighs != -1]
+        #Calculate the distances to all atoms in neighboring boxes
+        dvec = np.zeros((len(boxneighs),3),dtype=coords.dtype)
+        nlTrBoxneigh = np.zeros(dvec.shape,dtype=int)
+        nlVect = np.zeros(maxneigh,dtype=int)
+        nlTrVect = np.zeros((maxneigh,3),dtype=int)
+        dvecVect = np.zeros((maxneigh,3),dtype=coords.dtype)
+        drVect = np.zeros((maxneigh),dtype=coords.dtype)
+        for k in range(3):
+            # Compute the integer lattice vector translation first
+            dvec[:,k] = (coords[i,k] - coords[boxneighs,k] + 0.5)
+            nlTrBoxneigh[:,k] = np.floor(dvec[:,k])
+            # Now use the translation to compute the periodic displacement
+            dvec[:,k] = dvec[:,k] - nlTrBoxneigh[:,k] - 0.5
+        dvec = coords_frac_to_cart(dvec,latticeVectors)
+        distance = np.linalg.norm(dvec,axis=1)
+        #Filter the list according to the threshold
+        nlSel = np.where(distance<rcut)[0]
+        nlSel = nlSel[nlSel != i]
+        cnt = len(nlSel)
+        nlVect[1:cnt+1] = boxneighs[nlSel]
+        nlTrVect[1:cnt+1] = nlTrBoxneigh[nlSel]
+        dvecVect[1:cnt+1] = dvec[nlSel]
+        drVect[1:cnt+1] = distance[nlSel]
+        nlVect[0] = cnt
+        nlTrVect[0] = cnt
+        return(nlVect,nlTrVect[:,0],nlTrVect[:,1],nlTrVect[:,2],dvecVect,drVect)
+
+    nlChunk = np.empty([natsInRank,maxneigh],dtype=int)
+    nlTrChunkX = np.empty([natsInRank,maxneigh],dtype=int)
+    nlTrChunkY = np.empty([natsInRank,maxneigh],dtype=int)
+    nlTrChunkZ = np.empty([natsInRank,maxneigh],dtype=int)
+    if api == 'include_dvec':        
+        dvecChunkX = np.empty([natsInRank,maxneigh],dtype=coords.dtype)
+        dvecChunkY = np.empty([natsInRank,maxneigh],dtype=coords.dtype)
+        dvecChunkZ = np.empty([natsInRank,maxneigh],dtype=coords.dtype)
+        drChunk = np.empty([natsInRank,maxneigh],dtype=coords.dtype)
+
+    for k in range(natsInRank):
+        i = natsPerRank*(rank) + k 
+        nlVect,nlTrVectX,nlTrVectY,nlTrVectZ,dvecVect,drVect= get_neighs_of(i,coords,neighbox,boxOfI,inbox,latticeVectors)
+        nlChunk[k,:] = nlVect[:]
+        nlTrChunkX[k,:] =  nlTrVectX[:]
+        nlTrChunkY[k,:] =  nlTrVectY[:]
+        nlTrChunkZ[k,:] =  nlTrVectZ[:]
+        if api == 'include_dvec_dr':
+            drChunk[k,:] = drVect[:]
+            dvecChunkX[k,:] = dvecVect[:,0]
+            dvecChunkY[k,:] = dvecVect[:,1]
+            dvecChunkZ[k,:] = dvecVect[:,2]
+
+    #Gather the neighbor list across MPI ranks
+    nl = np.empty([nats,maxneigh],dtype=int)
+    nlTrX = np.empty([nats,maxneigh],dtype=int)
+    nlTrY = np.empty([nats,maxneigh],dtype=int)
+    nlTrZ = np.empty([nats,maxneigh],dtype=int)
+    if api == 'include_dvec_dr':
+        dvecX = np.empty([nats,maxneigh],dtype=coords.dtype)
+        dvecY = np.empty([nats,maxneigh],dtype=coords.dtype)
+        dvecZ = np.empty([nats,maxneigh],dtype=coords.dtype)
+        dr = np.empty([nats,maxneigh],dtype=coords.dtype)
+                
+    if(mpiON): 
+        tic = time.perf_counter()
+        nl = collect_matrix_from_chunks(nlChunk,nats,natsPerRank,rank,numranks,comm)
+        nlTrX = collect_matrix_from_chunks(nlTrChunkX,nats,natsPerRank,rank,numranks,comm)
+        nlTrY = collect_matrix_from_chunks(nlTrChunkY,nats,natsPerRank,rank,numranks,comm)
+        nlTrZ = collect_matrix_from_chunks(nlTrChunkZ,nats,natsPerRank,rank,numranks,comm)
+        if api == 'include_dvec_dr':
+            dr = collect_matrix_from_chunks(drChunk,nats,natsPerRank,rank,numranks,comm)
+            dvecX = collect_matrix_from_chunks(dvecChunkX,nats,natsPerRank,rank,numranks,comm)
+            dvecY = collect_matrix_from_chunks(dvecChunkY,nats,natsPerRank,rank,numranks,comm)
+            dvecZ = collect_matrix_from_chunks(dvecChunkZ,nats,natsPerRank,rank,numranks,comm)
+            
+        t_gather_nl = time.perf_counter() - tic
+        if rank == 0 and verb:
+            print("Time for gathering nl arrays= ",t_gather_nl," sec")        
+    else:
+        nl = nlChunk
+        nlTrX = nlTrChunkX
+        nlTrY = nlTrChunkY
+        nlTrZ = nlTrChunkZ
+        if api == 'include_dvec_dr':
+            dr = drChunk
+            dvecX = dvecChunkX
+            dvecY = dvecChunkY
+            dvecZ = dvecChunkZ
+
+    if api == 'new':
+        return(nl[:,0],nl[:,1:],np.moveaxis(np.array([nlTrX[:,1:],nlTrY[:,1:],nlTrZ[:,1:]]),0,-1))
+    elif api == 'include_dvec_dr':
+        return(nl[:,0],nl[:,1:],np.moveaxis(np.array([nlTrX[:,1:],nlTrY[:,1:],nlTrZ[:,1:]]),0,-1),np.moveaxis(np.array([dvecX[:,1:],dvecY[:,1:],dvecZ[:,1:]]),0,-1),dr[:,1:])
+    elif api == 'old':
+        return(nl,nlTrX,nlTrY,nlTrZ)
+    else:
+        raise_error("build_nlist","api must be new, old, or dvec")
+
+def test_build_nlist(exit1):
+    passed = True
+    try:
+        pt = ptable()
+        nats = len(pt.symbols)
+        coords = np.zeros((nats,3))
+        for i in range(len(pt.symbols)):
+            coords[i,0] = float(i)
+            coords[i,1] = float(i)+2.0
+            coords[i,2] = float(i)+3.0
+        latticeVectors = np.array([[(np.max(coords[:,0])+2.0)/2.0,0.0,0.0], \
+                                   [0.0,(np.max(coords[:,1])+2.0)/2.0,0.0], \
+                                   [0.0,0.0,(np.max(coords[:,2])+2.0)/2.0]])
+        coords = np.matmul(coords,np.linalg.inv(latticeVectors))
+        rcut = 4.0
+        density = 1.0
+        maxneigh = np.min([int(3.14592 * (4.0/3.0) * density * rcut**3),nats])
+        dvec = np.empty(coords.shape,dtype=coords.dtype)
+        nlTrvec = np.empty(coords.shape,dtype=int)
+        nl = np.zeros([nats,maxneigh],dtype=int)
+        nlTr = np.empty([nats,maxneigh,3],dtype=int)
+        for i in range(nats):
+            for k in range(3):
+                # Compute the integer lattice vector translation first
+                dvec[:,k] = (coords[i,k] - coords[:,k] + 0.5)
+                nlTrvec[:,k] = np.floor(dvec[:,k])
+                # Now use the translation to compute the periodic displacement
+                dvec[:,k] = dvec[:,k] - nlTrvec[:,k] - 0.5
+            distance = np.linalg.norm(coords_frac_to_cart(dvec,latticeVectors),axis=1)
+            #Filter the list according to the threshold
+            nlSel = np.where(distance<rcut)[0]
+            nlSel = nlSel[nlSel != i]
+            cnt = len(nlSel)
+            nl[i,1:cnt+1] = nlSel
+            nlTr[i,1:cnt+1] = nlTrvec[:cnt]
+            nl[i,0] = cnt
+            nlTr[i,0] = cnt
+        ref_nl = nl[:,1:]
+        ref_nlTr = nlTr[:,1:,:]
+        coords = np.matmul(coords,latticeVectors)
+        test_nn,test_nl,test_nlTr = build_nlist(coords,latticeVectors,rcut=rcut,api='new')
+        for i in range(nats):
+            sort_indices = np.argsort(test_nl[i,:test_nn[i]])
+            test_nl[i,:test_nn[i]] = test_nl[i,sort_indices]
+            test_nlTr[i,:test_nn[i],:] = test_nlTr[i,sort_indices,:]
+        if(not np.all(test_nl == ref_nl) and np.all(test_nlTr == ref_nlTr)):
+            passed = False
+    except:
+        print("test_build_nlist failed to execute")
+        passed = False
+
+    if(passed):
+        sdc_test_pass("build_nlist")
+    else:
+        sdc_test_fail("build_nlist")
+        if(exit1): exit(1)
+    return passed
+
 
 ## Get hindex
 # @brief hindex will give the orbital index for each atom 
@@ -1275,10 +1693,8 @@ if __name__ == '__main__':
             test_read_pdb_file(True)
         elif(tname == "write_pdb_file"):
             test_write_pdb_file(True)
+        elif(tname == "build_nlist"):
+            test_build_nlist(True)
         else:
             sdc_fail_at("main of sdc_system")
-
-
-
-
 
