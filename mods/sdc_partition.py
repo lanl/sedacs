@@ -3,7 +3,8 @@ Some functions for partition a graph
  
 """
 import os, sys
-import networkx as nx
+try: import networkx as nx; nxLib = True
+except: nxLib = False
 import numpy as np
 global metisLib
 try: import metis; metisLib = True 
