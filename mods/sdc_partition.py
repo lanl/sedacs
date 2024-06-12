@@ -1,7 +1,6 @@
 """partition
 Some functions for partition a graph
  
-So far: Regular and metis partition
 """
 import os, sys
 import networkx as nx
@@ -10,6 +9,24 @@ global metisLib
 try: import metis; metisLib = True 
 except: metisLib = False
 from sdc_graph import *
+
+# Get a small graph (>-<)
+# @brief This will construct a small graph for testing purposes.
+# This graph can be is trivially partitioned in two parts
+# @return A 6 nodes graph that can be represented by the following
+# picture: >-<
+def get_a_small_graph():
+    nnodes = 6
+    graph = np.zeros((nnodes,nnodes),dtype=int)
+    graph[:,0] = 1
+    graph[0,1] = 3
+    graph[1,1] = 0 ; graph[1,2] = 2 ; graph[1,3] = 4
+    graph[2,1] = 1
+    graph[4,0] = 3
+    graph[4,1] = 1 ; graph[4,2] = 3 ; graph[4,3] = 5
+    graph[3,1] = 4
+    graph[5,1] = 4
+    return graph
 
 ## Partition
 # @brief This will partition a graph based on a defined method
@@ -20,12 +37,361 @@ from sdc_graph import *
 # @return parts Partition containing a "list of parts" where every 
 # part is a list of nodes
 #
-def partition(graph,partitionType,nparts,verb=False):
+def graph_partition(graph,partitionType,nparts,verb=False):
     if(partitionType == "Regular"):
         parts = regular_partition(graph,nparts,verb)
     elif(partitionType == "Metis"):
         parts = metis_partition(graph,nparts,verb)
+    elif(partitionType == "MinCut"):
+        parts = mincut_partition(graph,nparts,verb)
     return parts
+
+## Partitioning by using atomic positions.
+# @brief This will use the atomic positions/coordinates in to order to 
+# generate fragments of the system returned as a list of list of indices.
+# @param coords Atomic postitions.
+# @param partitionType Method or type of partition to be uses
+# @param nx Number of points in the x direction 
+# @param ny Number of points in the y direction
+# @param nz Number of points in the z direction
+# @param verb Verbosity level
+# @return parts Partition containing a "list of parts" where every 
+# part is a list of nodes
+#
+def coords_partition(coords,partitionType,nx,ny,nz,verb=False):
+    if(partitionType == "Space"):
+        parts = space_partition(coords,partitionType,nx,ny,nz,verb)
+
+    return parts
+
+## Get total cuts
+# @brief Get the total edge cuts from a given partition. 
+# @param whichPart A vector where whichPart[i] indicates the partition
+# that i belongs to.
+# @param graph Graph to be partition. graph[i,0] = degree of node i. 
+# graph[i,j>0] = the node conected to node i.
+# @return cut The total cut.
+#
+def get_cut(whichPart,graph):
+    cut = 0
+    for i in range(len(whichPart)):
+        partIndexI = whichPart[i]
+        #Look at the neighbors to see if they are in different part
+        for j in range(1,graph[i,0]+1):
+            index = graph[i,j]
+            partIndexJ = whichPart[index]
+            if((partIndexI - partIndexJ) != 0):
+                cut = cut + 1
+    return cut
+
+def test_get_cut(exit1):
+    passed = True
+    nnodes = 9
+    whichPart = np.zeros((nnodes),dtype=int)
+    whichPart[0:4] = 0 ; whichPart[4:7] = 1 ; whichPart[7:9] = 2 
+    graph = np.zeros((nnodes,nnodes),dtype=int)
+    graph[:,0] = 1
+    # A cyclic graph
+    for i in range(nnodes-1):
+        graph[i,1] = i + 1 
+    graph[8,1] = 0
+    #3 segments will cut the graph in 3 points
+    result = 3 
+    try:
+        cut = get_cut(whichPart,graph)
+        if((result - cut) == 0):
+            passed = True
+        else:
+            passed = False
+    except:
+        passed = False
+    return passed
+    
+
+## Get partition indices
+# @brief Get a vector indicating which is the part index of a particular 
+# node. 
+# @param parts Partition containing a "list of parts" where every 
+# part is a list of nodes
+# nnodes Number of nodes in the graph.
+# 
+def get_parts_indices(parts,nnodes):
+    whichPart = np.zeros((nnodes),dtype=int)
+    partIndex = -1
+    for part in parts:
+        partIndex = partIndex + 1
+        for node in part:
+            whichPart[node] = partIndex
+    return whichPart
+
+def test_get_parts_indices(exit1):
+    passed = True
+    parts = [[0,1,2,3],[4,5,6],[7,8]]
+    nnodes = 9
+    result = np.zeros((nnodes),dtype=int)
+    result[0:4] = 0 ; result[4:7] = 1 ; result[7:9] = 2 
+    try:
+        whichParts = get_parts_indices(parts,nnodes)
+        if(np.linalg.norm(result - whichParts) == 0.0): 
+            passed = True
+        else:
+            passed = False
+    except:
+        passed = False
+    return passed
+
+
+## Get graph partition balance.
+# @brief This will return the partitioning balance defined as the quotient
+# between the max and min partition cardinals.
+# If partition is \f$ \Pi \f$, then:
+# \f[
+#    \mathrm{bal} = \frac{max_i|\pi_i|}{min_i|\pi_i|}
+# \f]
+# where \f$ \pi_i \f$ is a part of the graph (a set of node indices)
+# @return bal Balance of the partition.
+#
+def get_balancing(parts):
+    bal = 0
+    largest = 1
+    smallest = 10**9
+    for part in parts:
+        largest = max(largest,len(part))
+        smallest = min(smallest,len(part))
+
+    bal = largest/smallest
+    return bal 
+
+def test_get_balancing(exit1):
+    parts = [[0,1,2,3],[0,1]]
+    result = 2 
+    try:
+        bal = get_balancing(parts)
+        if((bal - result) == 0):
+            passed = True
+        else:
+            passed = False
+    except:
+        passed = False
+    return passed 
+
+## Get partition balanging.
+# @brief Same as get_balancing except this uses the partitioning 
+# vector. 
+# @param whichParts partition indexing vector. 
+# @param nparts Number of total parts.
+#
+def get_balance_from_indices(whichParts,nparts):
+    partsSizes = np.zeros((nparts),dtype=int)
+    for i in range(len(whichParts)):
+        partsSizes[whichParts[i]] = partsSizes[whichParts[i]] + 1
+
+    bal = np.max(partsSizes)/np.min(partsSizes)
+    return bal
+
+def test_get_balance_from_indices(exit1):
+    nnodes = 9
+    whichPart = np.zeros((nnodes),dtype=int)
+    whichPart[0:4] = 0 ; whichPart[4:7] = 1 ; whichPart[7:9] = 2
+    nparts = 3 
+    try:
+        bal = get_balance_from_indices(whichPart,nparts)
+        if(bal - 2.0 == 0.0):
+            passed = True
+        else:
+            passed = False
+    except:
+        passed  = False
+    return passed 
+
+## Do node partition flips with precomputed cuts.
+# @brief This function is a special case of do_flips where
+# the cuts around a node are precomputed for all possible 
+# part index that same node could have. This will differ from the do_flips
+# since everytime there is a flip, there is no actualization of the cuts. The
+# price to pay is the need of more iterations until convergence. 
+# @param whichPart partition indexing vector.
+# @param graph Graph to be partition. graph[i,0] = degree of node i. 
+# graph[i,j>0] = the node conected to node i.
+# @param nnodes Number of nodes.
+# @param nparts Number of parts.
+# @return whichPartNew New partition indexing verctor.
+#
+def do_flips_precomp(whichPart,graph,nnodes,nparts):
+    #Precompute all the possible cut vals O(nnodes*deg) 
+    cutsI = np.zeros((nnodes,nparts),dtype=int)
+    for i in range(nnodes):
+        deg = graph[i,0] 
+        #Get the max cut a node could have
+        cutsI[i,:] = deg 
+        #Lets look at every neighbor
+        for ii in range(1,deg+1):
+            index = graph[i,ii]
+            partIndexII = whichPart[index]
+            #Everytime there is a neighbor in a certain part
+            #it will decrese the cut of I if I would be on that 
+            #same part.
+            cutsI[i,partIndexII] = cutsI[i,partIndexII] - 1
+
+    #Now do the flips O(nnodes*nnodes/2)
+    whichPartNew = whichPart 
+    for i in range(nnodes):
+        partIndexI = whichPart[i]
+        for j in range(i+1,nnodes):
+            partIndexJ = whichPart[j]
+            if(partIndexI != partIndexJ):
+                #Look at their neighbors and count the cuts
+                origCut = 0
+                newCut = 0
+                #Now we know the cut when I is in partIndexI and J
+                origCut = cutsI[i,partIndexI]
+                newCut = cutsI[i,partIndexJ]
+                #Same for J
+                origCut = origCut + cutsI[j,partIndexJ]
+                newCut = newCut + cutsI[j,partIndexI]
+                if(newCut < origCut):
+                    whichPartNew[i] = partIndexJ
+                    whichPartNew[j] = partIndexI
+                    partIndexI = partIndexJ
+
+    
+    return whichPartNew
+
+def test_do_flips_precomp(exit1):
+    nnodes = 6 
+    graph = get_a_small_graph()
+    whichPart = np.zeros((nnodes),dtype=int)
+    result = np.zeros((nnodes),dtype=int)
+    result[0:3] = 1
+    whichPart[0] = 1 ; whichPart[3] = 1 ; whichPart[2] = 1
+    nparts = 2 
+    for i in range(10): 
+        whichPartNew = do_flips_precomp(whichPart,graph,nnodes,nparts)
+        whichPart = whichPartNew
+        cut = get_cut(whichPart,graph)
+    if(np.linalg.norm(whichPartNew - result) == 0):
+        passed = True
+    else:
+        passed = False
+    return passed
+
+## Do node partition flips.
+# @brief This function does the same as the do_flips_precomp. It will converge
+# in less iterations but with a worst scaling.
+# @param whichPart partition indexing vector.
+# @param graph Graph to be partition. graph[i,0] = degree of node i. 
+# graph[i,j>0] = the node conected to node i.
+# @return whichPartNew New partition indexing verctor.
+#
+def do_flips(whichPart,graph):
+    
+    whichPartNew = whichPart
+    totNewCut = 0
+    #Now flip the pairs
+    for i in range(len(graph)):
+        partIndexI = whichPart[i]
+        
+        for j in range(i+1,len(graph)):
+            partIndexJ = whichPart[j]
+            if(partIndexI != partIndexJ):
+                #Look at their neighbors and count the cuts
+                origCut = 0
+                newCut = 0
+                for ii in range(1,graph[i,0]+1):
+                    index = graph[i,ii]
+                    partIndexII = whichPart[index]
+                    if((partIndexI - partIndexII) != 0):
+                        origCut = origCut + 1
+                    #Alternative cut when fliped partIndexI and partIndexJ 
+                    if((partIndexJ - partIndexII) != 0):
+                        newCut = newCut + 1
+
+                #Look at their neighbors and count the cuts
+                for jj in range(1,graph[j,0]+1):
+                    index = graph[j,jj]
+                    #Original cut for J
+                    partIndexJJ = whichPart[index]
+                    if((partIndexJ - partIndexJJ) != 0):
+                        origCut = origCut + 1
+                    #Alternative cut if J would be I
+                    if((partIndexI - partIndexJJ) != 0):
+                        newCut = newCut + 1
+
+                if(newCut < origCut):
+                    whichPartNew[i] = partIndexJ
+                    whichPartNew[j] = partIndexI
+                    partIndexI = partIndexJ
+
+                totNewCut = totNewCut + newCut 
+
+    return whichPartNew 
+
+
+def test_do_flips(exit1):
+    nnodes = 6 
+    graph = get_a_small_graph()
+    whichPart = np.zeros((nnodes),dtype=int)
+    result = np.zeros((nnodes),dtype=int)
+    result[0:3] = 1
+    whichPart[0] = 1 ; whichPart[3] = 1 ; whichPart[2] = 1
+    nparts = 2 
+    for i in range(10): 
+        whichPartNew = do_flips_precomp(whichPart,graph,nnodes,nparts)
+        whichPart = whichPartNew
+        cut = get_cut(whichPart,graph)
+    if(np.linalg.norm(whichPartNew - result) == 0):
+        passed = True
+    else:
+        passed = False
+    return passed
+
+## MinCut partition local partitioning optimization.
+# @brief This will optimize a given partition based on a mincut algorithm.
+# @param graph Graph to be partition
+# @param nparts Number of total parts
+# @param verb Verbosity level
+# @return parts Partition containing a "list of parts" where every 
+# part is a list of nodes
+#
+def mincut_partition(graph,nparts,verb):
+
+    #Do a first partition
+    nnodes = len(graph[:,0])
+    parts = regular_partition(graph,nparts,verb)
+
+    #Get part indices
+    whichPart = get_parts_indices(parts,nnodes)
+    print(whichPart)
+    
+    #Evaluate the cut
+    cut = get_cut(whichPart,graph) 
+    print("First cut",cut)
+    
+    #Evaluate the balancing
+    bal = get_balancing(parts)
+    print("First balance",bal)
+
+    for i in range(20):
+        #whichPartNew     = do_flips(whichPart,graph)
+        whichPartNew  = do_flips_precomp(whichPart,graph,nnodes,nparts)
+        whichPart = whichPartNew
+        cut = get_cut(whichPartNew,graph)
+        bal = get_balance_from_indices(whichPartNew,nparts)
+        print(cut,bal)
+
+    #For comparing with metis
+    metisParts = metis_partition(graph,nparts,verb)
+    #Evaluate the final min cut
+    whichPartMetis = get_parts_indices(metisParts,nnodes)
+    metisCut = get_cut(whichPart,graph)
+
+    print("Metis min cut",metisCut)
+    print("This min cut",cut)
+
+    print("Metis parts indices",whichPart)
+    print("This indices",whichPartNew)
+    exit(0)
+                    
 
 ## Regular partition
 # @brief This will partition a graph in the most
@@ -126,190 +492,4 @@ def get_coreHaloIndices(core,graph,njumps):
                     nx[j] = True
     return coreHalo, nc, nch
 
-
-class Part:
-    def __init__(self):
-        self.name = "myPart"
-        self.adj = np.zeros((1,1))
-        self.nparts = 0
-        self.submats = []
-        self.verbose = True
-        self.parts = []
-        self.edgecuts = 0
-        self.sizes = 0
-        self.nnodes = 0
-        self.nc = []
-        self.nch = []
-        self.coreHalo = []
-
-
-
-    def metis(self,nparts=1,verbose=0):
-        """ Partitions using metis """
-        self.nparts = nparts
-        edgecuts, parts = metis.part_graph(self.G, self.nparts)
-        self.edgecuts = edgecuts 
-        self.parts = parts
-        self.sizes = []
-        for i in range(nparts): 
-            self.sizes.append(0)
-            for j in range(len(self.parts)):
-                if(self.parts[j] == i):
-                    self.sizes[i] = self.sizes[i] + 1
-
-
-    def help(self):
-        print("\nGraph partition class:")
-        print("To instanciate: gp = Part()")
-
-    def print(self):
-        print("\nGraph partition data:")
-        print("Number of parts =",self.nparts)
-
-
-    def getGraph(self,A,thr):
-        """Builds the adjacency matrix from any given
-        square matrix.
-        """
-        n = len(A)
-        nnz = 0
-        adj = np.zeros((n,n))
-        for i in range(n-1):
-            for j in range(i+1,n):
-                if abs(A[i,j])  > thr :
-                    nnz = nnz + 1
-                    adj[i,j] = 1
-                    adj[j,i] = 1
-
-        self.adj = adj            
-        self.nnz = nnz 
-
-        G = nx.Graph()
-        for i in range(n-1):
-            for j in range(i+1,n):
-                if (adj[i,j] == 1):
-                    G.add_nodes_from([i,j])
-                    G.add_edge(i,j,weight=1.0)
-        self.G = G
-        self.nnodes = n
-
-        return G
-
-    def getSubmats(self,A):
-
-        parts = self.parts
-        nparts = self.nparts
-        nnodes = self.nnodes
-
-        for i in range(nparts):
-
-            n = self.sizes[i]
-            submat = np.zeros((n,n))
-
-            jj = -1 ; kk = -1 
-            for j in range(nnodes):
-                if( parts[j] == i):
-                    jj = jj + 1
-                    kk = -1
-                    for k in range(nnodes):
-                        if(parts[k] == i):
-                            kk = kk + 1
-                            submat[jj,kk] = A[j,k]
-
-            self.submats.append(submat)
-
-    def getCoreHaloIndices(self,ipart,A,doubleJump):
-
-        nparts = self.nparts
-        nnodes = self.nnodes
-        parts = self.parts
-        adj = self.adj
-        nx = np.zeros((nnodes))
-
-        #Get the core indices from graph
-        coreHalo = []
-        nch = 0
-        for i in range(nnodes):
-            if(parts[i] == ipart):
-                coreHalo.append(i)
-                nch = nch + 1 
-                nx[i] = 1
-
-        nc = nch 
-
-        #Add halos from graph
-        for ii in range(nc):
-            i = coreHalo[ii]
-            for j in range(nnodes):
-                if((adj[i,j] > 0.1) & (nx[j] == 0)): 
-                    nch = nch + 1
-                    coreHalo.append(j)
-                    nx[j] = 1
-
-        #Add halos again (if double jump) 
-        if(doubleJump):
-            nch1 = nch 
-            for ii in range(nch1):
-                i = coreHalo[ii]
-                for j in range(nnodes):
-                    if((adj[i,j] > 0.1) & (nx[j] == 0)):
-                        nch = nch + 1
-                        coreHalo.append(j)
-                        nx[j] = 1
-
-        return coreHalo, nc, nch         
-
-    def getCoreHalos(self,ham,doubleJump):
-        
-        for i in range(self.nparts):
-            coreHalo, nc, nch = self.getCoreHaloIndices(i,ham,doubleJump)
-            self.nc.append(nc)
-            self.nch.append(nch)
-            self.coreHalo.append(coreHalo)
-
-    def printCoreHalos(self,i):
-       print("Core and halos list for part ",i)
-       print("Nodes in the core ",self.nc[i])
-       print("Nodes in the core+halos ",self.nch[i])
-       print("Cores+halo list ",self.coreHalo[i])
-
-
-    def getSubmatrix(self,nodeList,A):
-        
-        N = len(A) 
-        n = len(nodeList)
-        sMat = np.zeros((n,n))
-        if(n > N):
-            print("ERROR: Node list lenght larges than matrix size ...")
-            exit(0)
-        for ii in range(n):
-            i = nodeList[ii]
-            for jj in range(n):
-                j = nodeList[jj]
-                sMat[ii,jj] = A[i,j]
-
-        return sMat
-        
-    def getSubmats(self,A):
-
-        for i in range(self.nparts):
-            nodesList = self.coreHalo[i]
-            print(nodesList)
-
-            sMat = self.getSubmatrix(nodesList,A)
-            self.submats.append(sMat)
-        
-
-
-
-
-
-
-
-
-
-
-
-
-    
 
