@@ -10,6 +10,25 @@ A prototype engine that:
 import numpy as np
 import sys 
 import scipy.linalg as sp
+import os,time
+
+global gpuLib
+
+try:
+    import gpulibInterface as gpu
+    import ctypes
+    gpuLib=True
+    arch="nvda"
+    pwd=os.getcwd()
+        
+    if (arch == "nvda"):
+        print("loading nvidia...")
+        lib = ctypes.CDLL(str(pwd)+"/../../gpu/nvda/libnvda.so")
+    if (arch == "amd"):
+        lib = ctypes.CDLL(str(pwd)+"/../../gpu/amd/libamd.so")
+
+except:
+    gpuLib=False
 
 ## Simple random number generator
 # This is important in order to compare across codes 
@@ -131,6 +150,34 @@ def get_densityMatrix(H,Nocc,verb=False):
   if(verb): print("Chemical potential = ",mu)
   return D
 
+## Computes the Density matrix from a given Hamiltonian.
+# @author Josh Finkelstein
+# @brief This will create a "zero-temperature" Density matrix \f$ \rho \f$
+# \f[ \rho  =  \sum^{nocc} v_k v_k^T \f]
+# where \f$ v_k \f$ are the eigenvectors of the matrix \f$ H \f$
+# using GPU/AI accelerator library
+#
+# @param H Hamiltonian matrix 
+# @param Nocc Number of occupied orbitals
+# @param verb Verbosity. If True is passed, information is printed.
+#
+# @return D Density matrix
+#
+def get_densityMatrix_accel(H,N,Nocc,lib,verb=False):
+  """Calcualted the full density matrix from H"""
+  if(verb): print("Computing the Density matrix using GPU/AI accel library")
+
+  # init DM
+  D = np.zeros((N,N))
+  kbt = 0.00001
+
+  # get DM from cusolver diag
+  dm = gpu.dmDiag(H,D,N,Nocc,kbt,lib)
+  
+  return D
+
+
+
 ## Main program for proxy a
 # \brief It will read the number of atoms, contruct 
 # a set of random coordinates and give back a Density matrix.
@@ -144,14 +191,34 @@ if(__name__ == '__main__'):
       exit(0)
   else:
       nats = int(sys.argv[1])
+
   verb = True
   coords = get_random_coordinates(nats)
 
-  H = get_hamiltonian(coords)
+  H = proxyA_get_hamiltonian(coords)
 
+  gpuLibIn = True  ## need to pass from input file or command line
   occ = int(float(nats)/2.0) #Get the total occupied orbitals 
-  D = get_densityMatrix(H,occ)
   
+  if (gpuLibIn == False):
+      print("Using CPU for DM construction. Consider installing accelerator library...")
+      D = get_densityMatrix(H,occ)
+  
+  elif (gpuLibIn == True):
+      if (gpuLib == False):
+          print("No accelerator library found. Consider installing or change input.") 
+          exit()
+      D = get_densityMatrix_accel(H,nats,occ,lib)
+
   print("Hamiltonian matrix=",H)
+  print("Density matrix=",D/2.0)
+      
+  #D = get_densityMatrix(H,occ)
+  tic = time.perf_counter()
+  D = get_densityMatrix(H,occ)
   print("Density matrix=",D)
+  toc = time.perf_counter()
+  print(f"Time for python SP2 = {toc - tic:0.4f} seconds")
+  
+   
   

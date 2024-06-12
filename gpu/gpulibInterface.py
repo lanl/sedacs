@@ -44,21 +44,66 @@ def nlist(x,y,z,nlist,num_atoms,lib):
     return list(nlist)                          
 
 
+## gpuLib API call to inverse overlap factorization algorithm.
+# This interface function will accept two numpy arrays, the hamiltonian, and the density matrix
+# along with two integers, matSize and nocc. Function will build the density matrix from
+# the Hamiltonian, which has size matSize, using the DNN-SP2 method. For use with T=0 density
+# matrix calculations.
+# @param overlap Orbital overlap matrix.
+# @param guess Inital guess for inverse factor matrix. 
+# @param factor Pointer to inverse overlap matrix factor. 
+# @param matSize Matrix sizes.
+# @return factor Computed factor of inverse overlap  matrix, Z^TZ = S^{-1/2}.
+#
+def invOverlapFactor(overlap,guess,factor,matSize,lib):
 
-def dmDiag(ham,dm,matSize,nocc,lib):
+    ## convert to C data types
+    array_type1 = ctypes.c_double*matSize
+    overlap_c = array_type1(*overlap)                       
+    guess_c = array_type1(*guess)                       
+    factor_c = array_type1(*factor)               
+    matSize_c = ctypes.c_int(matSize)
+
+    ## time call
+    tic = time.perf_counter()
+  
+    ## call involap from .so lib
+    lib.involap(overlap_c,      \
+                guess_c,        \
+                factor_c,       \
+                matSize_c)
+     
+    # end timer
+    toc = time.perf_counter()
+    print(f"Time = {toc - tic:0.4f} seconds")
+    return list(factor)                          
+
+
+## gpuLib API call to construction of DM using diagonalization..
+# This interface function will accept two numpy arrays, the hamiltonian, and the density matrix
+# along with two integers, matSize and nocc. Function will build the density matrix from
+# the Hamiltonian, which has size matSize, using diagonalization. 
+#
+# @param ham Hamiltonian matrix.
+# @param dm Density matrix.. 
+# @param matSize Matrix sizes.
+# @param nocc Occupation of elec orbitals.
+# @param kbt Electronic temperature.
+# @return dm Desnity matrix.
+#
+def dmDiag(ham,dm,matSize,nocc,kbt,lib):
 
     ## time call
     tic = time.perf_counter()
 
     ## copies scalar data to C data structures
-    kbt = 0.1;
     kbt_c = ctypes.c_double(kbt)
     matSize_c = ctypes.c_int(matSize)
     nocc_c = ctypes.c_int(nocc)
 
     # end timer
     toc = time.perf_counter()
-    print(f"Time to convert types = {toc - tic:0.4f} seconds")
+    #print(f"Time to convert types = {toc - tic:0.4f} seconds")
 
     ## time call
     tic = time.perf_counter()
@@ -70,7 +115,7 @@ def dmDiag(ham,dm,matSize,nocc,lib):
     
     # end timer
     toc = time.perf_counter()
-    print(f"Time for setting args = {toc - tic:0.4f} seconds")
+    #print(f"Time for setting args = {toc - tic:0.4f} seconds")
     
     ## time call
     tic = time.perf_counter()
@@ -81,7 +126,7 @@ def dmDiag(ham,dm,matSize,nocc,lib):
                 nocc_c)
     toc = time.perf_counter()
 
-    print(f"Time for lib call = {toc - tic:0.4f} seconds")
+    #print(f"Time for lib call = {toc - tic:0.4f} seconds")
     return list(dm)                          
 
 
