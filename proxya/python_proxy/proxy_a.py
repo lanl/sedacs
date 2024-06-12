@@ -209,16 +209,11 @@ if(__name__ == '__main__'):
           print("No accelerator library found. Consider installing or change input.") 
           exit()
       D = get_densityMatrix_accel(H,nats,occ,lib)
+      D =/2.0 #account for double occ
 
   print("Hamiltonian matrix=",H)
-  print("Density matrix=",D/2.0)
-      
-  #D = get_densityMatrix(H,occ)
-  tic = time.perf_counter()
-  D = get_densityMatrix(H,occ)
   print("Density matrix=",D)
-  toc = time.perf_counter()
-  print(f"Time for python SP2 = {toc - tic:0.4f} seconds")
+      
   
    
   
