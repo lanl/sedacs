@@ -6,6 +6,7 @@ This is used to run individual tests
 
 from sdc_system import *
 from sdc_ptable import *
+from sdc_partition import *
 
 ## For coloring text
 class textcolors:
@@ -24,6 +25,7 @@ def run_my_test(testName):
     exit1 = True
     function = globals()[testFunctionName]
     passed = function(exit1)
+    return passed,exit1 
 
 # List of all the name of the routins to be tested
 # make a list using system calls based on the grep results 
@@ -32,5 +34,11 @@ testName = sys.argv[1]
 print("\nRunning tests ...",testName)
 
 # Run the tests 
-run_my_test(testName)
+passed,exit1 = run_my_test(testName)
 
+# Print message
+if(passed):
+    sdc_test_pass(testName)
+else:
+    sdc_test_fail(testName)
+    if(exit1): exit(1)

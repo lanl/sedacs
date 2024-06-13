@@ -227,18 +227,15 @@ def test_parameters_to_vectors(exit1):
         latticeVectors = parameters_to_vectors(paramA, paramB, paramC, angleAlpha, angleBeta, angleGamma, latticeVectors)
         expected_result = np.array([[2.0, 0.0, 0.0], [0.0, 3.0, 0.0], [0.0, 0.0, 4.0]])
         if(np.allclose(latticeVectors, expected_result)):
-            sdc_test_pass("parameters_to_vectors")
             passed = True
         else:
-            sdc_test_fail("parameters_to_vectors")
-            if(exit1): exit(1)
+            passed = False
     except:
-            sdc_test_fail("parameters_to_vectors")
-            if(exit1): exit(1)
+        passed = False
     return passed
 
 
-## Transforms the lattice vectors to lattice parameters
+## Transforms the lattice vectors to lattice parameers
 # @param latticeVectors 3x3 array containing the lattice vectors
 # @param verb Verbosity level.
 #
@@ -287,15 +284,8 @@ def test_vectors_to_parameters(exit1):
             passed = True
         else:
             passed = False
-
     except:
         passed = False
-
-    if(passed):
-        sdc_test_pass("vectors_to_parameters")
-    else:
-        sdc_test_fail("vectors_to_parameters")
-        if(exit1): exit(1)
     return passed
     
 
@@ -532,13 +522,6 @@ def test_read_xyz_file(exit1):
     except:
         passed = False
 
-    if(passed):
-        sdc_test_pass("read_xyz_file")
-    else:
-        sdc_test_fail("read_xyz_file")
-        passed = False
-        if(exit1): exit(1)
-
     return passed
 
 
@@ -664,13 +647,6 @@ def test_read_pdb_file(exit1):
     except:
         passed = False
 
-    if(passed):
-        sdc_test_pass("read_pdb_file")
-    else:
-        sdc_test_fail("read_pdb_file")
-        passed = False
-        if(exit1): exit(1)
-
     return passed
 
 
@@ -738,13 +714,6 @@ END"
     except:
         passed = False
 
-    if(passed):
-        sdc_test_pass("write_pdb_file")
-    else:
-        sdc_test_fail("write_pdb_file")
-        passed = False
-        if(exit1): exit(1)
-
     return passed
 
 
@@ -799,12 +768,6 @@ def test_write_xyz_coordinates(exit1):
             passed = False
     except:
         passed = False
-
-    if(passed):
-        sdc_test_pass("write_xyz_coordinates")
-    else:
-        sdc_test_fail("write_xyz_coordinates")
-        if(exit1): exit(1)
     return passed
 
 ## Extract subsystem
@@ -921,13 +884,6 @@ def test_read_xyz_trajectory(exit1):
     except:
         passed = False
 
-    if(passed):
-        sdc_test_pass("read_xyz_trajectory")
-    else:
-        sdc_test_fail("read_xyz_trajectory")
-        passed = False
-        if(exit1): exit(1)
-
     return passed
 
 ## Gets the volume of the simulation box
@@ -978,12 +934,6 @@ def test_get_volBox(exit1):
 
     except:
         passed = False
-
-    if(passed):
-        sdc_test_pass("get_volBox")
-    else:
-        sdc_test_fail("get_volBox")
-        if(exit1): exit(1)
 
     return passed
 

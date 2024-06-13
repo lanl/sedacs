@@ -418,14 +418,8 @@ def test_ptable(exit1):
             passed = False
             #print("10")
 #        
-        if(passed):
-            sdc_test_pass("test_ptable")
-        else:
-            sdc_test_fail("test_ptable")
-            if(exit1): exit(1)
     except:
-        sdc_test_fail("test_ptable")
-        if(exit1): exit(1)
+        passed = False
 
     return passed
 
