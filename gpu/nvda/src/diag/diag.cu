@@ -189,8 +189,9 @@ void get_fermilevel_bisection(double* h_eval,
     thrust::device_ptr<double> thrust_occ;
     thrust_occ = thrust::device_pointer_cast(occ);
 
+    int iter = 0; int Max = 50;
 
-    while( abs(err) > 1e-6 ){
+    while( (abs(err) > 1e-6) and (iter < Max)){
 
         // take new mu to be average of old ones
         mu[0] = (mu_b+mu_a)/2;
@@ -218,7 +219,7 @@ void get_fermilevel_bisection(double* h_eval,
             mu_b=mu[0];
 
         }
-
+        iter+=1;
     }
 }
 
@@ -316,7 +317,7 @@ void diagonalize(double* ham,
 
     // compute fermi level, mu
     get_fermilevel_bisection(eval, d_eval, d_occ, norb, kbt, bndfil, mu, nblks2, nthds2);
-    
+
     // build density matrix
     compute_dm(d_occ, d_evec, d_dm, norb);
 		

@@ -84,7 +84,7 @@ OBJDIAG    =  $(OBJ_DIR)/diag/diag.o\
 
 #OBJSP2     =  $(OBJ_DIR)/dnnsp2/*.o\
 
-OBJNLIST   =  $(OBJ_DIR)/nlist/*.o\
+#OBJNLIST   =  $(OBJ_DIR)/nlist/*.o\
 
 OBJCHEBY   =  $(OBJ_DIR)/fastcheby/*.o\
 
@@ -129,8 +129,8 @@ $(OBJ_DIR)/dnnsp2/%.o: $(SRC_DIR)/dnnsp2/%.cu
 	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR)\
                       $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB) 
 
-$(OBJ_DIR)/nlist/%.o: $(SRC_DIR)/nlist/%.cu
-	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR)\
+#$(OBJ_DIR)/nlist/%.o: $(SRC_DIR)/nlist/%.cu
+#	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR)\
                       $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB)
 
 $(OBJ_DIR)/fastcheby/%.o: $(SRC_DIR)/fastcheby/%.cu
