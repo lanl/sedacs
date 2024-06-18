@@ -82,7 +82,7 @@ def get_adaptiveDM(sdc,eng,comm,rank,numranks,sy,hindex,graphNL):
     fullGraph = graphNL
     for gsc in range(sdc.numAdaptIter):
         #Partition the graph 
-        parts = partition(fullGraph,sdc.partitionType,sdc.nparts,sdc.verb)
+        parts = graph_partition(fullGraph,sdc.partitionType,sdc.nparts,sdc.verb)
         njumps = 1; partsCoreHalo = []; numCores = []
         print("\nCore and halos indices for every part:")
         for i in range(sdc.nparts):
