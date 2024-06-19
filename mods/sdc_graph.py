@@ -88,7 +88,7 @@ def get_nx_graph(graph,w):
     nxGraph = nx.Graph()
     for i in range(0,n):
         nxGraph.add_nodes_from([i,i])
-        for k in range(1,graph[i,0]):
+        for k in range(1,graph[i,0]+1):
             j = graph[i,k]
             if((j != -1) and (j != i)):
                 nxGraph.add_edge(i,j,weight=w)
@@ -97,6 +97,26 @@ def get_nx_graph(graph,w):
     print('nxGraph',nxGraph)
     return nxGraph
 
+## Get a regular graph from a nx graph.
+# @brief From a networkx graph, this will construct a regular graph.
+# @param nxGraph Networkx graph.
+# @return graph The graph consisting on a 2D integer numpy array. 
+# E.g, `graph[i,k]` is the kth neighbor of node i. NOTE: The 0 entry of 
+# every row is reserved to store the degree of every node. 
+def get_graph_from_nx(nxGraph):
+    if(nxLib == False):
+        sdc_error("get_nx_graph","ERROR: Consider installing networkx")
+    n = nxGraph.number_of_nodes()
+    m = np.max(nxGraph.degree())
+    graph = np.zeros((n,m+1),dtype=int)
+    for i in range(n):
+        graph[i,0] = nxGraph.degree()[i]
+        jj = 0
+        for j in nxGraph.neighbors(i):
+            jj = jj + 1
+            graph[i,jj] = j
+
+    return graph 
 
 ## To plot the resulting graph
 # @brief Uses matplotlib to plot the nxGraph
@@ -218,8 +238,6 @@ def add_graphs(graphA, graphB):
 
     return graphC
 
-
-
 ## Multiply two Adjacencies
 # @brief The ij of the resulting graph will be connected 
 # if i in A and j in B have a common directly connected node k.
@@ -251,5 +269,27 @@ def multiply_graphs( ):
                 graphC[i,k] = j
         graphC[i,0] = k
 
-    
+# Get a small graph (>-<)
+# @brief This will construct a small graph for testing purposes.
+# This graph can be is trivially partitioned in two parts
+# @return A 6 nodes graph that can be represented by the following
+# picture: 
+#    0        3
+#      \     /
+#       1 - 4 
+#      /     \ 
+#    2        5
+def get_a_small_graph():
+    nnodes = 6
+    graph = np.zeros((nnodes,nnodes),dtype=int)
+    graph[:,0] = 1 #Every node has at least one neighbor
+    graph[0,1] = 1 #Node 0 is connected to 1
+    graph[1,1] = 0 ; graph[1,2] = 2 ; graph[1,3] = 4 #Node 1 to 0,2,4
+    graph[2,1] = 1 #Node 2 to 1 
+    graph[4,0] = 3 #Node 4 to 1,3,5
+    graph[4,1] = 1 ; graph[4,2] = 3 ; graph[4,3] = 5
+    graph[3,1] = 4 #Node 3 to 4
+    graph[5,1] = 4 #Node 5 to 4 
+    return graph
+
 
