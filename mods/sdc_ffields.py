@@ -13,7 +13,7 @@ def get_sdc_classical_forces(coords,types,symbols,latticeVectors,nl,nlTrX,nlTrY,
     if(verb):
         sdc_status_at("get_sdc_classical_force")
     if(fFieldName == "HarmonicAll"):
-        forces = harmonic_potential(coords,nl,nlTrX,nlTrY,nlTrZ,verb=True)
+        forces = harmonic_potential(coords,nl,nlTrX,nlTrY,nlTrZ,verb=False)
     else:
         sdc_error_at("get_sdc_classical_force",message="No valid force filed name")
     
@@ -46,8 +46,8 @@ def harmonic_potential(coords,nl,nlTrX,nlTrY,nlTrZ,verb=False):
         
                 forcesIJ[:] = -2*(distance - 1.0)*dVectVersor[:]
                 forces[i] = forces[i] + forcesIJ
-            else:
-                print("WARNING")
+            #else:
+                #print("WARNING")
 
     return forces
 

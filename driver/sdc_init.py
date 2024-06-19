@@ -71,6 +71,7 @@ def init(args):
     sy.latticeVectors,sy.symbols,sy.types,sy.coords = \
         read_coords_file(sdc.coordsFileName,lib="None",verb=True)
     sy.nats = len(sy.coords[:,0])
+    sy.vels = np.zeros((sy.nats,3))
 
     #Get hindex, the orbital index for each atom in the system
     sy.norbs, hindex = get_hindex(sdc.orbs,sy.symbols,sy.types)
