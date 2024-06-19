@@ -189,7 +189,9 @@ class trajectory:
 # @param angleBeta Angle between first and third lattice vectors
 # @param angleGamma Angle between first and second lattice vectors
 # @param latticeVectors 3x3 array containing the lattice vectors.
+# \verbatim
 # latticeVector[0,2] = z-coordinate of the first lattice vector
+# \endverbatim
 # @param verb Verbosity level.
 #
 def parameters_to_vectors(paramA,paramB,paramC,angleAlpha,angleBeta,angleGamma,\

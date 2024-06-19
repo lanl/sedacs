@@ -11,9 +11,13 @@ class textcolor:
     red = '\033[91m'
     normal = '\033[0m'
 
+def sdc_status_at(name):
+    print("\n >>> At ",name,"...\n") 
 
-def sdc_error_at(name):
+def sdc_error_at(name,message=None):
     print("\n !!!ERROR at",name,"\n")
+    if(message != None):
+        print("    ",message,"\n")
     exit(0)
 
 def sdc_warning_at(name):
