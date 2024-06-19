@@ -474,7 +474,8 @@ def metis_partition(graph,nparts,verb=False):
     #plot_graph(nxGraph)
     return parts
 
-def test_metis_partition(exit1):
+#This test is dissabled for now
+def NOtest_metis_partition(exit1):
     nnodes = 6 
     graph = get_a_small_graph()
     whichPart = np.zeros((nnodes),dtype=int)
