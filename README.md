@@ -52,3 +52,7 @@ to develop SEDACS.
 ### `driver`
 
 Scripts to exercise the code.
+
+# License
+
+This program is open source under the [BSD-3 License](LICENSE.txt).
