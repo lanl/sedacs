@@ -10,9 +10,9 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-# import os
-# import sys
-# sys.path.insert(0, os.path.abspath('.'))
+import os
+import sys
+sys.path.insert(0, os.path.abspath('../../mods'))
 
 
 # -- Project information -----------------------------------------------------
@@ -29,6 +29,9 @@ author = 'SEDACS team'
 # ones.
 extensions = [
 ]
+
+master_doc = 'index'
+
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -50,3 +53,14 @@ html_theme = 'alabaster'
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+
+extensions = ['myst_parser',
+        'sphinx.ext.autodoc']
+
+source_suffix = {
+    '.rst': 'restructuredtext',
+    '.txt': 'markdown',
+    '.md': 'markdown',
+
+}
+
