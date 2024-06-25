@@ -19,7 +19,7 @@ extern "C"{
 
 extern "C"{
 
-    void dm_cheby(double *, double *, int, int, int);
+    void dm_pscheby(double *, double *, int, int, double);
 
 }
 

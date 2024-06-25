@@ -1,184 +1,30 @@
-#include <sys/time.h>
-#include <time.h>
-#include <stdio.h>
-#include <vector>
-#include <math.h>
-#include <iostream>
-#include <boost/random/linear_congruential.hpp>
-#include <boost/random/uniform_real.hpp>
-#include <boost/random/variate_generator.hpp>
-//#include <rocblas.h>
-//#include <hip/hip_runtime.h>
-#include <include/error_check.hpp>
-
-void buildTest_eval(
-    double* H, const int n, double* eval)
-{
-
-    for (int i = 0; i < n ; i++){
-        for (int j = 0; j < n ; j++){
-                if (i==j){
-                        H[i + n * i] = eval[i];
-                        std::cout << H[i + n * i] << std::endl;
-                }else{
-                        H[i + n * j] = 0;
-                };
-
-        };
-    };
-};
-
-void buildTest_diag(
-    double* H, const int n)
-{
-
-    for (int i = 0; i < n ; i++){
-        for (int j = 0; j < n ; j++){
-                if (i==j){
-                        H[i + n * i] = -10.0+(double(i)/double(n))*20.0;
-                        std::cout << H[i + n * i] << std::endl;
-                }else{
-                        H[i + n * j] = 0;
-                };
-
-        };
-    };
-};
-
-void buildTest(
-    double* Iden, const int n)
-{
-
-    for (int i = 0; i < n ; i++){
-        for (int j = 0; j < n ; j++){
-                if (i==j && i>0.5*n){
-                        Iden[i + n * i] = 1;
-                }else{
-                        Iden[i + n * j] = 0;
-                };
-
-        };
-    };
-};
-
-double gtod(void)
-{
-    struct timeval tv;
-    gettimeofday(&tv, (struct timezone*)nullptr);
-    return 1.e6 * tv.tv_sec + tv.tv_usec;
-}
-
-__global__
-void buildId_dev(double* Iden, int n)
-{
-    int i = threadIdx.x + blockIdx.x*blockDim.x;
-    
-    if (i < n*n){
-        if (i%(n+i)==0){
-	    Iden[i + n * i] = 1.0;
-        }
-        else{
-	    Iden[i] = 0.0;
-        };
-    };
-};
+void gershgorin_cheby(const unsigned,
+                      const double*, 
+                      double*,
+                      double*);
 
 
-void buildIdentity(
-    double* Iden, const int n)
-{
+void buildTest_eval(const double*, 
+                    const int, 
+                    double*);
 
-    for (int i = 0; i < n ; i++){
-    	for (int j = 0; j < n ; j++){
-		if (i==j){
-			Iden[i + n * i] = 1.0;
-		}else{
-			Iden[i + n * j] = 0.0;
-		};
+void buildTest(double*,const int);
 
-    	};
-    };
-};
+double gtod(void);
 
-void build_SynthHam(
-    double* H, const int n)
-{
+void buildIdentity(double*, const int);
 
-    typedef boost::minstd_rand rng_type;
-    typedef boost::uniform_real<> distribution_type;
+void build_SynthHam(double*, const int);
 
-    int seed = 1739;
-    rng_type rng(seed);
-    distribution_type nd(-1., 1.);
-    boost::variate_generator<rng_type, distribution_type> gen(rng, nd);
+void cheby_coeffs(double emax, double emin, double ef, double kbt, int npts, int K, int M, double *c);
 
-    // metal
-    double rcoeff = 0.0; //gen();
-    double ea = 0.0;
-    double eb = 0.0;
-    double decay = -0.01;
-    // semiconductor
-    //double rcoeff = 0.0; //gen();
-    //double ea = 0.0;
-    //double eb = 0.0;
-    //double decay = -0.01;
-
-    // synthetic Hamiltonian for a metal
-
-    double dist = 0;
-
-    // Compute the diagonal
-    for (int i = 0; i < n ; i++){
-        if (i%2 == 0){
-            H[i+i*n] = ea + rcoeff*(2.0*gen() - 1.0);
-	}else{
-	    H[i+i*n] = ea + rcoeff*(2.0*gen() - 1.0);
-	}
-    }
-
-    // metal
-    double daiaj = -1.0;
-    double dbibj = -1.0;
-    double dab = 0.0;
-    
-    // semiconductor
-    //double daiaj = -1.0;
-    //double dbibj = 0.0;
-    //double dab = -2.0;
+void construct_ps_coeffs_new(double*, 
+                             double*, 
+                             const int, const int);
 
 
-    // Compute off-diagonal
-    for (int i = 0; i < n; i++){
-	for (int j = i+1; j < n; j++){
-	    
-	    if ( abs(double(i-j)) <= double(n)/2.0 ){
-		dist = std::max(abs(double(i-j))-2.0, 0.0);
-            }else{
-		dist = std::max((-abs(double(i-j)) + double(n)) - 2.0, 0.0);
-	    }
 
-	    // A-A type
-            if((i%2 != 0) and j%2 != 0){
-                H[i+j*n] = (daiaj + rcoeff*(2.0*gen() - 1.0))*exp(decay*dist);
-            // A-B type
-            }else if( (i%2 == 0) and (j%2 == 0) ){
-                H[i+j*n] = (dbibj + rcoeff*(2.0*gen() - 1.0))*exp(decay*dist);
-            //B-B type
-            }else{
-                H[i+j*n] = (dab + rcoeff*(2.0*gen() - 1.0))*exp(decay*dist);
-            }	    
-
-            // Symmetrize
-	    H[j+i*n] = H[i+j*n];
-	}
-    }
-
-    
-}
-void cheby_coeffs(double emax, double emin, double ef, double kbt, int npts, int K, int M, double *c){
-
-
-    // Determine cheby coefficients (code taken from progress)
+ /*   // Determine cheby coefficients (code taken from progress)
     //double Int = 0.;
     //double xj,fermi,x,Kr,Ti;
     ////////////////////////
@@ -221,7 +67,8 @@ void cheby_coeffs(double emax, double emin, double ef, double kbt, int npts, int
     // start cheby timing
     printf("Cheby coeffs complete...\n");
 };
-
+*/
+/*
 __global__ 
 void cheby_coeffs_GPU(const double emax, const double emin, 
 	              const double ef, 
@@ -288,119 +135,12 @@ void cheby_coeffs_GPU(const double emax, const double emin,
     };
 
 };
+*/
 
 
 
 
 
-
-
-
-
-
-
-void cheby_coeffs_wJackson(double emax, double emin, double ef, double kbt, int npts, int K, int M, double *c){
-
-
-    // Determine cheby coefficients (code taken from progress)
-    double Int = 0.;
-    double xj,fermi,x,Kr,Ti;
-    double jackson_coeff;
-    ////////////////////////
-    ////////////////////////
-    // CONSTRUCT VECTOR C //
-    ////////////////////////
-    ////////////////////////
-   
-    printf("Starting Cheby coeffs...\n");
-
-    for (int i=0; i < K * M ; i++){
-
-        Int = 0.0;
-    
-        for (int j=0; j < npts; j++){
-    
-            xj = cos((j+0.5)*M_PI/(npts + 1));
-            x = (emax-emin)*(xj + 1.0)/2.0 + emin;
-    
-            // Compute integral
-            Ti = cos((double)i * acos(xj));
-            fermi = 1.0/(1.0+exp((x-ef)/(kbt)));
-            Int = Int + Ti * fermi;
-        };
-
-        if (i == 0){
-                Kr = double(npts+1);
-        }else{
-                Kr = 0.5 * double(npts+1);
-        };
-        jackson_coeff =((K*M-i+1)*cos(M_PI*i/(K*M+1)) + sin(M_PI*i/(K*M+1))/tan(M_PI/(K*M+1)))/(K*M+1);  
-        c[i] = Int/Kr;
-        c[i] *= jackson_coeff;
-    };
-
-    // start cheby timing
-    printf("Cheby coeffs complete...\n");
-};
-
-
-
-void cheby_coeffs_trap(double emax, double emin, double ef, double kbt, int npts, int K, int M, double *c){
-
-
-    // Determine cheby coefficients (code taken from progress)
-    double Int = 0.;
-    double xj,fermi,x,Kr,Ti;
-
-    ////////////////////////
-    ////////////////////////
-    // CONSTRUCT VECTOR C //
-    ////////////////////////
-    ////////////////////////
-   
-    printf("Starting Cheby coeffs...\n");
-
-    //#pragma omp target map(from : c[:K * M])
-    //#pragma omp teams distribute
-
-    for (int i=0; i < K * M ; i++){
-
-        Int = 0.0;
-    
-        //#pragma omp parallel for reduction(+:sum)
-	for (int j=0; j <= npts; j++){
-    
-            xj = cos((j+0.5)*M_PI/(npts + 1));
-            x = (emax-emin)*(xj + 1.0)/2.0 + emin;
-    
-            // Compute integral
-            Ti = cos((double)i * acos(xj));
-            fermi = 1.0/(1.0+exp((x-ef)/(kbt)));
-
-            if(j==0 or j==npts){
-                Int = Int + Ti * fermi; 
-            } 
-            else
-            {
-                Int = Int + 2 * Ti * fermi;
-            };
-
-        };
-
-        if (i == 0){
-                Kr = double(npts+1);
-        }else{
-                Kr = 0.5 * double(npts+1);
-        };
-         
-        c[i] = Int/Kr/2.0;
-    };
-
-    // start cheby timing
-    printf("Cheby coeffs complete...\n");
-
-
-};
 
 /*void ps_coeffs_cheby_gpu(rocblas_handle handle, 
                          double emax, double emin,double ef,
@@ -587,7 +327,7 @@ void cheby_coeffs_trap(double emax, double emin, double ef, double kbt, int npts
 
 */
 
-
+/*
 void construct_ps_coeffs_new(double *ps_c, double *c, const int K, const int M){
 
     //input K, M: paterson-stockmeyer size parameters
@@ -729,4 +469,4 @@ void construct_ps_coeffs_new(double *ps_c, double *c, const int K, const int M){
     // free memory
     free(U);
 };
-
+*/

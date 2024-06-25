@@ -101,8 +101,26 @@ void computeOcc(double *eval,
     int i = threadIdx.x + blockIdx.x*blockDim.x;
 
     if (i < norb){
-        // calculate occupation using Fermi-Dirac, along diagonal
-        occ[i] = 2.0/(exp((eval[i] - mu)/kbt) + 1); 
+
+        // calculate occupation, along diagonal
+
+        if (kbt == 0.0)
+        {
+            // Heaviside step
+            if ((eval[i] < mu) or (eval[i] == mu))
+            {
+                occ[i] = 2.0;
+            }
+            else if ( eval[i] > mu )
+            {
+                occ[i] = 0.0;
+            }
+        }
+        else 
+        {
+            // Fermi-Dirac
+            occ[i] = 2.0/(exp((eval[i] - mu)/kbt) + 1);   
+        };
     }
 
 };
@@ -239,8 +257,8 @@ void  compute_dm_from_eig(double *occ,
     cublasCreate(&handle);	
 
     // set gemm coeffs
-    double a, b;
-    a=1.0; b=0.0;
+    double two, one, zero;
+    two=2.0, one=1.0; zero=0.0;
 
     // create occupation matrix
     double *occ_mat;
@@ -250,24 +268,24 @@ void  compute_dm_from_eig(double *occ,
     fill_diagonal<<<int(ceil(float(norb*norb)/512.)),512>>>(occ_mat, occ, norb);
 
     // evecs * occ_mat = occ_mat
-    cublasDgemm(handle,
+    CUBLAS_CHECK_ERR(cublasDgemm(handle,
                                  CUBLAS_OP_N, CUBLAS_OP_N,
                                  norb, norb, norb,
-                                 &a,
+                                 &one,
                                  evec, norb,
                                  occ_mat, norb,
-                                 &b,
-                                 occ_mat, norb);
+                                 &zero,
+                                 occ_mat, norb));
 
     // occ_mat * evecs^T= d_dm
-    cublasDgemm(handle,
+    CUBLAS_CHECK_ERR(cublasDgemm(handle,
                                  CUBLAS_OP_N, CUBLAS_OP_T,
                                  norb, norb, norb,
-                                 &a,
+                                 &two,
                                  occ_mat, norb,
                                  evec, norb,
-                                 &b,
-                                 dm, norb); 
+                                 &zero,
+                                 dm, norb)); 
 
     cublasDestroy(handle); 
     CUDA_CHECK_ERR(cudaFree(occ_mat));

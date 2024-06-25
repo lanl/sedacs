@@ -1,3 +1,9 @@
+void gershgorin(const unsigned,
+                const double*, 
+                double*,
+                double*);
+
+
 cudaError_t GPUSTrace(const unsigned,
                       const float*,
                       float*);        // Assumed to be on the device
