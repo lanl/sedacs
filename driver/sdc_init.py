@@ -71,6 +71,7 @@ def init(args):
     sy.latticeVectors,sy.symbols,sy.types,sy.coords = \
         read_coords_file(sdc.coordsFileName,lib="None",verb=True)
     sy.nats = len(sy.coords[:,0])
+    sy.vels = np.zeros((sy.nats,3))
 
     #Get hindex, the orbital index for each atom in the system
     sy.norbs, hindex = get_hindex(sdc.orbs,sy.symbols,sy.types)
@@ -79,7 +80,8 @@ def init(args):
     if args.use_torch:
         nl = build_nlist_torch(sy.coords,sy.latticeVectors,sdc.rcut,rank=rank,numranks=numranks,verb=False)
     else:    
-        nl,nlTrX,nlTrY,nlTrZ = build_nlist(sy.coords,sy.latticeVectors,sdc.rcut,rank=rank,numranks=numranks,verb=False)
+        nl,nlTrX,nlTrY,nlTrZ = build_nlist(sy.coords,sy.latticeVectors,sdc.rcut,api="old",rank=rank,numranks=numranks,verb=False)
+        #nl,nlTrX,nlTrY,nlTrZ = build_nlist_integer(sy.coords,sy.latticeVectors,sdc.rcut,rank=rank,numranks=numranks,verb=False)
     if mpiON:
         comm.Barrier()
         
@@ -89,7 +91,7 @@ def init(args):
         with open('neighborinfo.txt','w') as of:
             for kk in range(sy.nats):
                 print("Neighs (x-coords) of {} = ".format(kk),nl[kk,1:nl[kk,0]],"(",sy.coords[nl[kk,1:nl[kk,0]],0],")",file=of)
-
+    
     #Get the neighbors of atom 1234 
     AtToPrint = 0
     subSy = system(nl[AtToPrint,0])
@@ -104,5 +106,5 @@ def init(args):
     fullGraph = np.zeros((sy.nats,sdc.maxDeg+1),dtype=int)
     fullGraph[:,:] = graphNL[:,:]
 
-    return sdc,eng,comm,rank,numranks,sy,hindex,fullGraph,nl
+    return sdc,eng,comm,rank,numranks,sy,hindex,fullGraph,nl,nlTrX,nlTrY,nlTrZ
 

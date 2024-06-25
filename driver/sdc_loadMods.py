@@ -18,6 +18,7 @@ from sdc_graph import *
 from sdc_partition import *
 from sdc_init import *
 from sdc_graphAdaptive import *
+from sdc_classical import *
 global tcAvail 
 try:
     import torch as tc

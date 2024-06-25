@@ -48,6 +48,8 @@ class system:
         self.types = np.zeros(self.nats,dtype=int) 
         ## Coordinates for each atom, e.g., z-coordinate of the frist atom is coords[0,2]
         self.coords = np.zeros((self.nats,3),dtype=float)
+        ## Coordinates for each atom, e.g., z-coordinate of the frist atom is coords[0,2]
+        self.vels = np.zeros((self.nats,3),dtype=float)
         ## LatticeVectors. 3x3 matrix containing the lattice vectors for the simulation box.
         # latticeVectors[1,:] = first lattice vector.
         self.latticeVectors = np.zeros((3,3),dtype=float)
@@ -189,7 +191,9 @@ class trajectory:
 # @param angleBeta Angle between first and third lattice vectors
 # @param angleGamma Angle between first and second lattice vectors
 # @param latticeVectors 3x3 array containing the lattice vectors.
+# \verbatim
 # latticeVector[0,2] = z-coordinate of the first lattice vector
+# \endverbatim
 # @param verb Verbosity level.
 #
 def parameters_to_vectors(paramA,paramB,paramC,angleAlpha,angleBeta,angleGamma,\
