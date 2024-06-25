@@ -29,6 +29,12 @@ def run_my_test(testName):
 
 # List of all the name of the routins to be tested
 # make a list using system calls based on the grep results 
+if(len(sys.argv) <= 1):
+    print("\nNo test was passed ...")
+    print("\nUssage:")
+    print("\n          ./sdc_test_runner.py <test_name>\n")
+    exit(0)
+
 testName = sys.argv[1] 
 
 print("\nRunning tests ...",testName)

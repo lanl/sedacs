@@ -7,11 +7,14 @@ Welcome to SEDACS's documentation!
 ==================================
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :caption: Contents:
 
-   ./README.rst
+   ./README.md
    ./INPUT.rst
+   ./README-test.md
+   ./README-docs.md
+
 
 
 Indices and tables

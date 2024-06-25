@@ -26,3 +26,53 @@ Controls the verbosity level of the output. If set to ``False`` no
 output is printed out. If set to ``True``, basic messages of 
 the current execution point of the code will be printed. 
 
+`Tag=` 
+**********
+A string to tag all the files that are generated during a run 
+
+`CoordsFile=`
+*************
+Coordinates fullpath anf file name.
+
+`PartitionType=`
+****************
+The algorithm or strategy to partition the system or graph.
+
+`MaxDeg=` 
+*************
+Max degree for the grpah
+
+`NumParts=`
+**************
+Number of parts in which we will partition the system
+
+`Rcut=`
+*************
+Radius cutoff
+
+`Threshold=` 
+**************
+A small value used throughout the code to threshold matrices.
+
+`GraphThreshold=`
+****************
+A small value used to threshold a graph.
+
+`Field=` 
+************
+Applied filed 
+
+`Orbitals=` 
+************
+A dictionary indicating the number of orbitals for each atomic species
+
+`NumAdaptiveIter=`
+******************
+Number of graph adaptive iterations per Density Matrix construction
+
+`Engine=`
+******************
+Dictionary containing the following keywords: Nane: Engine name, InterfaceType: The 
+way the engine (Forces and electronic structure gerenating code) will be interfaced; 
+``Path``: Full path to the engine code; ``Executable``: Full path to the excecutable or library 
+        

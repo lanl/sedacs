@@ -30,7 +30,7 @@ do
   then
     echo 'add_test('$testName' ${Python_EXECUTABLE} sdc_test_runner.py '$testName')' >> CMakeLists.txt
   else
-    python sdc_test_runner.py $testName
+    python3 sdc_test_runner.py $testName
   fi
 done
 
