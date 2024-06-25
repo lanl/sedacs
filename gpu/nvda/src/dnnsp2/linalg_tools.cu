@@ -4,15 +4,8 @@
 #include <math.h>
 
 #include <cuda.h>
-#include <cublas_v2.h>
 #include <cuda_fp16.h>
-#include <curand.h>
-#include <curand_kernel.h>
-#include <random>
-#include <ctime>
-#include <cusolverDn.h>
-
-#include "linalg_tools.cuh"
+#include <cublas.h>
 
 
 // error check macros
@@ -32,6 +25,7 @@
     Kernal for computing the trace of a matrix A of size N.
     Code originally from LATTE.
 **/
+
 __global__
 void MatrixFastTraceKernel(const unsigned N, const int size, const float *A, float *result)
 {
@@ -90,11 +84,9 @@ void MatrixFastTraceKernel(const unsigned N, const int size, const float *A, flo
     if (threadIdx.x == 0) result[blockIdx.x] = sdata[0];
 }
 
-/**
-   Routine for calling fast trace on GPU.
-**/
-float linalgtools::M_Trace(const unsigned N,
-                           const float* A) {
+float M_Trace(const unsigned N,
+              const float* A) 
+{
 
   // Set number of threads
   unsigned NUM_THREADS = 1024;
@@ -107,15 +99,6 @@ float linalgtools::M_Trace(const unsigned N,
   float *local_trace = (float*)malloc(blockCount * sizeof(float));
 
   float trace=(float)0.0;
-
-/*
-  printf("N/2 = %d\n", size);
-  printf("blockCount = %d\n", blockCount);
-  printf("smemSize = %d\n ", smemSize);
-  printf("NUM_THREADS = %d\n", NUM_THREADS);
-  printf("sizeof(REAL) = %ld\n", sizeof(REAL));
-  printf("DM = %d\n", A.DM);
-*/
 
   cudaMalloc(&device_trace, blockCount * sizeof(float));
 
@@ -139,7 +122,6 @@ float linalgtools::M_Trace(const unsigned N,
 }
 
 
-/**
     Kernel for computing the trace (Tr) of a given matrix A
     of SIZE n (Will only work for even N currently)
 
@@ -150,7 +132,6 @@ float linalgtools::M_Trace(const unsigned N,
     good quick solution. Keep in mind the read is non-
     contiguous which is why I read it into block level
     shared memory first. -JSS
-**/
 __global__
 void GPUtracekernel(const unsigned N, const float *A, float* Tr)
 {
@@ -217,14 +198,12 @@ void GPUtracekernel(const unsigned N, const float *A, float* Tr)
     //Tr[0] = 1.0;
 };
 
-/**
     Launcher for computing the trace (Tr) of a given matrix A
     of size N
-**/
-cudaError_t linalgtools::GPUSTrace(const unsigned N
-                                  ,const float* A
-                                  ,float* Tr // Assumed to be on the device
-                                  ,cudaStream_t cuStrm)
+cudaError_t 
+GPUSTrace(const unsigned N,
+          const float* A,
+          float* Tr) // Assumed to be on the device
 {
     // Setup kernel launch
     unsigned MAX_THREADS = 1024;
@@ -233,30 +212,32 @@ cudaError_t linalgtools::GPUSTrace(const unsigned N
 
     // Call trace kernel
     GPUtracekernel<<<BLOCKS, THREADS, THREADS*sizeof(float), 0>>>(N/2, A, Tr);
-    //std::cout << "ERROR: " << cudaGetErrorString(cudaPeekAtLastError()) << std::endl;
-    // Copy trace back to device (blocking)
 
-
-    /* Cuda Error Checking */
     return cudaPeekAtLastError();
 
 };
 
 __global__
 void GPUtracekernel2(const unsigned N, const float *A, float* Tr)
-{
-    // Get global thread id
-    float local_sum = 0.0f;
-    for (unsigned i = 0; i < N; ++i)
+{ 
+    float local_sum = 0.0;
+    for (unsigned i = 0; i < N; i++)
         local_sum += A[i+i*N];
     Tr[0] = local_sum;
 };
 
-/**
+
+__global__
+void GPUtracekernel3(const unsigned N, const double *A, double* Tr)
+{   
+    double local_sum = 0.0;
+    for (unsigned i = 0; i < N; i++)
+        local_sum += A[i+i*N];
+    Tr[0] = local_sum;
+};
     Launcher for computing the trace (Tr) of a given matrix A
     of size N
-**/
-cudaError_t linalgtools::GPUSTrace2(const unsigned N
+cudaError_t GPUSTrace2(const unsigned N
                                    ,const float* A
                                    ,float* Tr // Assumed to be on the device
                                    ,cudaStream_t cuStrm)
@@ -271,27 +252,14 @@ cudaError_t linalgtools::GPUSTrace2(const unsigned N
     //std::cout << "ERROR: " << cudaGetErrorString(cudaPeekAtLastError()) << std::endl;
 
 
-    /* Cuda Error Checking */
     return cudaPeekAtLastError();
 
 };
 
 
-__global__
-void GPUtracekernel3(const unsigned N, const double *A, double* Tr)
-{   
-    double local_sum = 0.0;
-    for (unsigned i = 0; i < N; i++)
-        local_sum += A[i+i*N];
-    Tr[0] = local_sum;
-};
-
-
-/**
     Launcher for computing the trace (Tr) of a given matrix A
     of size N
-**/
-cudaError_t linalgtools::GPUDTrace(const unsigned N
+cudaError_t GPUDTrace(const unsigned N
                                    ,const double* A
                                    ,double* Tr // Assumed to be on the device
                                    ,cudaStream_t cuStrm)
@@ -306,7 +274,6 @@ cudaError_t linalgtools::GPUDTrace(const unsigned N
     //std::cout << "ERROR: " << cudaGetErrorString(cudaPeekAtLastError()) << std::endl;
 
 
-    /* Cuda Error Checking */
     return cudaPeekAtLastError();
 
 };
@@ -314,10 +281,8 @@ cudaError_t linalgtools::GPUDTrace(const unsigned N
 
 
 
-/**
     Kernel for computing C = alpha * A + beta * B for array A and B
     of size N
-**/
 __global__
 void computeS0np1kernel(const unsigned N
                       ,const float * Sig
@@ -326,21 +291,15 @@ void computeS0np1kernel(const unsigned N
                       ,float* C)
 {
     unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-     if (i < N) {
-       C[i] = Sig[0] * A[i] + (1-Sig[0]) * B[i];
-     }
+    if (i < N) {
+        C[i] = Sig[0] * A[i] + (1-Sig[0]) * B[i];
+    }
   
-   /* while (i < N * N) {
-      C[i] = Sig[0] * A[i] + (1-Sig[0]) * B[i];
-      i += blockDim.x * gridDim.x; // add total number of threads to i
-    }*/
 };
 
-/**
     Launcher for computing C = alpha * A + beta * B for array A and B
     of size N
-**/
-cudaError_t linalgtools::computeS0np1(const unsigned N
+cudaError_t computeS0np1(const unsigned N
                                    ,const float* Sig
                                    ,const float* A
                                    ,const float* B
@@ -358,55 +317,12 @@ cudaError_t linalgtools::computeS0np1(const unsigned N
     // Copy trace back to device (blocking)
 
 
-    /* Cuda Error Checking */
-    return cudaPeekAtLastError();
-
-};
-
-__global__
-void computeS1np1kernel(const unsigned N
-                      ,const float * Sig
-                      ,const float * A
-                      ,const float * __restrict__ B
-                      ,float* C)
-{
-    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-   
-    while (i < N * N) {
-      C[i] = Sig[0] * A[i] + (1-Sig[0]) * B[i];
-      i += blockDim.x * gridDim.x; // add total number of threads to i
-    }
-};
-
-/**
-    Launcher for computing C = alpha * A + beta * B for array A and B
-    of size N
-**/
-cudaError_t linalgtools::computeS1np1(const unsigned N
-                                   ,const float* Sig
-                                   ,const float* A
-                                   ,const float* B
-                                   ,float* C // Assumed to be on the device
-                                   ,cudaStream_t cuStrm)
-{
-    // Setup kernel launch
-    unsigned MAX_THREADS = 1024;
-    unsigned BLOCKS = ceil(N/float(MAX_THREADS));
-    unsigned THREADS = MAX_THREADS;
-
-    // Split the floats into the high and low parts
-    computeS1np1kernel<<<BLOCKS, THREADS>>>(N, Sig, A, B, C);
-
-
-    /* Cuda Error Checking */
     return cudaPeekAtLastError();
 
 };
 
 
-/**
     Kernel for computing Sigma
-**/
 __global__
 void computeSigmakernel(unsigned Nocc
                       ,const float* TrXn
@@ -421,7 +337,7 @@ void computeSigmakernel(unsigned Nocc
 };
 
 
-cudaError_t linalgtools::computeSigma(unsigned Nocc
+cudaError_t computeSigma(unsigned Nocc
                                     ,const float* TrXn
                                     ,const float* TrX2n
                                     ,float* Sig
@@ -432,16 +348,13 @@ cudaError_t linalgtools::computeSigma(unsigned Nocc
     // Split the floats into the high and low parts
     computeSigmakernel<<<BLOCKS, THREADS>>>(Nocc, TrXn, TrX2n, Sig);
 
-    /* Cuda Error Checking */
     return cudaPeekAtLastError();
 
 };
 
 
 
-/**
     Kernel for computing Sigma
-**/
 __global__
 void computeSigmakernel_double(unsigned Nocc
                       ,const double* TrXn
@@ -456,7 +369,7 @@ void computeSigmakernel_double(unsigned Nocc
 };
 
 
-cudaError_t linalgtools::computeSigma_double(unsigned Nocc
+cudaError_t computeSigma_double(unsigned Nocc
                                     ,const double* TrXn
                                     ,const double* TrX2n
                                     ,double* Sig
@@ -467,67 +380,17 @@ cudaError_t linalgtools::computeSigma_double(unsigned Nocc
     // Split the floats into the high and low parts
     computeSigmakernel_double<<<BLOCKS, THREADS>>>(Nocc, TrXn, TrX2n, Sig);
 
-    /* Cuda Error Checking */
     return cudaPeekAtLastError();
 
 };
-cudaError_t linalgtools::computeEigs(float* d_A
-				    ,int N
-				    ,float* Eig
-				    ,cudaStream_t cuStrm) {			        
-    // Cusolver Handle
-      cusolverDnHandle_t cusolverH;
-      cusolverDnCreate(&cusolverH);
 
-
-      int device;
-      cudaGetDevice(&device);
-      std::cout<< "eigs device = " << device << std::endl;
-	
-    // allocate memory for eigenvalues
-      float *d_Eig;
-      cudaMalloc(&d_Eig, N * sizeof(float));
-
-    // compute eigenvalues and eigenvectors
-      cusolverEigMode_t jobz = CUSOLVER_EIG_MODE_NOVECTOR;
-      cublasFillMode_t uplo = CUBLAS_FILL_MODE_LOWER;
-
-    // query working space of syevd
-      int lwork = 0;
-      //cusolver_status =
-          cusolverDnSsyevd_bufferSize(cusolverH, jobz, uplo, N, d_A, N,
-                                    d_Eig, &lwork);
-
-      float *d_work = NULL;
-      cudaMalloc((void **) &d_work, sizeof(float) * lwork);
-
-    // solve
-      int *devInfo = NULL;
-      cudaMalloc((void **) &devInfo, sizeof(int));
-
-    //cusolver_status =
-      cusolverDnSsyevd(cusolverH, jobz, uplo, N, d_A, N, d_Eig,
-                       d_work, lwork, devInfo);
-
-    // recopy S since d_S gets overwritten 
-   //   cudaMemcpy(d_A, h_A, N * N * sizeof(float), cudaMemcpyDeviceToDevice);
-    
-    // destory cusolver handle and S
-      cusolverDnDestroy(cusolverH);
-
-    // copy eigenvalues to host
-      cudaMemcpy(Eig, d_Eig, N * sizeof(float), cudaMemcpyDeviceToHost);
-     
-    /* Cuda Error Checking */
-      return cudaPeekAtLastError();
-}
-
-cudaError_t linalgtools::doRefinement(double* _dA
-                                     ,double* D0_
-                                     ,const int _N
-				     ,const int _Nocc
-                                     ,cublasHandle_t handle
-				     ,cudaStream_t cuStrm){
+void 
+doRefinement(double* _dA,
+             double* D0_,
+             const int _N,
+    	     const int _Nocc,
+             cublasHandle_t handle)
+{
 
     double *d_T02, *d_T04;
     int N = _N;
@@ -538,21 +401,21 @@ cudaError_t linalgtools::doRefinement(double* _dA
     
     // T0^2 in double precision
     double alpha_dbl=1.0, beta_dbl=0.0;
+
     //cublasStat = 
-    cublasDgemm(handle,
-                             CUBLAS_OP_N, CUBLAS_OP_N,
-                             N, N, N,
-                             &alpha_dbl,
-                             _dA, N,
-                             _dA, N,
-                             &beta_dbl,
-                             d_T02, N); 
-    
+    cublasDgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N,
+                N, N, N,
+                &alpha_dbl,
+                _dA, N,
+                _dA, N,
+                &beta_dbl,
+                d_T02, N); 
+   
     cudaMemcpy(d_T04, d_T02, N * N * sizeof(double), cudaMemcpyDeviceToDevice); 
     
     // 2*T0^2 - T0^4 in double precision
     alpha_dbl=-1.0,beta_dbl=2.0;
-    //cublasStat = 
+  //cublasStat = 
     cublasDgemm(handle,
                              CUBLAS_OP_N, CUBLAS_OP_N,
                              N, N, N,
@@ -569,92 +432,6 @@ cudaError_t linalgtools::doRefinement(double* _dA
     cudaFree(d_T04);
     
     //Cuda Error Checking 
-    return cudaPeekAtLastError();
-};
-
-cudaError_t linalgtools::doRefinement_1stOrder(double* _dA0
-		                              ,double* _dA1
-                                              ,double* D1_
-                                              ,const int _N
-				              ,const int _Nocc
-                                              ,cublasHandle_t handle
-				              ,cudaStream_t cuStrm){
-
-    double *dbuf, *d_A0xA0, *d_A0A1xA1A0;
-    int N = _N;
-
-
-    cudaMalloc(&dbuf,N*N*sizeof(double));
-    cudaMalloc(&d_A0xA0,N*N*sizeof(double));
-    cudaMalloc(&d_A0A1xA1A0,N*N*sizeof(double));
-    
-    double alpha_dbl=2.0, beta_dbl=1.0, gamma_dbl=0.0;
-    
-    
-    //cublasStat = 
-    cublasDgemm(handle,
-                CUBLAS_OP_N, CUBLAS_OP_N,
-                N, N, N,
-                &beta_dbl,
-                _dA0, N,
-                _dA1, N,
-                &gamma_dbl,
-                d_A0A1xA1A0, N); 
-    
-    cublasDgemm(handle,
-                CUBLAS_OP_N, CUBLAS_OP_N,
-                N, N, N,
-                &beta_dbl,
-                _dA1, N,
-                _dA0, N,
-                &beta_dbl,
-                d_A0A1xA1A0, N); 
-
-    //cublasStat =  
-    
-    //cublasDscal(handle, N*N, &alpha_dbl, d_A0A1xA1A0, 1);
-    //cublasStat = 
-
-    cublasDgeam(handle,
-                             CUBLAS_OP_N, CUBLAS_OP_N,
-                             N, N,
-                             &alpha_dbl,
-                             d_A0A1xA1A0, N,
-                             &gamma_dbl,
-                             D1_, N,
-                             D1_, N);
-
-    
-    alpha_dbl=-1.0;
-    
-    //cublasStat = 
-    cublasDgemm(handle,
-                             CUBLAS_OP_N, CUBLAS_OP_N,
-                             N, N, N,
-                             &beta_dbl,
-                             _dA0, N,
-                             _dA0, N,
-                             &gamma_dbl,
-                             d_A0xA0, N); 
-    
-    cublasDgemm(handle,
-                             CUBLAS_OP_N, CUBLAS_OP_N,
-                             N, N, N,
-                             &alpha_dbl,
-                             d_A0xA0, N,
-                             d_A0A1xA1A0, N,
-                             &beta_dbl,
-                             D1_, N); 
-    cublasDgemm(handle,
-                             CUBLAS_OP_N, CUBLAS_OP_N,
-                             N, N, N,
-                             &alpha_dbl,
-                             d_A0A1xA1A0, N,
-                             d_A0xA0, N,
-                             &beta_dbl,
-                             D1_, N); 
-
-    //Cuda Error Checking 
-    return cudaPeekAtLastError();
+    //return cudaPeekAtLastError();
 };
 

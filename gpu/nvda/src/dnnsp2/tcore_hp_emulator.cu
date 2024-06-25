@@ -2,17 +2,9 @@
 #include <iomanip>
 #include <stdio.h>
 #include <math.h>
-
 #include <cuda.h>
-//#include <cublas_v2.h>
-//#include <cublas.h>
 #include <cuda_fp16.h>
-
-#include <random>
-#include <ctime>
-
-#include <tcore_hp_emulator.cuh>
-#include <error_check.cuh>
+#include <cublas.h>
 
 // device function for splitting a float into two halves
 __device__
@@ -27,7 +19,7 @@ void split_single(const float x, half &hi, half &lo)
 // global function for splitting a float matrix into two float halves
 template <typename T>
 __global__
-void array_split_single(const float *AF, float *AH1, float *AH2, const unsigned N)
+void array_split_single(const float *AF, half *AH1, half *AH2, const unsigned N)
 {
     unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -37,21 +29,21 @@ void array_split_single(const float *AF, float *AH1, float *AH2, const unsigned 
 
         split_single(AF[i], hi, lo);
 
-        AH1[i] = float(hi);
-        AH2[i] = float(lo);
+        AH1[i] = hi;
+        AH2[i] = lo;
     }
 }
 
 
-void tcoretools::tcoreSPGemmSymm (cublasHandle_t &handle
+void tcoreSPGemmSymm (cublasHandle_t  handle
                                  ,const unsigned N
                                  ,const float* A
-                                 ,float* Ah
-                                 ,float* Al
+                                 ,half* Ah
+                                 ,half* Al
                                  ,float* B1
                                  ,float* B2
-                                 ,float* B
-                                 ,cudaStream_t cuStrm) {
+                                 ,float* B)
+{
     // Setup kernel launch
     unsigned num_thds = 512;
     unsigned num_blks = int(ceil(float(N*N)/float(num_thds)));
@@ -63,41 +55,41 @@ void tcoretools::tcoreSPGemmSymm (cublasHandle_t &handle
     float beta = 0.0;
 
     // Compute gemmEx for high
-    CUBLAS_CHECK_ERR(cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, N, N, 
+    cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, N, N, 
                                   &alpha,
-                                  Ah, CUDA_R_32F, N,
-                                  Ah, CUDA_R_32F, N,
+                                  Ah, CUDA_R_16F, N,
+                                  Ah, CUDA_R_16F, N,
                                   &beta, B1, CUDA_R_32F, N, 
-                                  CUBLAS_COMPUTE_32F_FAST_16F, CUBLAS_DEFAULT_MATH));
+                                  CUBLAS_COMPUTE_32F_FAST_16F, CUBLAS_GEMM_DEFAULT);
 
     // Compute gemmEx for low
-    CUBLAS_CHECK_ERR(cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, N, N, 
+    cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, N, N, 
                                   &alpha,
-                                  Ah, CUDA_R_32F, N,
-                                  Al, CUDA_R_32F, N,
+                                  Ah, CUDA_R_16F, N,
+                                  Al, CUDA_R_16F, N,
                                   &beta, B2, CUDA_R_32F, N, 
-                                  CUBLAS_COMPUTE_32F_FAST_16F, CUBLAS_DEFAULT_MATH));
+                                  CUBLAS_COMPUTE_32F_FAST_16F, CUBLAS_GEMM_DEFAULT);
 
     alpha = 1.0;
     beta = 1.0;
-    CUBLAS_CHECK_ERR(cublasSgeam(handle,
+    cublasSgeam(handle,
                                  CUBLAS_OP_N, CUBLAS_OP_T,
                                  N, N,
                                  &alpha,
                                  B2, N,
                                  &beta,
                                  B2, N,
-                                 B, N));
+                                 B, N);
 
     // undo prior scaling of 2^10
     beta = powf(2,-10);
-    CUBLAS_CHECK_ERR(cublasSgeam(handle,
+    cublasSgeam(handle,
                                  CUBLAS_OP_N, CUBLAS_OP_N,
                                  N, N,
                                  &alpha,
                                  B1, N,
                                  &beta,
                                  B, N,
-                                 B, N));
+                                 B, N);
 };
 
