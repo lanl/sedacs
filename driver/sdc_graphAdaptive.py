@@ -11,7 +11,7 @@ import time
 # @brief Construct a connectivity graph based on constructing density matrices 
 # of parts of the system.
 #
-def get_singlePoit(sdc,eng,rank,numranks,comm,parts,partsCoreHalo,sy,hindex): 
+def get_singlePoint(sdc,eng,rank,numranks,comm,parts,partsCoreHalo,sy,hindex): 
     # computing DM for core+halo part
     # 
     partsPerRank = int(sdc.nparts/numranks)
@@ -91,7 +91,7 @@ def get_adaptiveDM(sdc,eng,comm,rank,numranks,sy,hindex,graphNL):
             numCores.append(nc)
             print("coreHalo for part",i,"=",coreHalo)
         
-        fullGraphRho = get_singlePoit(sdc,eng,rank,numranks,comm,parts,partsCoreHalo,sy,hindex)
+        fullGraphRho = get_singlePoint(sdc,eng,rank,numranks,comm,parts,partsCoreHalo,sy,hindex)
         fullGraph = add_graphs(fullGraphRho,graphNL) 
          
 
