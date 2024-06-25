@@ -32,7 +32,7 @@ The current codebase has the following folder structure:
 ### `proxya`
 
 Proxya code as explained in the proposal. This proxy code should
-perform up to a full SCF optimization of the Density Mmatrix. It is written in
+perform up to a full SCF optimization of the density matrix. It is written in
 three different languages: Python, Fortran, and C.
 
 ### `gpu`
