@@ -1,12 +1,13 @@
 #include <iostream>
 #include <string>
 #include <math.h>
+#include <structs.h>
+
 #include <cuda.h>
-#include <error_check.cuh>
-#include <cusolverDn.h>
 #include <thrust/device_vector.h> 
 #include <thrust/host_vector.h> 
-#include <structs.h>
+#include <error_check.cuh>
+#include <cusolverDn.h>
 
 // diagonalize a matrix
 void computeEval(double *d_ham, int norb, 
@@ -159,9 +160,10 @@ void gershgorin(double* mu_a, double *mu_b, double* ham, int n){
 
 }
 
-
-// determine chemical potential to use for building 
-// density matrix using diagonalization
+/*
+    Determine chemical potential to use for building 
+    density matrix using diagonalization.
+*/
 void get_fermilevel_bisection(double* h_eval,
                               double* eval,
                               double* occ,
@@ -224,11 +226,13 @@ void get_fermilevel_bisection(double* h_eval,
 }
 
 
-//Compute a density matrix from eigenvectors
-void  compute_dm(double *occ, 
-                 double *evec, 
-                 double *dm,
-                 const unsigned norb)
+/*
+    Compute a density matrix from eigenvectors
+*/
+void  compute_dm_from_eig(double *occ, 
+                          double *evec, 
+                          double *dm,
+                          const unsigned norb)
 {
     // create handles
     cublasHandle_t handle;
@@ -319,7 +323,7 @@ void diagonalize(double* ham,
     get_fermilevel_bisection(eval, d_eval, d_occ, norb, kbt, bndfil, mu, nblks2, nthds2);
 
     // build density matrix
-    compute_dm(d_occ, d_evec, d_dm, norb);
+    compute_dm_from_eig(d_occ, d_evec, d_dm, norb);
 		
     // send dm back to host
     CUDA_CHECK_ERR(cudaMemcpy(dm, d_dm, norb * norb * sizeof(double), cudaMemcpyDeviceToHost));

@@ -5,7 +5,7 @@
 
 #include <cuda.h>
 #include <cuda_fp16.h>
-#include <cublas.h>
+#include <cublas_v2.h>
 
 /**
     Kernal for computing the trace of a matrix A of size N.
@@ -408,12 +408,13 @@ doRefinement(double* _dA,
     // T0^2 in double precision
     double alpha_dbl=1.0, beta_dbl=0.0;
 
-    cublasDgemm(CUBLAS_OP_N, CUBLAS_OP_N,
+    cublasDgemm(handle,
+                CUBLAS_OP_N, CUBLAS_OP_N,
                 N, N, N,
-                alpha_dbl,
+                &alpha_dbl,
                 _dA, N,
                 _dA, N,
-                beta_dbl,
+                &beta_dbl,
                 d_T02, N); 
    
     cudaMemcpy(d_T04, d_T02, N * N * sizeof(double), cudaMemcpyDeviceToDevice); 
@@ -421,12 +422,13 @@ doRefinement(double* _dA,
     // 2*T0^2 - T0^4 in double precision
     alpha_dbl=-1.0,beta_dbl=2.0;
 
-    cublasDgemm(CUBLAS_OP_N, CUBLAS_OP_N,
+    cublasDgemm(handle,
+                CUBLAS_OP_N, CUBLAS_OP_N,
                 N, N, N,
-                alpha_dbl,
+                &alpha_dbl,
                 d_T02, N,
                 d_T02, N,
-                beta_dbl,
+                &beta_dbl,
                 d_T04, N);  // this function computes D = 2.0*T2 - 1.0*T2*T2 in double precision
     
 
