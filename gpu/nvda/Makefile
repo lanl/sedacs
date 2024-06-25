@@ -94,6 +94,7 @@ OBJCHEBY   =  $(OBJ_DIR)/fastcheby/*.o\
 	         
 OBJSP2      =    $(OBJ_DIR)/dnnsp2/dnnsp2.o\
                  $(OBJ_DIR)/dnnsp2/tcore_hp_emulator.o\
+                 $(OBJ_DIR)/dnnsp2/linalg_tools.o\
 
 #OBJNLIST=  $(OBJ_DIR)/nlist/utils.o\
 	   $(OBJ_DIR)/nlist/nlist.o\
@@ -122,10 +123,6 @@ $(OBJ_DIR)/diag/%.o: $(SRC_DIR)/diag/%.cu
 $(OBJ_DIR)/dnnsp2/%.o: $(SRC_DIR)/dnnsp2/%.cu
 	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR) $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB) 
 
-#$(OBJ_DIR)/nlist/%.o: $(SRC_DIR)/nlist/%.cu
-#	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR)\
-                      $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB)
-
 $(OBJ_DIR)/fastcheby/%.o: $(SRC_DIR)/fastcheby/%.cu
 	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR)\
                       $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB)
@@ -141,7 +138,6 @@ $(OBJ_DIR)/fastcheby/%.o: $(SRC_DIR)/fastcheby/%.cu
 $(OBJ_DIR)/lib/%.o: $(SRC_DIR)/lib/%.cu
 	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR)\
                       $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB)
-
 
 
 #Clean objects in object directory.

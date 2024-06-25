@@ -14,6 +14,19 @@ import os,time
 
 global gpuLib
 
+import gpulibInterface as gpu
+import ctypes
+gpuLib=True
+arch="nvda"
+pwd=os.getcwd()
+        
+if (arch == "nvda"):
+        print("loading nvidia...")
+        lib = ctypes.CDLL(str(pwd)+"/../../gpu/nvda/libnvda.so")
+if (arch == "amd"):
+        lib = ctypes.CDLL(str(pwd)+"/../../gpu/amd/libamd.so")
+
+
 try:
     import gpulibInterface as gpu
     import ctypes
@@ -214,6 +227,8 @@ if(__name__ == '__main__'):
   print("Hamiltonian matrix=",H)
   print("Density matrix=",D)
       
+  D = get_densityMatrix(H,occ)
+  print("Density matrix=",D)
   
    
   
