@@ -4,6 +4,7 @@
 #include <diag.cuh>
 #include <dnnsp2.cuh>
 
+
 void dm_dnnsp2(double* ham, double* dm, int n, int nocc){
 
     printf("DNN SP2\n");

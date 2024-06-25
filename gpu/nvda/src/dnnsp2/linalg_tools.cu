@@ -7,20 +7,6 @@
 #include <cuda_fp16.h>
 #include <cublas.h>
 
-
-// error check macros
-#define cudaCheckErrors(msg) \
-    do { \
-        cudaError_t __err = cudaGetLastError(); \
-        if (__err != cudaSuccess) { \
-            fprintf(stderr, "Fatal error: %s (%s at %s:%d)\n", \
-                msg, cudaGetErrorString(__err), \
-                __FILE__, __LINE__); \
-            fprintf(stderr, "*** FAILED - ABORTING\n"); \
-            exit(1); \
-        } \
-    } while (0)
-
 /**
     Kernal for computing the trace of a matrix A of size N.
     Code originally from LATTE.
@@ -122,6 +108,7 @@ float M_Trace(const unsigned N,
 }
 
 
+/*
     Kernel for computing the trace (Tr) of a given matrix A
     of SIZE n (Will only work for even N currently)
 
@@ -132,6 +119,7 @@ float M_Trace(const unsigned N,
     good quick solution. Keep in mind the read is non-
     contiguous which is why I read it into block level
     shared memory first. -JSS
+*/
 __global__
 void GPUtracekernel(const unsigned N, const float *A, float* Tr)
 {
@@ -198,8 +186,10 @@ void GPUtracekernel(const unsigned N, const float *A, float* Tr)
     //Tr[0] = 1.0;
 };
 
+/*
     Launcher for computing the trace (Tr) of a given matrix A
     of size N
+*/
 cudaError_t 
 GPUSTrace(const unsigned N,
           const float* A,
@@ -235,8 +225,12 @@ void GPUtracekernel3(const unsigned N, const double *A, double* Tr)
         local_sum += A[i+i*N];
     Tr[0] = local_sum;
 };
+
+
+/*
     Launcher for computing the trace (Tr) of a given matrix A
     of size N
+*/
 cudaError_t GPUSTrace2(const unsigned N
                                    ,const float* A
                                    ,float* Tr // Assumed to be on the device
@@ -256,9 +250,10 @@ cudaError_t GPUSTrace2(const unsigned N
 
 };
 
-
+/*
     Launcher for computing the trace (Tr) of a given matrix A
     of size N
+*/
 cudaError_t GPUDTrace(const unsigned N
                                    ,const double* A
                                    ,double* Tr // Assumed to be on the device
@@ -280,11 +275,12 @@ cudaError_t GPUDTrace(const unsigned N
 
 
 
-
+/*
     Kernel for computing C = alpha * A + beta * B for array A and B
     of size N
+*/
 __global__
-void computeS0np1kernel(const unsigned N
+void computeSnp1kernel(const unsigned N
                       ,const float * Sig
                       ,const float * A
                       ,const float * __restrict__ B
@@ -297,9 +293,11 @@ void computeS0np1kernel(const unsigned N
   
 };
 
+/*
     Launcher for computing C = alpha * A + beta * B for array A and B
     of size N
-cudaError_t computeS0np1(const unsigned N
+*/
+cudaError_t computeSnp1(const unsigned N
                                    ,const float* Sig
                                    ,const float* A
                                    ,const float* B
@@ -312,7 +310,7 @@ cudaError_t computeS0np1(const unsigned N
     unsigned THREADS = MAX_THREADS;
 
     // Split the floats into the high and low parts
-    computeS0np1kernel<<<BLOCKS, THREADS>>>(N, Sig, A, B, C);
+    computeSnp1kernel<<<BLOCKS, THREADS>>>(N, Sig, A, B, C);
 
     // Copy trace back to device (blocking)
 
@@ -322,7 +320,9 @@ cudaError_t computeS0np1(const unsigned N
 };
 
 
+/*
     Kernel for computing Sigma
+*/
 __global__
 void computeSigmakernel(unsigned Nocc
                       ,const float* TrXn
@@ -337,11 +337,14 @@ void computeSigmakernel(unsigned Nocc
 };
 
 
-cudaError_t computeSigma(unsigned Nocc
-                                    ,const float* TrXn
-                                    ,const float* TrX2n
-                                    ,float* Sig
-                                    ,cudaStream_t cuStrm) {
+/*
+    Kernel launcher for computing Sigma
+*/
+cudaError_t computeSigma(unsigned Nocc,
+                         const float* TrXn,
+                         const float* TrX2n,
+                         float* Sig)
+{
     unsigned BLOCKS = 1;
     unsigned THREADS = 1;
 
@@ -354,7 +357,9 @@ cudaError_t computeSigma(unsigned Nocc
 
 
 
-    Kernel for computing Sigma
+/*
+    Kernel for computing Sigma in double
+*/
 __global__
 void computeSigmakernel_double(unsigned Nocc
                       ,const double* TrXn
@@ -368,7 +373,9 @@ void computeSigmakernel_double(unsigned Nocc
     }
 };
 
-
+/*
+    Kernel launcher for computing Sigma in double
+*/
 cudaError_t computeSigma_double(unsigned Nocc
                                     ,const double* TrXn
                                     ,const double* TrX2n
@@ -395,36 +402,34 @@ doRefinement(double* _dA,
     double *d_T02, *d_T04;
     int N = _N;
 
-
     cudaMalloc(&d_T02,N*N*sizeof(double));
     cudaMalloc(&d_T04,N*N*sizeof(double));
     
     // T0^2 in double precision
     double alpha_dbl=1.0, beta_dbl=0.0;
 
-    //cublasStat = 
-    cublasDgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N,
+    cublasDgemm(CUBLAS_OP_N, CUBLAS_OP_N,
                 N, N, N,
-                &alpha_dbl,
+                alpha_dbl,
                 _dA, N,
                 _dA, N,
-                &beta_dbl,
+                beta_dbl,
                 d_T02, N); 
    
     cudaMemcpy(d_T04, d_T02, N * N * sizeof(double), cudaMemcpyDeviceToDevice); 
     
     // 2*T0^2 - T0^4 in double precision
     alpha_dbl=-1.0,beta_dbl=2.0;
-  //cublasStat = 
-    cublasDgemm(handle,
-                             CUBLAS_OP_N, CUBLAS_OP_N,
-                             N, N, N,
-                             &alpha_dbl,
-                             d_T02, N,
-                             d_T02, N,
-                             &beta_dbl,
-                             d_T04, N);  // this function computes D = 2.0*T2 - 1.0*T2*T2 in double precision
+
+    cublasDgemm(CUBLAS_OP_N, CUBLAS_OP_N,
+                N, N, N,
+                alpha_dbl,
+                d_T02, N,
+                d_T02, N,
+                beta_dbl,
+                d_T04, N);  // this function computes D = 2.0*T2 - 1.0*T2*T2 in double precision
     
+
     // Move D to device and host
     cudaMemcpy(D0_, d_T04, N * N * sizeof(double), cudaMemcpyDeviceToDevice); 
 

@@ -172,10 +172,7 @@ void dnnsp2(double* ham,
     float a = float(-1/(hN-h1)); 
     float b = float(hN/(hN-h1)); 
 
-
-    std::cout << " a = " << a << std::endl;
-
- /*   cublasSgeam(handle,
+    cublasSgeam(handle,
                                  CUBLAS_OP_N, CUBLAS_OP_N,
                                  N, N,
                                  &b,
@@ -324,7 +321,7 @@ void dnnsp2(double* ham,
     
     // Destroy handle
     cublasDestroy(handle);
-*/
+
 }
 
 
