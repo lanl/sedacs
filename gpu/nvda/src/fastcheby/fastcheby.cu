@@ -1,22 +1,28 @@
 #include <vector>
 #include <sys/time.h>
 #include <time.h>
-#include <omp.h>
 #include <math.h>
 #include <iomanip>
-#include <utils.cuh>
-#include <cuda.h>
 #include <iostream>
 
-#define DEBUG_OFF
+//#include <utils.cuh>
+#include <cuda.h>
+#include <cublas_v2.h>
+#include <error_check.cuh>
 
-
-
-void chebyshev(double *ham, double *dm, int K, int M, int n) 
+/*
+    Main Chebyshev expansion routine that computes density matrix
+    using the fast cheby solver in Finkelstein et al. JCP 2023
+*/
+void chebyshev(double *ham, double *dm, 
+               int K, int M, 
+               int n,
+               double mu,
+               double kbt) 
 {
 
     int ld = n;
-    int thds = 1024;
+    int thds = 512;
     int blks = (int) ceil(float(K * M) / float(thds));
 
     // Info
@@ -27,89 +33,80 @@ void chebyshev(double *ham, double *dm, int K, int M, int n)
               << "==================================" << "\n "
     	      << std::endl;
 
-}
-    //
-
     // determine device number
-    //int count;
-    //hipGetDeviceCount(&count);
-    //int device=0;
-    //hipSetDevice(device);
-    //
-/*
+    int count;
+    cudaGetDeviceCount(&count);
+    int device=0;
+    cudaSetDevice(device);
+
     for (int i=0; i<10; i++){
         std::cout << ham[i] << std::endl;
     }
 
 
-    // init HIP streams 
+    // initialize cuda streams 
     int num_streams = std::max(K,M);
-    hipStream_t stream[num_streams];
+    cudaStream_t stream[num_streams];
     for (int i = 0 ; i < num_streams; i++){
-        hipStreamCreate(&stream[i]);
+        CUDA_CHECK_ERR(cudaStreamCreate(&stream[i]));
     };
     
-    // init rocblas
-    //rocblas_initialize();
+    // define cublas handle
+    cublasHandle_t handle;
+    CUBLAS_CHECK_ERR(cublasCreate(&handle));
 
     // hip device properties
-    //hipDeviceProp_t props;
-    //hipGetDeviceProperties(&props, device);
+    //cudaDeviceProp_t props;
+    //cudaGetDeviceProperties(&props, device);
 
 
-    // Create start/stop event objects and variable for elapsed time in ms
+/*    // Create start/stop event objects and variable for elapsed time in ms
     hipEvent_t start, stop;
     HIP_API_CHECK(hipEventCreate(&start));
     HIP_API_CHECK(hipEventCreate(&stop));
     float elapsed_time_ms;
-
+*/
 
     // Define and allocate Chebyshev polynomials
     // matrices, T_n, on device
     double *d_T[K+1];
     double *d_aux[M+1];
      
-    hipError_t ret;
+    cudaError_t stat;
     for (int j=0; j <= K; j++){ 
-        HIP_API_CHECK(hipMalloc(&d_T[j], ld * n * sizeof(double)));
+        CUDA_CHECK_ERR(cudaMalloc(&d_T[j], ld * n * sizeof(double)));
     };
     
     for (int j=0; j <= M; j++){ 
-        HIP_API_CHECK(hipMalloc(&d_aux[j], ld * n * sizeof(double)));
+        CUDA_CHECK_ERR(cudaMalloc(&d_aux[j], ld * n * sizeof(double)));
     };
-    ///////
 
     // declare vars
-    double *d_I,*d_D,*d_temp;
-    HIP_API_CHECK(hipMalloc(&d_I, n * n * sizeof(double)));
-    HIP_API_CHECK(hipMalloc(&d_D, n * n * sizeof(double)));
-    HIP_API_CHECK(hipMalloc(&d_temp, n * n * sizeof(double)));
+    double *d_I,*d_dm,*d_temp;
+    CUDA_CHECK_ERR(cudaMalloc(&d_I, n * n * sizeof(double)));
+    CUDA_CHECK_ERR(cudaMalloc(&d_dm, n * n * sizeof(double)));
+    CUDA_CHECK_ERR(cudaMalloc(&d_temp, n * n * sizeof(double)));
 
-    
+
     // Determine cheby coefficients (code taken from progress)
 
     // Cheby params
-    double ef = 0.9997;   
+    //double ef = 0.9997;   
     double emax = 2.0;
     double emin = -101.0;
-    double kbt = 0.1;  //eV
+    //double kbt = 0.1;  //eV
     int npts = 1e3;
-    
 
+
+    // Chebyshev coefficients    
     double *c, *d, *d_c;
-    HIP_API_CHECK(hipHostMalloc(&c, K * M * sizeof(double)));
-    HIP_API_CHECK(hipHostMalloc(&d, K * M * sizeof(double)));
-    HIP_API_CHECK(hipMalloc(&d_c, K * M * sizeof(double)));
+    CUDA_CHECK_ERR(cudaMallocHost(&c, K * M * sizeof(double)));
+    CUDA_CHECK_ERR(cudaMallocHost(&d, K * M * sizeof(double)));
+    CUDA_CHECK_ERR(cudaMalloc(&d_c, K * M * sizeof(double)));
    
 
-    // init rocblas handle
-    rocblas_status rocbStat;
-    rocblas_handle handle;
-    rocblas_create_handle(&handle);
-
-
     //ps_coeffs_cheby_gpu(handle, c, d_c, K, M);
-    auto t1 = gtod();
+    /*auto t1 = gtod();
     ps_coeffs_cheby_gpu(handle, 
                         emax, emin, ef,
                         kbt,
@@ -119,9 +116,11 @@ void chebyshev(double *ham, double *dm, int K, int M, int n)
                         K, 
                         M);
    
-    HIP_API_CHECK(hipDeviceSynchronize());
-    auto t2 = gtod();
- 
+    CUDA_CHECK_ERR(cudaDeviceSynchronize());
+    auto t2 = gtod();*/
+}
+
+ /*
     // initialize T0 = Id
     hipLaunchKernelGGL(buildId_dev,blks,thds,0,0,d_T[0],n);
     // initialize T1 = H
@@ -600,7 +599,7 @@ void chebyshev(double *ham, double *dm, int K, int M, int n)
 
     magma_finalize();*/
 
-};
+
 
 /*
 int main()

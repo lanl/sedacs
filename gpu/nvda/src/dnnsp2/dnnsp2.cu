@@ -108,10 +108,10 @@ void dnnsp2(double* ham,
      
     // Cublas Handle
     cublasHandle_t handle;
-    cublasCreate(&handle);
+    CUBLAS_CHECK_ERR(cublasCreate(&handle));
     
     // Set math mode
-    cublasSetMathMode(handle, CUBLAS_DEFAULT_MATH);
+    CUBLAS_CHECK_ERR(cublasSetMathMode(handle, CUBLAS_DEFAULT_MATH));
 
     // Declare Memory
     double *d_TrD0, *TrD0, *d_ham, *d_dm; 
@@ -172,19 +172,23 @@ void dnnsp2(double* ham,
     float a = float(-1/(hN-h1)); 
     float b = float(hN/(hN-h1)); 
 
-    cublasSgeam(handle,
+    std::cout << "h1 = " << h1 <<  ", hN = " << hN << std::endl;
+    std::cout << "a = " << a <<  ", b = " << b << std::endl;
+
+    CUBLAS_CHECK_ERR(cublasSgeam(handle,
                                  CUBLAS_OP_N, CUBLAS_OP_N,
                                  N, N,
                                  &b,
                                  d_Id, N,
                                  &a,
                                  d_S0, N,  
-                                 d_S0, N); 
+                                 d_S0, N)); 
     
 
     // compute and copy initial traces
     GPUSTrace(N,d_S0,d_TrS0);
     CUDA_CHECK_ERR(cudaMemcpy(TrS0, d_TrS0, sizeof(float), cudaMemcpyDeviceToHost));  
+    std::cout << "Tr[S] = " << TrS0[0] << std::endl;
     
     //if (precision==fp32){
     float alphaS = 1.0, betaS = 0.0;
@@ -194,51 +198,51 @@ void dnnsp2(double* ham,
         
         if (precision==fp32){
 
-            cublasSgemm(handle,
+            CUBLAS_CHECK_ERR(cublasSgemm(handle,
                                          CUBLAS_OP_N, CUBLAS_OP_N,
                                          N, N, N,
                                          &alphaS,
                                          d_S0, N,
                                          d_S0, N,
                                          &betaS,
-                                         d_S02, N);
+                                         d_S02, N));
         
         }
         else if (precision==fp16_fp32){
-
+            std::cout << "Tensor cores mult." << std::endl; 
             tcoreSPGemmSymm(handle,
-                                        N,
-                                        d_S0,
-                                        hbuf1, hbuf2,
-                                        sbuf1, sbuf2,
-                                        d_S02);
+                                             N,
+                                             d_S0,
+                                             hbuf1, hbuf2,
+                                             sbuf1, sbuf2,
+                                             d_S02);
 
         };
 	
 	// trace of S0^2
         GPUSTrace(N,d_S02,d_TrS02); //only works for N even
         CUDA_CHECK_ERR(cudaMemcpy(TrS02, d_TrS02, sizeof(float), cudaMemcpyDeviceToHost)); 
-	
+    std::cout << "Tr[S0] = " << TrS0[0] << std::endl;
         
 	// S0 idempotency error    
         Idemp_Error.push_back(TrS0[0]-TrS02[0]);
           
-        #ifdef VERBOSE
-          
+        // if verbose: 
         std::cout << "S0 Idempotency error = " << Idemp_Error[iter] << std::endl;	
-	  
-        #endif
 	 
         // convergence control on S0
-	if (TrS0[0]-TrS02[0]<=0){
+	if (TrS0[0]-TrS02[0]<=0)
+        {
             printf("XO converged at iteration = %d \n", iter);
             break;
         }
-        else if ( iter>2 && v_sgn[iter-1]!=v_sgn[iter-2]  && Idemp_Error[iter]>= 4.5*Idemp_Error[iter-2]*Idemp_Error[iter-2] ){
+        else if ( iter>2 && v_sgn[iter-1]!=v_sgn[iter-2] \
+                   && Idemp_Error[iter]>= 4.5*Idemp_Error[iter-2]*Idemp_Error[iter-2] )
+        {
             printf("XO converged at iteration = %d \n", iter);
             break;
         };
-
+        
         // Compute Sigma (which is determind by S0)
         computeSigma(Nocc,d_TrS0,d_TrS02,d_Sig);
         CUDA_CHECK_ERR(cudaMemcpy(Sig, d_Sig, sizeof(float), cudaMemcpyDeviceToHost)); 
@@ -247,14 +251,14 @@ void dnnsp2(double* ham,
 	b = 1.0-Sig[0]; 
 	
 	// Compute S0_{n+1} = W_n*S0_n^2 + B_n = W_n*S0_n^2 + (1-W_n)S0_n
-        cublasSgeam(handle,
+        CUBLAS_CHECK_ERR(cublasSgeam(handle,
                                      CUBLAS_OP_N, CUBLAS_OP_N,
                                      N, N, 
                                      &a,
                                      d_S02, N,
                                      &b,
                                      d_S0, N,  
-                                     d_S0, N);
+                                     d_S0, N));
 
         // Update traces
         TrS0[0] = Sig[0]*TrS02[0] + (1-Sig[0])*TrS0[0];
@@ -320,7 +324,7 @@ void dnnsp2(double* ham,
     free(Sig);
     
     // Destroy handle
-    cublasDestroy(handle);
+    CUBLAS_CHECK_ERR(cublasDestroy(handle));
 
 }
 

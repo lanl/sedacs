@@ -14,18 +14,6 @@ import os,time
 
 global gpuLib
 
-import gpulibInterface as gpu
-import ctypes
-gpuLib=True
-arch="nvda"
-pwd=os.getcwd()
-        
-if (arch == "nvda"):
-        print("loading nvidia...")
-        lib = ctypes.CDLL(str(pwd)+"/../../gpu/nvda/libnvda.so")
-if (arch == "amd"):
-        lib = ctypes.CDLL(str(pwd)+"/../../gpu/amd/libamd.so")
-
 
 try:
     import gpulibInterface as gpu
@@ -185,7 +173,8 @@ def get_densityMatrix_accel(H,N,Nocc,lib,verb=False):
   kbt = 0.00001
 
   # get DM from cusolver diag
-  dm = gpu.dmDiag(H,D,N,Nocc,kbt,lib)
+  dm = gpu.dmDNNSP2(H,D,N,Nocc,lib)
+  #dm = gpu.dmDiag(H,D,N,Nocc,kbt,lib)
   
   return D
 
@@ -222,7 +211,7 @@ if(__name__ == '__main__'):
           print("No accelerator library found. Consider installing or change input.") 
           exit()
       D = get_densityMatrix_accel(H,nats,occ,lib)
-      D =D/2.0 #account for double occ
+#      D =D/2.0 #account for double occ
 
   print("Hamiltonian matrix=",H)
   print("Density matrix=",D)
