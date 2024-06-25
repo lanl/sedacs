@@ -1,5 +1,3 @@
-
-
 ## To build
 
 Be sure to load the nvhpc module in your cluster environment, or have the nvhpc compilers installed, specifically nvc++. This compiler is needed to build 
@@ -26,7 +24,7 @@ The makefile will build the 'libnvda.so' shared object file that can be used by 
 
 
 
-##License
+## License
 
 This program is Open-Source under the BSD-3 License.
  
