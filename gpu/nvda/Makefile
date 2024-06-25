@@ -14,8 +14,6 @@ CXX_SO_FLAGS= -fpic
 EXTRA_CXX_FLAGS= --diag_suppress=bad_macro_redef
 $(info $$CXX is [${CXX}])
 # #
-INCLUDE_DIR= -Iinclude
-# #
 #
 # # CUDA math library directory:
 NVCOMP_LIB_DIR= -L${NVHPC_ROOT}/compilers/lib64
@@ -24,6 +22,8 @@ NVCOMP_INC_DIR= -I${NVHPC_ROOT}/compilers/include
 # # CUDA linking libraries:
 NVCOMP_LINK_LIB= -lcudanvhpc
 # #
+
+INCLUDE_DIR= -Iinclude
 #
 # # CUDA math library directory:
 CUDAMATH_LIB_DIR= -L${NVHPC_ROOT}/math_libs/lib64
@@ -63,7 +63,7 @@ SRC_DIR = src
 OBJ_DIR = bin
 #
 # # Include header file diretory:
-INC_DIR = include
+#INCLUDE_DIR = include
 #
 # ##########################################################
 #
@@ -80,9 +80,7 @@ $(shell   mkdir -p $(OBJ_DIRS))
 
 # # Object files:
 
-OBJDIAG    =  $(OBJ_DIR)/diag/diag.o\
-
-#OBJSP2     =  $(OBJ_DIR)/dnnsp2/*.o\
+OBJDIAG     =  $(OBJ_DIR)/diag/diag.o\
 
 #OBJNLIST   =  $(OBJ_DIR)/nlist/*.o\
 
@@ -92,18 +90,15 @@ OBJCHEBY   =  $(OBJ_DIR)/fastcheby/*.o\
 
 #OBJMLSP2  =  $(OBJ_DIR)/mlsp2/*.o\
 
-#OBJSP2=    $(OBJ_DIR)/dnnsp2/dnnsp2.o\
-#	   $(OBJ_DIR)/dnnsp2/tcore_hp_emulator.o\
-#	   $(OBJ_DIR)/dnnsp2/linalg_tools.o\
-
-OBJMAIN    =  $(OBJ_DIR)/lib/*.o
-
-#OBJDIAG=   $(OBJ_DIR)/diag/diag.o\
+#OBJSP2      =    #$(OBJ_DIR)/dnnsp2/linalg_tools.o\
+	         
+OBJSP2      =    $(OBJ_DIR)/dnnsp2/dnnsp2.o\
+                 $(OBJ_DIR)/dnnsp2/tcore_hp_emulator.o\
 
 #OBJNLIST=  $(OBJ_DIR)/nlist/utils.o\
 	   $(OBJ_DIR)/nlist/nlist.o\
 
-#OBJMAIN=   $(OBJ_DIR)/lib/libnvda.o
+OBJMAIN=   $(OBJ_DIR)/lib/libnvda.o
 
 OBJS = $(OBJSP2) $(OBJDIAG) $(OBJNLIST) $(OBJCHEBY) \
 	$(OBJMLSP2) $(OBJMAIN)
@@ -122,12 +117,10 @@ so: $(OBJS)
                 $(CUDA_LINK_LIB) $(CUDAMATH_LIB_DIR) $(CUDAMATH_LINK_LIB) $(NVCOMP_LIB_DIR) $(NVCOMP_LINK_LIB)
 
 $(OBJ_DIR)/diag/%.o: $(SRC_DIR)/diag/%.cu
-	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR)\
-                      $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB)
+	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR) $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB)
 
 $(OBJ_DIR)/dnnsp2/%.o: $(SRC_DIR)/dnnsp2/%.cu
-	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR)\
-                      $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB) 
+	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR) $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB) 
 
 #$(OBJ_DIR)/nlist/%.o: $(SRC_DIR)/nlist/%.cu
 #	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR)\

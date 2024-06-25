@@ -1,6 +1,5 @@
-#include <cusolverDn.h>
 #include <cufft.h>
-//#include <cublas.h>
+#include <cusolverDn.h>
 
 #define CUDA_CHECK_ERR(val) check((val), #val, __FILE__, __LINE__)
 #define CUFFT_CHECK_ERR(ans) { cufft_check((ans), __FILE__, __LINE__); }
