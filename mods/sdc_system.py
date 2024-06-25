@@ -471,9 +471,9 @@ def read_xyz_file(fileName,lib="None",verb=True):
         if(noBox): 
             #If there is no box we create one by taking the coordinate
             #limits given by the positions of the atoms
-            latticeVectors[0,0] = np.max(coords[:,0]) - np.min(coords[:,0])
-            latticeVectors[1,1] = np.max(coords[:,1]) - np.min(coords[:,1])
-            latticeVectors[2,2] = np.max(coords[:,2]) - np.min(coords[:,2])
+            latticeVectors[0,0] = np.max(coords[:,0]) - np.min(coords[:,0]) + 5.0
+            latticeVectors[1,1] = np.max(coords[:,1]) - np.min(coords[:,1]) + 5.0
+            latticeVectors[2,2] = np.max(coords[:,2]) - np.min(coords[:,2]) + 5.0
     
     if(lib == "Ase"): #https://wiki.fysik.dtu.dk/ase/ase/atoms.html
         if(aseLib == False):
@@ -610,7 +610,12 @@ def read_pdb_file(fileName,lib="None",verb=False):
         coords[i,1] = coordsyList[i]
         coords[i,2] = coordszList[i]
     types = np.array(typesList,dtype=int)
-    
+   
+    if(noBox):
+        latticeVectors[0,0] = np.max(coords[:,0]) - np.min(coords[:,0]) + 5.0
+        latticeVectors[1,1] = np.max(coords[:,1]) - np.min(coords[:,1]) + 5.0
+        latticeVectors[2,2] = np.max(coords[:,2]) - np.min(coords[:,2]) + 5.0
+
     return latticeVectors,symbols,types,coords 
 
 def test_read_pdb_file(exit1):
