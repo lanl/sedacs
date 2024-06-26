@@ -1,0 +1,25 @@
+[project]
+name = "sedacs"
+version = "0.1.0"
+description = "Scalable Ecosystem, Driver, and Analyzer for Complex Chemistry Simulations (SEDACS) enablesmassively parallel atomistic simulations that can seamlessly integrate with a diverserange of available and emerging quantum chemistry codes at different levelsof theory."
+authors = [
+    {name = "Christian Francisco Negre", email = "christianfannegre@gmail.com"},
+    {name = "Joshua David Finkelstein", email = "finkeljos@gmail.com"},
+    {name = "Michael E. Wall", email = "mewall@lanl.gov"},
+    {name = "Qi Zhang", email = "singularitti@outlook.com"},
+    {name = "Anders Niklasson", email = "amn@lanl.gov"},
+    {name = "Maksim Kulichenko", email = "maxim@lanl.gov"},
+    {name = "Alejandro Lopez-Bezanilla", email = "alopezb@cadejo.lanl.gov"},
+]
+dependencies = []
+requires-python = ">=3.10"
+readme = "README.md"
+license = {text = "BSD-3-Clause"}
+
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+
+[tool.pdm]
+distribution = true
