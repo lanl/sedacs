@@ -13,6 +13,9 @@ Welcome to SEDACS's documentation!
    ./README.md
    ./LICENSE.txt
    ./INPUT.rst
+   ./PROXY.rst
+   ./LATTE.rst
+   ./PYSEQM.rst
    ./README-test.md
    ./README-docs.md
 
