@@ -14,6 +14,7 @@ doxy:
 
 sphinx:
 	(cp ../README.md ./source-sphinx/)
+	(cp ../LICENSE.txt ./source-sphinx/)
 	(cp ../test/README.md ./source-sphinx/README-test.md)
 	(cp ./README.rst ./source-sphinx/README-docs.rst)
 	(cd ./source-sphinx/; make latex)
