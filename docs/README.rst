@@ -30,7 +30,7 @@ These programs can be installed as follows::
 Build the full documentation
 ------------------------------
  
-This will build all three types of docs (Sphinx, Doxygen, and latex)::
+This will build all types of docs (Sphinx and Doxygen)::
 
   make  
 

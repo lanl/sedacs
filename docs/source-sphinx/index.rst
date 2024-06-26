@@ -11,6 +11,7 @@ Welcome to SEDACS's documentation!
    :caption: Contents:
 
    ./README.md
+   ./LICENSE.txt
    ./INPUT.rst
    ./README-test.md
    ./README-docs.md
