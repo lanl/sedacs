@@ -83,6 +83,7 @@ $(shell   mkdir -p $(OBJ_DIRS))
 OBJDIAG     =  $(OBJ_DIR)/diag/diag.o\
 
 OBJCHEBY    =  $(OBJ_DIR)/fastcheby/fastcheby.o\
+               $(OBJ_DIR)/fastcheby/utils.o\
 
 OBJSP2      =  $(OBJ_DIR)/dnnsp2/dnnsp2.o\
                $(OBJ_DIR)/dnnsp2/tcore_hp_emulator.o\

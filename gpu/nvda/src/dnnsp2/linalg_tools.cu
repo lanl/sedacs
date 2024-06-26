@@ -7,6 +7,46 @@
 #include <cuda_fp16.h>
 #include <cublas_v2.h>
 
+
+void gershgorin(const unsigned N,
+                const double *X, 
+                double *h1,
+                double *hN)
+{
+    float sum, diag_elem, minest, maxest;
+
+    for (size_t i = 0; i < N; ++i)
+    {   
+        sum = 0.0; minest = 0.0; 
+        diag_elem = 0.0; maxest = 0.0;
+        for (size_t j = 0; j < N; ++j)
+        {   
+            if (i != j)
+            {   
+                sum += abs(X[i * N + j]);  // assuming row major, running sum
+            }   
+            else
+            {   
+                diag_elem = X[i * N + i]; 
+            }   
+    
+        }   
+    
+        minest = diag_elem - sum; //sum always non-neg
+        maxest = diag_elem + sum; //sum always non-neg
+
+        if (minest < h1[0])
+        {   
+            h1[0] = minest;
+        }   
+        if (hN[0]< maxest)
+        {   
+            hN[0] = maxest;
+        }   
+    }   
+};
+
+
 /**
     Kernal for computing the trace of a matrix A of size N.
     Code originally from LATTE.

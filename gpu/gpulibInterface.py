@@ -66,14 +66,14 @@ def dmDiag(ham,dm,matSize,nocc,kbt,lib):
     matSize_c = ctypes.c_int(matSize)
     nocc_c = ctypes.c_int(nocc)
 
-    # end timer
+    ## end timer
     toc = time.perf_counter()
     #print(f"Time to convert types = {toc - tic:0.4f} seconds")
 
     ## time call
     tic = time.perf_counter()
    
-    # set C function arg types
+    ## set C function arg types
     lib.dm_diag.argtypes = [ctl.ndpointer(np.float64,flags='aligned, c_contiguous'), \
                             ctl.ndpointer(np.float64,flags='aligned, c_contiguous'), \
                             c_double, c_int, c_int]
@@ -112,7 +112,7 @@ def dmDNNSP2(ham,dm,matSize,nocc,lib):
     matSize_c = ctypes.c_int(matSize)
     nocc_c = ctypes.c_int(nocc)
 
-    # set C function arg types
+    ## set C function arg types
     lib.dm_dnnsp2.argtypes = [ctl.ndpointer(np.float64,flags='aligned, c_contiguous'), \
                               ctl.ndpointer(np.float64,flags='aligned, c_contiguous'), \
                               c_int, c_int]
@@ -141,23 +141,26 @@ def dmDNNSP2(ham,dm,matSize,nocc,lib):
 # @param expOrder Expansion order (largest poly. degree).
 # @return dm Density matrix
 #
-def dmCheby(ham,dm,matSize,N,lib):
-
+def dmCheby(ham,dm,matSize,nocc,kbt,lib):
+    
     ## convert to C data types
-    array_type1 = ctypes.c_double*matSize
-    ham_c = array_type1(*ham)                       
-    dm_c = array_type1(*dm)               
     matSize_c = ctypes.c_int(matSize)
-    expOrder_c = ctypes.c_int(expOrder)
+    nocc_c = ctypes.c_int(nocc)
+    kbt_c = ctypes.c_double(kbt)
 
+    ## set C function arg types
+    lib.dm_pscheby.argtypes = [ctl.ndpointer(np.float64,flags='aligned, c_contiguous'), \
+                               ctl.ndpointer(np.float64,flags='aligned, c_contiguous'), \
+                               c_int, c_int, c_double]
     ## time call
     tic = time.perf_counter()
   
     ## call cheby from .so lib
-    lib.dm_cheby(ham_c,      \
-                 dm_c,       \
-                 matSize_c,  \
-                 expOrder_c)   
+    lib.dm_pscheby(ham,        \
+                   dm,         \
+                   matSize_c,  \
+                   nocc_c,     \
+                   kbt_c)
     # end timer
     toc = time.perf_counter()
     print(f"Time = {toc - tic:0.4f} seconds")

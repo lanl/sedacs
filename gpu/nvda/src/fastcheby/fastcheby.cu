@@ -5,30 +5,36 @@
 #include <iomanip>
 #include <iostream>
 
-//#include <utils.cuh>
+#include <utils.cuh>
 #include <cuda.h>
 #include <cublas_v2.h>
 #include <error_check.cuh>
+
+
+
+
 
 /*
     Main Chebyshev expansion routine that computes density matrix
     using the fast cheby solver in Finkelstein et al. JCP 2023
 */
-void chebyshev(double *ham, double *dm, 
-               int K, int M, 
-               int n,
-               double mu,
-               double kbt) 
+void pscheby(double *ham, double *dm, 
+             int K, int M, 
+             int N,
+             int nocc,
+             double kbt) 
 {
 
-    int ld = n;
+    int ld = N;
     int thds = 512;
     int blks = (int) ceil(float(K * M) / float(thds));
+    cudaError_t stat;
 
-    // Info
+
+    // Print info
     std::cout << "==================================" << "\n"
               << "Computing Chebychev expansion for: " << "\n"
-              << "    System size = " << n << "\n"
+              << "    System size = " << N << "\n"
               << "    Num expansion terms = " << K*M << "\n"
               << "==================================" << "\n "
     	      << std::endl;
@@ -39,11 +45,6 @@ void chebyshev(double *ham, double *dm,
     int device=0;
     cudaSetDevice(device);
 
-    for (int i=0; i<10; i++){
-        std::cout << ham[i] << std::endl;
-    }
-
-
     // initialize cuda streams 
     int num_streams = std::max(K,M);
     cudaStream_t stream[num_streams];
@@ -51,6 +52,8 @@ void chebyshev(double *ham, double *dm,
         CUDA_CHECK_ERR(cudaStreamCreate(&stream[i]));
     };
     
+
+
     // define cublas handle
     cublasHandle_t handle;
     CUBLAS_CHECK_ERR(cublasCreate(&handle));
@@ -59,42 +62,40 @@ void chebyshev(double *ham, double *dm,
     //cudaDeviceProp_t props;
     //cudaGetDeviceProperties(&props, device);
 
-
-/*    // Create start/stop event objects and variable for elapsed time in ms
-    hipEvent_t start, stop;
-    HIP_API_CHECK(hipEventCreate(&start));
-    HIP_API_CHECK(hipEventCreate(&stop));
-    float elapsed_time_ms;
-*/
-
     // Define and allocate Chebyshev polynomials
     // matrices, T_n, on device
     double *d_T[K+1];
     double *d_aux[M+1];
      
-    cudaError_t stat;
     for (int j=0; j <= K; j++){ 
-        CUDA_CHECK_ERR(cudaMalloc(&d_T[j], ld * n * sizeof(double)));
+        CUDA_CHECK_ERR(cudaMalloc(&d_T[j], ld * N * sizeof(double)));
     };
     
     for (int j=0; j <= M; j++){ 
-        CUDA_CHECK_ERR(cudaMalloc(&d_aux[j], ld * n * sizeof(double)));
+        CUDA_CHECK_ERR(cudaMalloc(&d_aux[j], ld * N * sizeof(double)));
     };
 
-    // declare vars
+    // declare device vars
     double *d_I,*d_dm,*d_temp;
-    CUDA_CHECK_ERR(cudaMalloc(&d_I, n * n * sizeof(double)));
-    CUDA_CHECK_ERR(cudaMalloc(&d_dm, n * n * sizeof(double)));
-    CUDA_CHECK_ERR(cudaMalloc(&d_temp, n * n * sizeof(double)));
-
+    CUDA_CHECK_ERR(cudaMalloc(&d_I, N * N * sizeof(double)));
+    CUDA_CHECK_ERR(cudaMalloc(&d_dm, N * N * sizeof(double)));
+    CUDA_CHECK_ERR(cudaMalloc(&d_temp, N * N * sizeof(double)));
 
     // Determine cheby coefficients (code taken from progress)
+
+
+    // Estimate sprectral bounds
+    double h1, hN;
+    gershgorin_cheby(N, ham, &h1, &hN);
+
+    std::cout << "h1 = " << h1 << ", hN = " << hN << std::endl;
+
+
 
     // Cheby params
     //double ef = 0.9997;   
     double emax = 2.0;
     double emin = -101.0;
-    //double kbt = 0.1;  //eV
     int npts = 1e3;
 
 
@@ -105,19 +106,20 @@ void chebyshev(double *ham, double *dm,
     CUDA_CHECK_ERR(cudaMalloc(&d_c, K * M * sizeof(double)));
    
 
-    //ps_coeffs_cheby_gpu(handle, c, d_c, K, M);
-    /*auto t1 = gtod();
-    ps_coeffs_cheby_gpu(handle, 
-                        emax, emin, ef,
+    //auto t1 = gtod();
+    /*construct_ps_coeffs_gpu(handle, 
+                        emax, emin, mu,
                         kbt,
                         npts, 
                         c, 
                         d_c, 
                         K, 
                         M);
-   
+   */
+    construct_ps_coeffs_new(d, c, K, M);
     CUDA_CHECK_ERR(cudaDeviceSynchronize());
-    auto t2 = gtod();*/
+    //auto t2 = gtod();
+
 }
 
  /*

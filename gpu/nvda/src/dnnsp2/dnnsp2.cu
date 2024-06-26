@@ -3,15 +3,17 @@
 #include <stdio.h>
 #include <math.h>
 #include <typeinfo>
-#include <cuda.h>
-#include <cublas_v2.h>
-#include <cuda_fp16.h>
 #include <cmath>
 #include <vector>
 #include <structs.h>
+
+#include <cuda.h>
+#include <cublas_v2.h>
+#include <cuda_fp16.h>
 #include <tcore_hp_emulator.cuh>
 #include <linalg_tools.cuh>
 #include <error_check.cuh>
+
 
 __global__ 
 void DtoF(double* X,
@@ -54,44 +56,6 @@ void dev_buildIdenity(float* X, int N)
     };
 };
 
-
-void gershgorin(const unsigned N,
-                const double *X, 
-                double *h1,
-                double *hN)
-{
-    float sum, diag_elem, minest, maxest;
-
-    for (size_t i = 0; i < N; ++i)
-    {   
-        sum = 0.0; minest = 0.0; 
-        diag_elem = 0.0; maxest = 0.0;
-        for (size_t j = 0; j < N; ++j)
-        {   
-            if (i != j)
-            {   
-                sum += abs(X[i * N + j]);  // assuming row major, running sum
-            }   
-            else
-            {   
-                diag_elem = X[i * N + i]; 
-            }   
-    
-        }   
-    
-        minest = diag_elem - sum; //sum always non-neg
-        maxest = diag_elem + sum; //sum always non-neg
-
-        if (minest < h1[0])
-        {   
-            h1[0] = minest;
-        }   
-        if (hN[0]< maxest)
-        {   
-            hN[0] = maxest;
-        }   
-    }   
-};
 
 
 
@@ -172,9 +136,6 @@ void dnnsp2(double* ham,
     float a = float(-1/(hN-h1)); 
     float b = float(hN/(hN-h1)); 
 
-    std::cout << "h1 = " << h1 <<  ", hN = " << hN << std::endl;
-    std::cout << "a = " << a <<  ", b = " << b << std::endl;
-
     CUBLAS_CHECK_ERR(cublasSgeam(handle,
                                  CUBLAS_OP_N, CUBLAS_OP_N,
                                  N, N,
@@ -188,7 +149,6 @@ void dnnsp2(double* ham,
     // compute and copy initial traces
     GPUSTrace(N,d_S0,d_TrS0);
     CUDA_CHECK_ERR(cudaMemcpy(TrS0, d_TrS0, sizeof(float), cudaMemcpyDeviceToHost));  
-    std::cout << "Tr[S] = " << TrS0[0] << std::endl;
     
     //if (precision==fp32){
     float alphaS = 1.0, betaS = 0.0;
@@ -209,26 +169,23 @@ void dnnsp2(double* ham,
         
         }
         else if (precision==fp16_fp32){
-            std::cout << "Tensor cores mult." << std::endl; 
             tcoreSPGemmSymm(handle,
-                                             N,
-                                             d_S0,
-                                             hbuf1, hbuf2,
-                                             sbuf1, sbuf2,
-                                             d_S02);
-
+                            N,
+                            d_S0,
+                            hbuf1, hbuf2,
+                            sbuf1, sbuf2,
+                            d_S02);
         };
 	
 	// trace of S0^2
         GPUSTrace(N,d_S02,d_TrS02); //only works for N even
         CUDA_CHECK_ERR(cudaMemcpy(TrS02, d_TrS02, sizeof(float), cudaMemcpyDeviceToHost)); 
-    std::cout << "Tr[S0] = " << TrS0[0] << std::endl;
         
 	// S0 idempotency error    
         Idemp_Error.push_back(TrS0[0]-TrS02[0]);
           
-        // if verbose: 
-        std::cout << "S0 Idempotency error = " << Idemp_Error[iter] << std::endl;	
+        //if verbose: 
+        //std::cout << "S0 Idempotency error = " << Idemp_Error[iter] << std::endl;	
 	 
         // convergence control on S0
 	if (TrS0[0]-TrS02[0]<=0)

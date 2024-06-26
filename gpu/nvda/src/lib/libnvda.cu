@@ -3,9 +3,10 @@
 #include <structs.h>
 #include <diag.cuh>
 #include <dnnsp2.cuh>
+#include <pscheby.cuh>
 
 
-void dm_dnnsp2(double* ham, double* dm, int n, int nocc){
+void dm_dnnsp2(double* ham, double* dm, int norb, int nocc){
 
     printf("DNN SP2\n");
    
@@ -14,20 +15,23 @@ void dm_dnnsp2(double* ham, double* dm, int n, int nocc){
     refine_t r = yes;
 
 
-    dnnsp2(ham, dm, n, nocc, u, r);    
+    dnnsp2(ham, dm, norb, nocc, u, r);    
 
 }
 
 
-void dm_cheby(double* ham, double* dm, double kbt, int norb, int nocc){
+void dm_pscheby(double* ham, double* dm, int norb, int nocc, double kbt){
 
 
     double bndfil = 0.666666;
 
-    //precision_t u = fp64;    
- 
-    //refine_t r = yes;
+    precision_t u = fp64;    
+    
+    refine_t r = yes;
 
+    int K = 32; int M = 32;
+
+    pscheby(ham, dm, K, M, norb, nocc, kbt);    
 
 
 }

@@ -58,13 +58,13 @@ void buildTest(
     };
 };
 
-double gtod(void)
+/*double gtod(void)
 {
     struct timeval tv;
     gettimeofday(&tv, (struct timezone*)nullptr);
     return 1.e6 * tv.tv_sec + tv.tv_usec;
 }
-
+*/
 __global__
 void buildId_dev(double* Iden, int n)
 {
@@ -721,9 +721,50 @@ void construct_ps_coeffs_new(double *ps_c, double *c, const int K, const int M){
     // copy c to ps_c
     for (int i=0; i < K*M; i++){
 	ps_c[i] = c[i]; 
+        std::cout << ps_c[i] << std::endl;
     };
     
     // free memory
     free(U);
 };
+
+
+void gershgorin_cheby(const unsigned N,
+                const double *X, 
+                double *h1,
+                double *hN)
+{
+    float sum, diag_elem, minest, maxest;
+
+    for (size_t i = 0; i < N; ++i)
+    {   
+        sum = 0.0; minest = 0.0; 
+        diag_elem = 0.0; maxest = 0.0;
+        for (size_t j = 0; j < N; ++j)
+        {   
+            if (i != j)
+            {   
+                sum += abs(X[i * N + j]);  // assuming row major, running sum
+            }   
+            else
+            {   
+                diag_elem = X[i * N + i]; 
+            }   
+    
+        }   
+    
+        minest = diag_elem - sum; //sum always non-neg
+        maxest = diag_elem + sum; //sum always non-neg
+
+        if (minest < h1[0])
+        {   
+            h1[0] = minest;
+        }   
+        if (hN[0]< maxest)
+        {   
+            hN[0] = maxest;
+        }   
+    }   
+};
+
 

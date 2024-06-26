@@ -14,6 +14,17 @@ import os,time
 
 global gpuLib
 
+import gpulibInterface as gpu
+import ctypes
+gpuLib=True
+arch="nvda"
+pwd=os.getcwd()
+    
+if (arch == "nvda"):
+    print("loading nvidia...")
+    lib = ctypes.CDLL(str(pwd)+"/../../gpu/nvda/libnvda.so")
+if (arch == "amd"):
+    lib = ctypes.CDLL(str(pwd)+"/../../gpu/amd/libamd.so")
 
 try:
     import gpulibInterface as gpu
@@ -170,15 +181,14 @@ def get_densityMatrix_accel(H,N,Nocc,lib,verb=False):
 
   # init DM
   D = np.zeros((N,N))
-  kbt = 0.00001
+  kbt = 0.0
 
   # get DM from cusolver diag
-  dm = gpu.dmDNNSP2(H,D,N,Nocc,lib)
+  #dm = gpu.dmDNNSP2(H,D,N,Nocc,lib)
   #dm = gpu.dmDiag(H,D,N,Nocc,kbt,lib)
+  dm = gpu.dmCheby(H,D,N,Nocc,kbt,lib)
   
   return D
-
-
 
 ## Main program for proxy a
 # \brief It will read the number of atoms, contruct 
@@ -189,7 +199,7 @@ if(__name__ == '__main__'):
   n = len(sys.argv)
   if(n == 1):
       print("Give the total number of atoms. Example:\n")
-      print("proxy_a 10\n")
+      print("proxy_a 100\n")
       exit(0)
   else:
       nats = int(sys.argv[1])
@@ -211,12 +221,8 @@ if(__name__ == '__main__'):
           print("No accelerator library found. Consider installing or change input.") 
           exit()
       D = get_densityMatrix_accel(H,nats,occ,lib)
-#      D =D/2.0 #account for double occ
 
   print("Hamiltonian matrix=",H)
-  print("Density matrix=",D)
-      
-  D = get_densityMatrix(H,occ)
   print("Density matrix=",D)
   
    
