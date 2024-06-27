@@ -12,7 +12,12 @@ authors = [
     {name = "Mehmet Cagri Kaymak", email = "mkaymak@lanl.gov"},
     {name = "Alejandro Lopez-Bezanilla", email = "alopezb@cadejo.lanl.gov"},
 ]
-dependencies = []
+dependencies = [
+    "torch>=2.3.1",
+    "mpi4py>=3.1.6",
+    "scipy>=1.14.0",
+    "mdtraj>=1.10.0",
+]
 requires-python = ">=3.10"
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
