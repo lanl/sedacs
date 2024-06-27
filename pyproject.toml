@@ -9,6 +9,7 @@ authors = [
     {name = "Qi Zhang", email = "singularitti@outlook.com"},
     {name = "Anders Niklasson", email = "amn@lanl.gov"},
     {name = "Maksim Kulichenko", email = "maxim@lanl.gov"},
+    {name = "Mehmet Cagri Kaymak", email = "mkaymak@lanl.gov"},
     {name = "Alejandro Lopez-Bezanilla", email = "alopezb@cadejo.lanl.gov"},
 ]
 dependencies = []
