@@ -52,3 +52,10 @@ test = [
     "pytest>=8.2.2",
     "pytest-cov>=5.0.0",
 ]
+
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src", "data"]
