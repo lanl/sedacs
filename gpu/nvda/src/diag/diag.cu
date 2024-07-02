@@ -203,7 +203,6 @@ void get_fermilevel_bisection(double* h_eval,
     // set these to mu_a and mu_b
     mu_a = h_eval[0];
     mu_b = h_eval[norb-1];
-    std::cout << mu_a << ", " << mu_b << std::endl;
 
     // wrap occ into a thrust device vector for reductions
     thrust::device_ptr<double> thrust_occ;
@@ -224,7 +223,7 @@ void get_fermilevel_bisection(double* h_eval,
     
         // calculate error in sum of occupations
         err = f - nel;
-        std::cout << err<< std::endl;
+        //std::cout << err<< std::endl;
         
         // halve the interval [mu_a,mu_b]
         if ( err < 0. ){
@@ -339,6 +338,8 @@ void diagonalize(double* ham,
 
     // compute fermi level, mu
     get_fermilevel_bisection(eval, d_eval, d_occ, norb, kbt, bndfil, mu, nblks2, nthds2);
+
+    std::cout << "mu = " << mu[0] << std::endl;
 
     // build density matrix
     compute_dm_from_eig(d_occ, d_evec, d_dm, norb);

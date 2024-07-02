@@ -11,13 +11,11 @@
 #include <error_check.cuh>
 
 
-
-
-
 /*
     Main Chebyshev expansion routine that computes density matrix
     using the fast cheby solver in Finkelstein et al. JCP 2023
 */
+
 void pscheby(double *ham, double *dm, 
              int K, int M, 
              int N,
@@ -28,7 +26,6 @@ void pscheby(double *ham, double *dm,
     int ld = N;
     int thds = 512;
     int blks = (int) ceil(float(K * M) / float(thds));
-    cudaError_t stat;
 
 
     // Print info
@@ -52,8 +49,6 @@ void pscheby(double *ham, double *dm,
         CUDA_CHECK_ERR(cudaStreamCreate(&stream[i]));
     };
     
-
-
     // define cublas handle
     cublasHandle_t handle;
     CUBLAS_CHECK_ERR(cublasCreate(&handle));
@@ -81,77 +76,64 @@ void pscheby(double *ham, double *dm,
     CUDA_CHECK_ERR(cudaMalloc(&d_dm, N * N * sizeof(double)));
     CUDA_CHECK_ERR(cudaMalloc(&d_temp, N * N * sizeof(double)));
 
-    // Determine cheby coefficients (code taken from progress)
-
-
+    
     // Estimate sprectral bounds
     double h1, hN;
     gershgorin_cheby(N, ham, &h1, &hN);
-
     std::cout << "h1 = " << h1 << ", hN = " << hN << std::endl;
 
-
-
     // Cheby params
-    //double ef = 0.9997;   
-    double emax = 2.0;
-    double emin = -101.0;
-    int npts = 1e3;
+    int npts = 1e4;
 
-
-    // Chebyshev coefficients    
+    // Compute Chebyshev coefficients    
     double *c, *d, *d_c;
     CUDA_CHECK_ERR(cudaMallocHost(&c, K * M * sizeof(double)));
     CUDA_CHECK_ERR(cudaMallocHost(&d, K * M * sizeof(double)));
     CUDA_CHECK_ERR(cudaMalloc(&d_c, K * M * sizeof(double)));
-   
+  
+    cheby_coeffs_dev(hN, h1, 0.642348, kbt, 
+                     npts,
+                     K, M, N,
+                     d_c);
+    
+    //CUDA_CHECK_ERR(cudaMemcpy(c,d_c, N * sizeof(double),cudaMemcpyDeviceToHost));
 
-    //auto t1 = gtod();
-    /*construct_ps_coeffs_gpu(handle, 
-                        emax, emin, mu,
-                        kbt,
-                        npts, 
-                        c, 
+    ps_cheby_coeffs_dev(d, 
                         d_c, 
-                        K, 
-                        M);
-   */
-    construct_ps_coeffs_new(d, c, K, M);
-    CUDA_CHECK_ERR(cudaDeviceSynchronize());
-    //auto t2 = gtod();
+                        K, M,
+                        handle);
 
-}
 
- /*
     // initialize T0 = Id
-    hipLaunchKernelGGL(buildId_dev,blks,thds,0,0,d_T[0],n);
+    buildId_dev(d_T[0],N);
+
     // initialize T1 = H
-    HIP_API_CHECK(hipMemcpy(d_T[1],ham, n*n*sizeof(double),hipMemcpyHostToDevice));
+    CUDA_CHECK_ERR(cudaMemcpy(d_T[1], ham, N * N * sizeof(double),cudaMemcpyHostToDevice));
 
 
     // Transform Hamiltonian
     // so that spectrum inside (-1,1)
     // (H - avg_eps*I)/delta_eps = H^~
-    double delta_eps = emax-emin;
-    double avg_eps = 0.5*(emax + emin);
+    double delta_eps = hN-h1;
+    double avg_eps = 0.5*(hN + h1);
     double alpha = -2*avg_eps/delta_eps;
     double beta = 2.0/delta_eps;
 
-    // set stream before each rocblas call, cannot pass
+    // set stream before each cublas call, cannot pass
     // into call like with magma, active stream resides
     // within the handle
-    rocbStat = rocblas_set_stream(handle, stream[0]);   
+    CUBLAS_CHECK_ERR(cublasSetStream(handle, stream[0]));   
                                                   
-    rocbStat = rocblas_dgeam(handle, 
-                             rocblas_operation_none, rocblas_operation_none, 
-                             n, n, 
-                             &alpha, d_T[0], ld, 
-                             &beta, d_T[1], ld, 
-                             d_T[1], ld);
-    //
+    CUBLAS_CHECK_ERR(cublasDgeam(handle, 
+                                 CUBLAS_OP_N, CUBLAS_OP_N, 
+                                 N, N,
+                                 &alpha, d_T[0], ld,
+                                 &beta, d_T[1], ld,
+                                 d_T[1], ld));
 
-    long int usec_ps_coeffs = t2 - t1;
-    std::cout << " Time for PS coeffs: time/s = " << (double)usec_ps_coeffs/1e6 << std::endl;
+
+    //long int usec_ps_coeffs = t2 - t1;
+    //std::cout << " Time for PS coeffs: time/s = " << (double)usec_ps_coeffs/1e6 << std::endl;
 
     
     /////////////////////////
@@ -173,10 +155,9 @@ void pscheby(double *ham, double *dm,
     int stages = ceil( log( (double) K ) / log(2.0) );
     std::cout << "number of stages needed = " << stages << std::endl;
 
-    rocblas_operation no_trans = rocblas_operation_none;
     
     // time mults
-    t1 = gtod();
+    //t1 = gtod();
 
     // Loop over stages
     for (int i = 1; i <= stages ; i++){
@@ -186,32 +167,31 @@ void pscheby(double *ham, double *dm,
 
  
             alpha = 1.0; beta = 0.0;
-	    rocbStat = rocblas_dgemm(handle,
-                                     no_trans, no_trans,
-                                     n,n,n,
-                                     &alpha,
-                                     d_T[1], ld,
-                                     d_T[1], ld,
-                                     &beta,
-                                     d_T[2], ld);
+            // replace with tensor core
+	    CUBLAS_CHECK_ERR(cublasDgemm(handle,
+                                         CUBLAS_OP_N, CUBLAS_OP_N,
+                                         N, N, N,
+                                         &alpha,
+                                         d_T[1], ld,
+                                         d_T[1], ld,
+                                         &beta,
+                                         d_T[2], ld));
 
             alpha = -1.0; beta = 2.0;
-	    rocbStat = rocblas_dgeam(handle,
-                                     no_trans, no_trans,
-                                     n, n,
-	   	     	             &alpha, 
-    		    	             d_T[0], ld, 
-			             &beta, 
-			             d_T[2], ld, 
-			             d_T[2], ld); 
+	    CUBLAS_CHECK_ERR(cublasDgeam(handle,
+                                         CUBLAS_OP_N, CUBLAS_OP_N,
+                                         N, N,
+	   	     	                 &alpha, 
+    		    	                 d_T[0], ld, 
+			                 &beta, 
+			                 d_T[2], ld, 
+			                 d_T[2], ld)); 
 
 
             // cnt_ops+=1;
-            #ifdef DEBUG_ON
-	    printf("Compute 2*(T_%d times T_%d)-T_%d = T_%d on queue %d \n", 1, 1, 0, 2, 0);
-	    printf("queue sync %d \n", 0);	    
-	    printf("================================== \n");
-	    #endif
+	    //printf("Compute 2*(T_%d times T_%d)-T_%d = T_%d on queue %d \n", 1, 1, 0, 2, 0);
+	    //printf("queue sync %d \n", 0);	    
+	    //printf("================================== \n");
 
 	}
         else{ 
@@ -222,33 +202,33 @@ void pscheby(double *ham, double *dm,
 	    for (j = k+1; j <= pow(2,i-1); j++){
                 if (j+k < K+1){
 
-                    rocbStat = rocblas_set_stream(handle, stream[j-k-1]);   
+                    CUBLAS_CHECK_ERR(cublasSetStream(handle, stream[j-k-1]));   
 	    
                     alpha = 1.0; beta = 0.0;
-      	            rocbStat = rocblas_dgemm(handle,
-                                             no_trans, no_trans,
-                                             n, n, n,
-                                             &alpha,
-                                             d_T[j], ld,
-                                             d_T[k], ld,
-                                             &beta,
-                                             d_T[j+k], ld);
+      	            CUBLAS_CHECK_ERR(cublasDgemm(handle,
+                                                 CUBLAS_OP_N, CUBLAS_OP_N,
+                                                 N, N, N,
+                                                 &alpha,
+                                                 d_T[j], ld,
+                                                 d_T[k], ld,
+                                                 &beta,
+                                                 d_T[j+k], ld));
 
                     alpha = -1.0; beta = 2.0;
-	            rocbStat = rocblas_dgeam(handle,
-                                             no_trans, no_trans,
-	    	                             n, n,
-		                             &alpha, 
-		                             d_T[abs(j-k)], ld, 
-		                             &beta, 
-				             d_T[j+k], ld,
-				             d_T[j+k], ld);
+	            CUBLAS_CHECK_ERR(cublasDgeam(handle,
+                                                 CUBLAS_OP_N, CUBLAS_OP_N,
+	    	                                 N, N,
+		                                 &alpha, 
+		                                 d_T[abs(j-k)], ld, 
+		                                 &beta, 
+				                 d_T[j+k], ld,
+				                 d_T[j+k], ld));
 	
 		    cnt_ops+=1;		
 
-       		    #ifdef DEBUG_ON
-		    printf("Compute 2*(T_%d times T_%d)-T_%d = T_%d on queue %d \n", j, k, abs(j-k), j+k, j-k-1);
-		    #endif
+       		    //#ifdef DEBUG_ON
+		    //printf("Compute 2*(T_%d times T_%d)-T_%d = T_%d on queue %d \n", j, k, abs(j-k), j+k, j-k-1);
+		    //#endif
 		};
 	           	
 	    };	   	
@@ -256,33 +236,31 @@ void pscheby(double *ham, double *dm,
 	    for (j = k+1; j <= pow(2,i-1); j++){
                 if (j+kk < K+1){
 		
-                    rocbStat = rocblas_set_stream(handle, stream[j-1]);   
+                    CUBLAS_CHECK_ERR(cublasSetStream(handle, stream[j-1]));   
                     
  	            alpha = 1.0; beta = 0.0;
-      	            rocbStat = rocblas_dgemm(handle,
-                                             no_trans, no_trans,
-                                             n, n, n,
-                                             &alpha,
-                                             d_T[j], ld,
-                                             d_T[kk], ld,
-                                             &beta,
-                                             d_T[j+kk], ld);
+      	            CUBLAS_CHECK_ERR(cublasDgemm(handle,
+                                                 CUBLAS_OP_N, CUBLAS_OP_N,
+                                                 N, N, N,
+                                                 &alpha,
+                                                 d_T[j], ld,
+                                                 d_T[kk], ld,
+                                                 &beta,
+                                                 d_T[j+kk], ld));
 
                     alpha = -1.0; beta = 2.0;
-	            rocbStat = rocblas_dgeam(handle,
-                                             no_trans, no_trans,
-	    	                             n, n,
-		                             &alpha, 
-		                             d_T[abs(j-kk)], ld, 
-		                             &beta, 
-				             d_T[j+kk], ld,
-				             d_T[j+kk], ld);
+	            CUBLAS_CHECK_ERR(cublasDgeam(handle,
+                                                 CUBLAS_OP_N, CUBLAS_OP_N,
+	    	                                 N, N,
+		                                 &alpha, 
+		                                 d_T[abs(j-kk)], ld, 
+		                                 &beta, 
+				                 d_T[j+kk], ld,
+				                 d_T[j+kk], ld));
 	
-		    cnt_ops+=1;		
+		    cnt_ops+=1;
 
-		    #ifdef DEBUG_ON		        	
-		    printf("Compute 2*(T_%d times T_%d)-T_%d = T_%d on queue %d \n", j, kk, abs(j-kk), j+kk, j-1);
-		    #endif
+		    //printf("Compute 2*(T_%d times T_%d)-T_%d = T_%d on queue %d \n", j, kk, abs(j-kk), j+kk, j-1);
 		};
 	    };	
 		
@@ -290,105 +268,107 @@ void pscheby(double *ham, double *dm,
 	    // sync streams for each stage
 	    for (int i_s = 0; i_s < pow(2,i-1); i_s++){
             
-	        HIP_API_CHECK(hipStreamSynchronize(stream[i_s]));
-                #ifdef DEBUG_ON
-                printf("queue sync %d \n", i_s);	    
-	        #endif
+	        CUDA_CHECK_ERR(cudaStreamSynchronize(stream[i_s]));
+
+                //printf("queue sync %d \n", i_s);	    
 	    };
        		
-	    #ifdef DEBUG_ON
-	    printf("================================== \n");
-	    #endif
+	    //printf("================================== \n");
 
         };
 
-    };   
-    t2 = gtod();
-    usec_mult = t2 - t1;
-    std::cout << " Time for mults: time/s = " << (double)usec_mult/1e6 << std::endl;
+    }; 
+
+    //t2 = gtod();
+    //usec_mult = t2 - t1;
+    //std::cout << " Time for mults: time/s = " << (double)usec_mult/1e6 << std::endl;
+
 
     ////////////////////////
     /// COMPUTE THE SUMS ///
     ////////////////////////
 
     // start timer
-    t1 = gtod();
+    //t1 = gtod();
 
-    for (int k=0; k < K; k++){    
-        for (int j=0; j < M; j++){
+    for (int k=0; k < K; k++)
+    {    
+        for (int j=0; j < M; j++)
+        {
 
-	    if(k==(K-1)){
+	    if(k==(K-1))
+            {
                     
-                rocbStat = rocblas_set_stream(handle, stream[j]);   
+                CUBLAS_CHECK_ERR(cublasSetStream(handle, stream[j]));   
 	         
-                alpha = c[(K*M-1)-(j*K + k)];
+                alpha = d[(K*M-1)-(j*K + k)];
                 beta = 1.0;
-                rocbStat = rocblas_dgeam(handle,
-                                         no_trans, no_trans,
-		                         n, n,
-					 &alpha, 
-					 d_T[0], ld, 
-					 &beta, 
-					 d_aux[j], ld, 
-					 d_aux[j], ld); 
-       		#ifdef DEBUG_ON
-		std::cout << c[(K*M-1)-(j*K + k)] << " * I "  
+
+                CUBLAS_CHECK_ERR(cublasDgeam(handle,
+                                             CUBLAS_OP_N, CUBLAS_OP_N,
+		                             N, N,
+					     &alpha, 
+					     d_T[0], ld, 
+					     &beta, 
+					     d_aux[j], ld, 
+					     d_aux[j], ld)); 
+		
+            /*    std::cout << c[(K*M-1)-(j*K + k)] << " * I "  
 			  << " + 1 * dev_daux[" << j << "]" 
 			  << " = dev_daux[" << j << "]" 
 			  << " on queue " << j << ". " 
 			  << std::endl;
- 		#endif
-
-		}
-                else{	
+            */
+	    }
+            else
+            {	
 		    
-                    if (k==0){
+                if (k==0)
+                {
                     
-                        rocbStat = rocblas_set_stream(handle, stream[j]);   
+                    CUBLAS_CHECK_ERR(cublasSetStream(handle, stream[j]));   
 
-                        alpha = c[(K*M-1)-(j*K + k)];
-                        beta = 0.0;
-                        rocbStat = rocblas_dgeam(handle,
-                                                 no_trans, no_trans,
-                                                 n, n,
+                    alpha = c[(K*M-1)-(j*K + k)];
+                    beta = 0.0;
+                    CUBLAS_CHECK_ERR(cublasDgeam(handle,
+                                                 CUBLAS_OP_N, CUBLAS_OP_N,
+                                                 N, N,
 					         &alpha,
 					         d_T[(K-1)-k], ld, 
 					         &beta, 
                                                  d_aux[j], ld, 
-                                                 d_aux[j], ld); 
-                        #ifdef DEBUG_ON
+                                                 d_aux[j], ld)); 
 	 		
-			std::cout << c[(K*M-1)-(j*K + k)]  
-				  << " * dev_T" << (K-1)-k
-			          << " + 0 * dev_aux[" << j << "]" 
-				  << " = dev_aux[" << j << "]" 
-				  << " on queue " << j << ". " 
-				  << std::endl;
-		        #endif
+		/*    std::cout << c[(K*M-1)-(j*K + k)]  
+			      << " * dev_T" << (K-1)-k
+			      << " + 0 * dev_aux[" << j << "]" 
+			      << " = dev_aux[" << j << "]" 
+			      << " on queue " << j << ". " 
+			      << std::endl;
+                */
 		}
-                else{
-                        rocbStat = rocblas_set_stream(handle, stream[j]);   
+                else
+                {
+                    CUBLAS_CHECK_ERR(cublasSetStream(handle, stream[j]));   
                         
-                        alpha = c[(K*M-1)-(j*K + k)];
-                        beta = 1.0;
-                        rocbStat = rocblas_dgeam(handle,
-                                                 no_trans, no_trans,
-                                                 n, n,
+                    alpha = d[(K*M-1)-(j*K + k)];
+                    beta = 1.0;
+                    CUBLAS_CHECK_ERR(cublasDgeam(handle,
+                                                 CUBLAS_OP_N, CUBLAS_OP_N,
+                                                 N, N,
 					         &alpha, 
 					         d_T[(K-1)-k], ld, 
 					         &beta, 
                                                  d_aux[j], ld, 
-                                                 d_aux[j], ld); 
-                        #ifdef DEBUG_ON
-	 		
-		        std::cout << c[(K*M-1)-(j*K + k)]  
-			          << " * d_T" << (K-1)-k
-			          << " + 1 * d_aux[" << j << "]" 
-			          << " = d_aux[" << j << "]" 
-			          << " on queue " << j << ". " 
-		                  << std::endl;
-			#endif
+                                                 d_aux[j], ld)); 
 
+		/*    std::cout << c[(K*M-1)-(j*K + k)]  
+			      << " * d_T" << (K-1)-k
+			      << " + 1 * d_aux[" << j << "]" 
+			      << " = d_aux[" << j << "]" 
+			      << " on queue " << j << ". " 
+		              << std::endl;
+                */
 		};
 
             };
@@ -396,50 +376,48 @@ void pscheby(double *ham, double *dm,
 	};
 
     };
-   
+
     for (int i_s=0; i_s < M; i_s++){
 	    
-         HIP_API_CHECK(hipStreamSynchronize(stream[i_s]));
+         CUDA_CHECK_ERR(cudaStreamSynchronize(stream[i_s]));
 
-	 #ifdef DEBUG_ON
-	 std::cout << "hip_stream_sync(" << i_s << ")" << std::endl;
-         #endif
+	 //std::cout << "cudaStreamSync(" << i_s << ")" << std::endl;
     };
 
     // final serial mults and sums on stream 0                     
-    rocbStat = rocblas_set_stream(handle, stream[0]);   
+    CUBLAS_CHECK_ERR(cublasSetStream(handle, stream[0]));   
  
     for (int j=0; j < M-1; j++){
     
         alpha=1.0; beta=1.0;
-        rocbStat = rocblas_dgemm(handle,
-                                 no_trans, no_trans,
-                                 n, n, n,
-                                 &alpha,
-                                 d_T[K], ld,
-                                 d_aux[j], ld,
-                                 &beta,
-                                 d_aux[j+1], ld);
+        CUBLAS_CHECK_ERR(cublasDgemm(handle,
+                                     CUBLAS_OP_N, CUBLAS_OP_N,
+                                     N, N, N,
+                                     &alpha,
+                                     d_T[K], ld,
+                                     d_aux[j], ld,
+                                     &beta,
+                                     d_aux[j+1], ld));
 
     		
-        #ifdef DEBUG_ON
-	    std::cout << "d_T_" << K << " * d_aux[" << j << "] + 1 * d_aux[" << j + 1 << "]" 
-	     	      << " = d_aux[" << j + 1 << "]"
-	              << " on queue " << 0 << ". " << std::endl;
-	#endif
+        //#ifdef DEBUG_ON
+	//    std::cout << "d_T_" << K << " * d_aux[" << j << "] + 1 * d_aux[" << j + 1 << "]" 
+	//     	      << " = d_aux[" << j + 1 << "]"
+	//              << " on queue " << 0 << ". " << std::endl;
+	//#endif
     };
-
+    
     // sync stream 0
-    HIP_API_CHECK(hipStreamSynchronize(stream[0]));
+    CUDA_CHECK_ERR(cudaStreamSynchronize(stream[0]));
 
-    t2 = gtod();
-    usec_sum = t2 - t1;
-    std::cout << " Time for sums: time/s = " << (double)usec_sum/1e6 << std::endl;
+    //t2 = gtod();
+    //usec_sum = t2 - t1;
+    //std::cout << " Time for sums: time/s = " << (double)usec_sum/1e6 << std::endl;
 
 
     // copy DM back from device
-    //HIP_API_CHECK(hipMemcpy(dm,d_aux[M-1], n*n*sizeof(double),hipMemcpyDeviceToHost));
-*/
+    CUDA_CHECK_ERR(cudaMemcpy(dm,d_aux[M-1], N * N * sizeof(double),cudaMemcpyDeviceToHost));
+};
 
     /*
 

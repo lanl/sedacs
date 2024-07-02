@@ -7,6 +7,10 @@
 #include <boost/random/linear_congruential.hpp>
 #include <boost/random/uniform_real.hpp>
 #include <boost/random/variate_generator.hpp>
+//#include <lapack.h>
+
+#include <error_check.cuh>
+
 
 void buildTest_eval(
     double* H, const int n, double* eval)
@@ -65,8 +69,14 @@ void buildTest(
     return 1.e6 * tv.tv_sec + tv.tv_usec;
 }
 */
+
+
+/*
+    Kernel to build identity matrix on device 
+*/
+
 __global__
-void buildId_dev(double* Iden, int n)
+void buildId_dev_kernel(double* Iden, int n)
 {
     int i = threadIdx.x + blockIdx.x*blockDim.x;
     
@@ -79,7 +89,91 @@ void buildId_dev(double* Iden, int n)
         };
     };
 };
+/*
+    Kernel launcher to build identity matrix on device 
+*/
 
+void buildId_dev(double* Iden, 
+                 const int n) 
+{
+    const int thds = 512;
+    const int blks = (int) ceil(float(n) / float(thds));
+     
+
+    buildId_dev_kernel<<<blks,thds>>>(Iden, n);
+    
+    CUDA_CHECK_ERR(cudaDeviceSynchronize());
+
+};
+
+
+
+/*__global__ 
+void cheby_coeffs_GPU(const double emax, const double emin, 
+                      const double ef, 
+                      const double kbt, 
+                      const int npts, 
+                      const int K, const int M, 
+                      double *c_)
+{
+
+    const unsigned int i = threadIdx.x + blockIdx.x * blockDim.x;
+
+    __shared__ double berga[512];
+
+    if (i < K * M){
+        int ix = 0;
+        double xj,x,Ti,fermi,Kr,mid_xj;
+        double sum = 0.;
+        double s;
+        double dx = M_PI/(npts + 1);
+
+        if (i == 0){
+            Kr = double(npts+1) * 3.;
+        }else{
+            Kr = 0.5 * double(npts+1) * 3.;
+        };
+
+        while (ix < npts){
+
+            // simpsons rule
+            if (ix == 0){
+                s = 1.0 ;
+            }
+            else if (ix%2 == 0 and ix < npts-1){
+                s = 2.0;
+            }
+            else if (ix%2 == 1 and ix < npts-1 ){
+                s = 4.0;
+            }
+            else if (ix == npts-1){
+                s = 1.0;
+            } 
+            // <Ti|f> = \int_{-pi/2}^{pi/2 Ti(t)*f(t)dt
+            // <Ti|f> = \int_{-1}^1 Ti(x)*f(x)/(1-x^2) dx
+            xj = cos((ix+0.5)*dx);
+            
+            x = (emax-emin)*(xj + 1.0)/2.0 + emin;
+    
+            Ti = cos(i * acos(xj));
+            fermi = 1.0/(1.0+exp((x-ef)/(kbt)));
+   
+            sum += Ti * fermi * s;
+            ix += 1; 
+        };
+
+
+        berga[threadIdx.x] = sum / Kr;
+
+        __syncthreads();
+        c_[i] = berga[threadIdx.x];
+
+
+
+    };
+
+};
+*/
 
 void buildIdentity(
     double* Iden, const int n)
@@ -219,17 +313,21 @@ void cheby_coeffs(double emax, double emin, double ef, double kbt, int npts, int
     printf("Cheby coeffs complete...\n");
 };
 
+
+/*
+    Kernel for computing Chebyshev expansion coefficients.
+*/
+
 __global__ 
-void cheby_coeffs_GPU(const double emax, const double emin, 
-	              const double ef, 
-	              const double kbt, 
-	              const int npts, 
-	              const int K, const int M, 
-	              double *c_)
+void cheby_coeffs_dev_kernel(const double emax, const double emin, 
+	                     const double ef, 
+	                     const double kbt, 
+	                     const int npts, 
+	                     const int K, const int M, 
+	                     double *c_)
 {
 
     const unsigned int i = threadIdx.x + blockIdx.x * blockDim.x;
-    //const unsigned int ix = threadIdx.x + blockIdx.x * blockDim.x;
 
     __shared__ double berga[1024];
 
@@ -286,14 +384,34 @@ void cheby_coeffs_GPU(const double emax, const double emin,
 
 };
 
+/*
+    Kernel launcher for computing Chebyshev expansion coefficients.
+*/
+void cheby_coeffs_dev(const double emax, const double emin, 
+	              const double ef, 
+	              const double kbt, 
+	              const int npts, 
+	              const int K, const int M, const int N, 
+	              double *_c)
+{
+
+    const int thds = 512;
+    const int blks = (int) ceil(float(N) / float(thds));
+     
+
+    cheby_coeffs_dev_kernel<<<blks,thds>>>(emax, emin, 
+	                                   ef, 
+	                                   kbt, 
+	                                   npts, 
+	                                   K, M, 
+	                                   _c);
+
+    CUDA_CHECK_ERR(cudaDeviceSynchronize());
+
+    printf("Cheby coeffs complete...\n");
 
 
-
-
-
-
-
-
+}
 
 
 void cheby_coeffs_wJackson(double emax, double emin, double ef, double kbt, int npts, int K, int M, double *c){
@@ -585,7 +703,7 @@ void ps_coeffs_cheby_gpu(rocblas_handle handle,
 
 
 
-void construct_ps_coeffs_new(double *ps_c, double *c, const int K, const int M){
+void ps_cheby_coeffs_dev(double *ps_c, double *c, const int K, const int M, cublasHandle_t handle){
 
     //input K, M: paterson-stockmeyer size parameters
     //input c: standard chebyshev expansion coeffs
@@ -702,10 +820,8 @@ void construct_ps_coeffs_new(double *ps_c, double *c, const int K, const int M){
 
 
     // Solve upper-triangular linear problem using back-substitution
-    double *U;
+    double *U, *d_U;
     U = (double*) malloc( K * M * K * M * sizeof(double) );
-
-   // double berga=1.0;
 
     for (int i=0; i < K*M; i++){
         for (int j=0; j < K*M; j++){
@@ -716,11 +832,25 @@ void construct_ps_coeffs_new(double *ps_c, double *c, const int K, const int M){
     // Solve c=U*ps_c
     // Call lapack, upper-triangular solve in fp64
     int N = K*M, err, nrhs=1; 
+    double one = 1.0;
 
+    CUDA_CHECK_ERR(cudaMalloc(&d_U, N * N * sizeof(double)));
+    CUDA_CHECK_ERR(cudaMemcpy(d_U, U, N * N * sizeof(double), cudaMemcpyHostToDevice));
+
+    // lapack routine
     //dtrtrs_("U","N","N",&N, &nrhs, U, &N, c, &N, &err);
+    CUBLAS_CHECK_ERR(cublasDtrsm(handle,
+                                 CUBLAS_SIDE_LEFT, CUBLAS_FILL_MODE_UPPER,
+                                 CUBLAS_OP_N, CUBLAS_DIAG_NON_UNIT,
+                                 N, 1,
+                                 &one,
+                                 d_U, N,
+                                 c, N));
+    
+    CUDA_CHECK_ERR(cudaMemcpy(ps_c, c, N * sizeof(double), cudaMemcpyDeviceToHost));
+
     // copy c to ps_c
     for (int i=0; i < K*M; i++){
-	ps_c[i] = c[i]; 
         std::cout << ps_c[i] << std::endl;
     };
     

@@ -32,25 +32,33 @@ CUDAMATH_INC_DIR= -I${NVHPC_ROOT}/math_libs/include
 # # CUDA linking libraries:
 CUDAMATH_LINK_LIB= -lcublas -lcusolver 
 # #
-#
-# # CUDA library directory:
+# CUDA library 
+# #
 CUDA_LIB_DIR= -L${NVHPC_ROOT}/cuda/lib64
 # # CUDA include directory:
 CUDA_INC_DIR= -I${NVHPC_ROOT}/cuda/include
 # # CUDA linking libraries:
 CUDA_LINK_LIB= -lcudart
-# #
 # 
-# #MPI library directory:
+# MPI library 
+# 
 MPI_LIB_DIR= -L${MPI_ROOT}/lib
 # # MPI include directory:
 MPI_INC_DIR= -I${MPI_ROOT}/include
 # # MPI linking libraries:
 MPI_LINK_LIB= -lmpi
-#
-# # Thrust directory:
+# #
+# Thrust library dir
+# # 
 THRUST_INC_DIR= -I${NVHPC_ROOT}/compilers/include-stdpar/thrust
 # #
+# 
+# # LAPACK library directory:
+LAPACK_LIB_DIR= -L${LAPACK_ROOT}/lib
+# # MPI include directory:
+LAPACK_INC_DIR= -I${LAPACK_ROOT}/include
+# # MPI linking libraries:
+LAPACK_LINK_LIB= -llapack
 #
 # ##########################################################
 #
@@ -120,7 +128,7 @@ $(OBJ_DIR)/dnnsp2/%.o: $(SRC_DIR)/dnnsp2/%.cu
 	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR) $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB) 
 
 $(OBJ_DIR)/fastcheby/%.o: $(SRC_DIR)/fastcheby/%.cu
-	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR) $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB)
+	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR) $(CUDAMATH_INC_DIR) $(LAPACK_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB) $(LAPACK_LIB_DIR) $(LAPACK_LINK_LIB)
 
 #$(OBJ_DIR)/invovlp/%.o: $(SRC_DIR)/invovlp/%.cu
 #	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR)\
