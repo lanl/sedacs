@@ -1,7 +1,7 @@
 import importlib.util
 import os.path
 
-__all__ = ["packagepath", "datapath", "plotspath"]
+__all__ = ["src_path", "data_path", "plots_path"]
 
 
 def locate_package(package_name):
@@ -16,13 +16,13 @@ def locate_package(package_name):
         print(f"Package `{package_name}` not found.")
 
 
-def packagepath():
+def src_path():
     return locate_package("sedacs")
 
 
-def datapath():
-    return os.path.join(packagepath(), "data")
+def data_path():
+    return os.path.join(src_path(), "data")
 
 
-def plotspath():
-    return os.path.join(packagepath(), "plots")
+def plots_path():
+    return os.path.join(src_path(), "plots")
