@@ -1,7 +1,12 @@
 import argparse
 import time
 
+from sedacs.driver.sdc_classical import *
+from sedacs.driver.sdc_graph import *
+from sedacs.driver.sdc_graphAdaptive import *
+from sedacs.driver.sdc_init import *
 from sedacs.mods.sdc_parser import *
+from sedacs.mods.sdc_partition import *
 from sedacs.mods.sdc_system import *
 from sedacs.proxy_a import *
 
@@ -12,12 +17,6 @@ try:
     mpiON = True
 except ModuleNotFoundError:
     mpiON = False
-
-from sedacs.driver.sdc_classical import *
-from sedacs.driver.sdc_graph import *
-from sedacs.driver.sdc_graphAdaptive import *
-from sedacs.driver.sdc_init import *
-from sedacs.mods.sdc_partition import *
 
 global tcAvail
 try:
