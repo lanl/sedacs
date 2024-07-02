@@ -1,7 +1,7 @@
 import importlib.util
 import os.path
 
-__all__ = ["src_path", "data_path", "plots_path"]
+__all__ = ["src_path", "data_path", "plots_path", "examples_path"]
 
 
 def locate_package(package_name):
@@ -26,3 +26,7 @@ def data_path():
 
 def plots_path():
     return os.path.join(src_path(), "plots")
+
+
+def examples_path():
+    return os.path.join(src_path(), "examples")
