@@ -1,5 +1,6 @@
 import importlib.util
 import os.path
+from pathlib import Path
 
 __all__ = ["src_path", "data_path", "plots_path", "examples_path"]
 
@@ -11,7 +12,7 @@ def locate_package(package_name):
         package_path = spec.origin
         # Get the directory containing the package
         installation_path = os.path.dirname(package_path)
-        return installation_path
+        return Path(installation_path)
     else:
         print(f"Package `{package_name}` not found.")
 
