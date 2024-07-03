@@ -1101,6 +1101,161 @@ def test_coords_dvec_nlist(exit1):
         if(exit1): exit(1)
     return passed
 
+def coords_cart_to_frac(cart_coords,latticeVectors):
+    A_transpose = latticeVectors
+    A_transpose_inv = np.linalg.inv(A_transpose)
+    frac_coords = np.matmul(cart_coords,A_transpose_inv)
+    return frac_coords
+
+def test_coords_cart_to_frac(exit1):
+    passed = True
+    try:
+        pt = ptable()
+        nats = len(pt.symbols)
+        coords = np.zeros((nats,3))
+        for i in range(len(pt.symbols)):
+            coords[i,0] = float(i)
+            coords[i,1] = float(i)+2.0
+            coords[i,2] = float(i)+3.0
+        latticeVectors = np.array([[(np.max(coords[:,0])+2.0)/2.0,0.0,0.0], \
+                                   [0.0,(np.max(coords[:,1])+2.0)/2.0,0.0], \
+                                   [0.0,0.0,(np.max(coords[:,2])+2.0)/2.0]])
+        ref_coords = np.matmul(coords,np.linalg.inv(latticeVectors))
+        test_coords = coords_cart_to_frac(coords,latticeVectors)
+        if(not np.allclose(test_coords, ref_coords)):
+            passed = False
+    except:
+        passed = False
+
+    if(passed):
+        sdc_test_pass("coords_cart_to_frac")
+    else:
+        sdc_test_fail("coords_cart_to_frac")
+        if(exit1): exit(1)
+    return passed
+
+def coords_frac_to_cart(frac_coords,latticeVectors):
+    A_transpose = latticeVectors
+    cart_coords = np.matmul(frac_coords,A_transpose)
+    return cart_coords
+    
+def test_coords_frac_to_cart(exit1):
+    passed = True
+    try:
+        pt = ptable()
+        nats = len(pt.symbols)
+        coords = np.zeros((nats,3))
+        for i in range(len(pt.symbols)):
+            coords[i,0] = float(i)
+            coords[i,1] = float(i)+2.0
+            coords[i,2] = float(i)+3.0
+        latticeVectors = np.array([[(np.max(coords[:,0])+2.0)/2.0,0.0,0.0], \
+                                   [0.0,(np.max(coords[:,1])+2.0)/2.0,0.0], \
+                                   [0.0,0.0,(np.max(coords[:,2])+2.0)/2.0]])
+        coords = np.matmul(coords,np.linalg.inv(latticeVectors))
+        ref_coords = np.matmul(coords,latticeVectors)
+        test_coords = coords_frac_to_cart(coords,latticeVectors)
+        if(not np.allclose(test_coords, ref_coords)):
+            passed = False
+    except:
+        passed = False
+
+    if(passed):
+        sdc_test_pass("coords_frac_to_cart")
+    else:
+        sdc_test_fail("coords_frac_to_cart")
+        if(exit1): exit(1)
+    return passed
+
+def coords_dvec_nlist(coords_in,nn,nl,nlTr,latticeVectors,rank=0,numranks=1,api='include_dr'):
+    mpiON = False
+    if(mpiLib and (numranks > 1)): mpiON = True 
+
+    nats = len(coords_in[:,0])
+    if(mpiON): comm = MPI.COMM_WORLD
+    natsPerRank = int(nats/numranks)
+    if(rank == numranks - 1):
+        natsInRank = nats - natsPerRank*(numranks - 1)
+    else:
+        natsInRank = natsPerRank
+
+    if np.allclose(np.diag(np.diagonal(latticeVectors)), latticeVectors) == False:
+        coords = coords_cart_to_frac(coords_in,latticeVectors)
+        method='nonortho'
+    else:
+        coords = coords_in
+        latticeLengths = np.diagonal(latticeVectors)
+        method='ortho'
+
+    dvecChunk = np.zeros([natsInRank,nl.shape[1],3],dtype=coords.dtype)
+    drChunk = np.zeros([natsInRank,nl.shape[1]],dtype=coords.dtype)
+    dvec = np.zeros((nl.shape[0],nl.shape[1],3),dtype=coords_in.dtype)
+    dr = np.zeros(nl.shape,dtype=coords_in.dtype)
+    for j in range(natsInRank):
+        i = natsPerRank*rank + j
+        for k in range(3):
+            if method=='ortho':
+                dvecChunk[j,0:nn[i],k] = (coords[i,k] - coords[nl[i,0:nn[i]],k]) - nlTr[i,0:nn[i],k]*latticeLengths[k]
+            else:
+                dvecChunk[j,0:nn[i],k] = (coords[i,k] - coords[nl[i,0:nn[i]],k]) - nlTr[i,0:nn[i],k]
+        if method == 'nonortho':
+            dvecChunk[j,0:nn[i]] = coords_frac_to_cart(dvecChunk[j,0:nn[i]],latticeVectors)
+        drChunk[j,0:nn[i]] = np.linalg.norm(dvecChunk[j,0:nn[i]],axis=1)
+    if(mpiON): 
+        dr = collect_matrix_from_chunks(drChunk,nats,natsPerRank,rank,numranks,comm)
+        dvec[:,:,0] = collect_matrix_from_chunks(dvecChunk[:,:,0],nats,natsPerRank,rank,numranks,comm)
+        dvec[:,:,1] = collect_matrix_from_chunks(dvecChunk[:,:,1],nats,natsPerRank,rank,numranks,comm)
+        dvec[:,:,2] = collect_matrix_from_chunks(dvecChunk[:,:,2],nats,natsPerRank,rank,numranks,comm)
+            
+    else:
+        dr = drChunk
+        dvec = dvecChunk
+    if api == 'include_dr':
+        return dvec,dr
+    else:
+        return dvec
+
+def test_coords_dvec_nlist(exit1):
+    passed = True
+    try:
+        pt = ptable()
+        nats = len(pt.symbols)
+        coords = np.zeros((nats,3))
+        for i in range(len(pt.symbols)):
+            coords[i,0] = float(i)
+            coords[i,1] = float(i)+2.0
+            coords[i,2] = float(i)+3.0
+        latticeVectors = np.array([[(np.max(coords[:,0])+2.0)/2.0,0.0,0.0], \
+                                   [0.0,(np.max(coords[:,1])+2.0)/2.0,0.0], \
+                                   [0.0,0.0,(np.max(coords[:,2])+2.0)/2.0]])
+        latticeLengths = latticeVectors.diagonal()
+        rcut = 4.0
+        nn,nl,nlTr = build_nlist(coords,latticeVectors,rcut=rcut,api='new')
+        dvec = np.zeros((nl.shape[0],nl.shape[1],3),dtype=coords.dtype)
+        for i in range(coords.shape[0]):
+            for k in range(3):
+                dvec[i,0:nn[i],k] = (coords[i,k] - coords[nl[i,0:nn[i]],k]) - nlTr[i,0:nn[i],k]*latticeLengths[k]
+
+        dr = np.zeros(nl.shape,dtype=coords.dtype)
+        for i in range(dvec.shape[0]):
+            dr[i,0:nn[i]] = np.linalg.norm(dvec[i,0:nn[i],:],axis=1)
+            #dr[i,0:nn[i]] = np.sqrt(np.sum(dvec[:,i,0:nn[i]]**2,axis=0))
+        ref_dr = dr
+        ref_dvec = dvec
+        test_dvec, test_dr = coords_dvec_nlist(coords,nn,nl,nlTr,latticeVectors)
+        if(not np.allclose(test_dr,ref_dr) and np.allclose(test_dvec,ref_dvec)):
+            passed = False
+    except:
+        print("test_coords_dvec_nlist failed to execute")
+        passed = False
+
+    if(passed):
+        sdc_test_pass("coords_dvec_nlist")
+    else:
+        sdc_test_fail("coords_dvec_nlist")
+        if(exit1): exit(1)
+    return passed
+
 ## Neighbor list 
 # @brief It will bild a neighbor list using an "all to all" approach
 # @param coords System coordinates. coords[7,1]: y-coordinate of atom 7.
@@ -1432,9 +1587,8 @@ def build_nlist(coords_cart,latticeVectors,rcut,rank=0,numranks=1,verb=False,api
         #Get the list of all atoms in neighboring boxes
         boxneighs = inbox[neighbox[boxOfI[i]]]
         #Shorten the long dimension for speedup on CPU
-        #max_nonzero_elems = np.max(np.count_nonzero(boxneighs != -1,axis=1))
-        #boxneighs = boxneighs[:,0:max_nonzero_elems].flatten()
-        boxneighs = boxneighs[boxneighs != -1]
+        #Eliminate the atom itself from the neighbor list
+        boxneighs = boxneighs[np.logical_and(boxneighs != -1,boxneighs != i)]
         #Calculate the distances to all atoms in neighboring boxes
         dvec = np.zeros((len(boxneighs),3),dtype=coords.dtype)
         nlTrBoxneigh = np.zeros(dvec.shape,dtype=int)
@@ -1452,7 +1606,6 @@ def build_nlist(coords_cart,latticeVectors,rcut,rank=0,numranks=1,verb=False,api
         distance = np.linalg.norm(dvec,axis=1)
         #Filter the list according to the threshold
         nlSel = np.where(distance<rcut)[0]
-        nlSel = nlSel[nlSel != i]
         cnt = len(nlSel)
         nlVect[1:cnt+1] = boxneighs[nlSel]
         nlTrVect[1:cnt+1] = nlTrBoxneigh[nlSel]
