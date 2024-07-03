@@ -174,11 +174,11 @@ def get_densityMatrix_accel(H,N,Nocc,lib,verb=False):
 
   # get DM from cusolver diag
   #dm = gpu.dmDNNSP2(H,D,N,Nocc,lib)
-  dm = gpu.dmCheby(H,D,N,Nocc,kbt,lib)
+  #dm = gpu.dmCheby(H,D,N,Nocc,kbt,lib)
   print("Density matrix=",D)
-  dm = gpu.dmDiag(H,D,N,Nocc,kbt,lib)
+  #dm = gpu.dmDiag(H,D,N,Nocc,kbt,lib)
   #print("Density matrix=",dm)
-  
+  dm = gpu.dmMLSP2(H,D,N,Nocc,lib)  
   return D
 
 ## Main program for proxy a

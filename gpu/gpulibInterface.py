@@ -7,7 +7,7 @@ import time
 from ctypes import *
 import ctypes
 import numpy.ctypeslib as ctl
-
+from juliacall import Main as jl
 
 ## gpuLib API call to inverse overlap factorization algorithm.
 # This interface function will accept two numpy arrays, the hamiltonian, and the density matrix
@@ -93,6 +93,48 @@ def dmDiag(ham,dm,matSize,nocc,kbt,lib):
 
     #print(f"Time for lib call = {toc - tic:0.4f} seconds")
     return list(dm)                          
+
+
+
+## gpuLib API call to ML-SP2 denisty matrix solver.
+# This interface function will accept two numpy arrays, the hamiltonian, and the density matrix
+# along with two integers, matSize and nocc. Function will build the density matrix from
+# the Hamiltonian, which has size matSize, using the ML-SP2 method. For use with finite T
+# matrix calculations.
+# @param ham Hamiltonian matrix.
+# @param dm Density matrix. 
+# @param matSize Matrix sizes.
+# @param nocc Occupation number.
+# @return dm Density matrix that was constructed.
+#
+def dmMLSP2(ham,dm,matSize,nocc,lib):
+
+    ## copies scalar data to C data structures
+    matSize_c = ctypes.c_int(matSize)
+    nocc_c = ctypes.c_int(nocc)
+
+    ## run Julia code to parametrize SP2
+    jl.seval("using Pkg")
+    jl.seval("Pkg.develop(path=\"../../gpu/jul/GenSP2\")")
+    jl.seval("""using GenSP2, LinearAlgebra
+           β = 400
+           μ = 0.5
+           (θ_sp2, θ_fermi, θ_entropy, x) = generate_model(; β, μ, max_iter=1_000_000, nlayers=16)
+           """)
+    ## set C function arg types
+    lib.dm_mlsp2.argtypes = [ctl.ndpointer(np.float64,flags='aligned, c_contiguous'), \
+                             ctl.ndpointer(np.float64,flags='aligned, c_contiguous'), \
+                             c_int, c_int]
+
+
+    ## time call
+    lib.dm_mlsp2(ham,                \
+                 dm,                 \
+                 matSize_c,          \
+                 nocc_c)
+
+    return list(dm)                          
+
 
 
 ## gpuLib API call to DNN-SP2 denisty matrix solver.

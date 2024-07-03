@@ -13,6 +13,13 @@ extern "C"{
 
 extern "C"{
  
+    void dm_mlsp2(double *, double *, int, int);
+
+}
+
+
+extern "C"{
+ 
     void dm_dnnsp2(double *, double *, int, int);
 
 }

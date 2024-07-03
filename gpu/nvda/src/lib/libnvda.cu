@@ -19,6 +19,20 @@ void dm_dnnsp2(double* ham, double* dm, int norb, int nocc){
 
 }
 
+void dm_mlsp2(double* ham, double* dm, int norb, int nocc){
+
+    printf("ML SP2\n");
+   
+    precision_t u = fp16_fp32;    
+ 
+    refine_t r = yes;
+
+
+    dnnsp2(ham, dm, norb, nocc, u, r);    
+
+}
+
+
 
 void dm_pscheby(double* ham, double* dm, int norb, int nocc, double kbt){
 
