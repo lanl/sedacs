@@ -1,3 +1,5 @@
+#include <cublas_v2.h>
+
 void gershgorin_cheby(const unsigned,
                       const double*, 
                       double*,
@@ -12,15 +14,22 @@ void buildTest(double*,const int);
 
 double gtod(void);
 
+void buildId_dev(double*, int);
+
 void buildIdentity(double*, const int);
 
 void build_SynthHam(double*, const int);
 
-void cheby_coeffs(double emax, double emin, double ef, double kbt, int npts, int K, int M, double *c);
+void cheby_coeffs_dev(const double, const double, const double, 
+                      const double, 
+                      const int, 
+                      const int, const int, const int, 
+                      double*);
 
-void construct_ps_coeffs_new(double*, 
-                             double*, 
-                             const int, const int);
+void ps_cheby_coeffs_dev(double*, 
+                         double*, 
+                         const int, const int,
+                         cublasHandle_t);
 
 
 
