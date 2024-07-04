@@ -36,7 +36,7 @@ if args.use_torch:
         else:
             print("Using CPU")
             args.device = tc.device("cpu")
-        from sdc_torch import *
+        from sedacs.torch import *
     except ImportError as e:
         raise ImportError("Unable to import pytorch")
 

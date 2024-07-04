@@ -2,8 +2,8 @@
 
 import numpy as np
 from latte import *
-from sdc_system import *
-from sdc_ptable import *
+from sedacs.system import *
+from sedacs.periodic_table import *
 
 
 ## General LATTE dm API call 

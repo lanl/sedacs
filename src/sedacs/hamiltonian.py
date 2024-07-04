@@ -5,8 +5,8 @@ this will be done interfacing with an engine.
 """
 
 import numpy as np
-from sdc_interface_files import *
-from sdc_interface_modules import *
+from sedacs.interface_files import *
+from sedacs.interface_modules import *
 
 ## Build the non-scf Hamiltonian matrix.
 # @brief This will build a Hamiltonian matrix. Typically this will be done interfacing with an engine.

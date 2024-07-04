@@ -1,7 +1,7 @@
-from sedacs.mods.sdc_ffields import *
-from sedacs.mods.sdc_integrate import *
-from sedacs.mods.sdc_ptable import *
-from sedacs.mods.sdc_system import *
+from sedacs.ffields import *
+from sedacs.integrate import *
+from sedacs.periodic_table import *
+from sedacs.system import *
 
 
 def test_ffield(coords, types, symbols, latticeVectors, nl, nlTrX, nlTrY, nlTrZ):

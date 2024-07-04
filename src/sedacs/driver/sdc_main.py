@@ -4,8 +4,8 @@
 """
 
 import argparse
-from sdc_parser import *
-from sdc_system import *
+from sedacs.parser import *
+from sedacs.system import *
 from proxy_a import *
 import time
 try:
@@ -13,8 +13,8 @@ try:
     mpi = True
 except ImportError as e:
     mpi = False
-from sdc_graph import *
-from sdc_partition import *
+from sedacs.graph import *
+from sedacs.graph_partition import *
 
 
 parser = argparse.ArgumentParser(description='Test driver for sedacs')
@@ -35,7 +35,7 @@ if args.use_torch:
         else:
             print("Using CPU")
             args.device = tc.device('cpu')
-        from sdc_torch import *
+        from sedacs.torch import *
     except ImportError as e:
         raise ImportError("Unable to import pytorch")
             

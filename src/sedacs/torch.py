@@ -1,6 +1,6 @@
 # Pytorch kernels
 
-from sdc_system import *
+from sedacs.system import *
 import torch as tc
 import torch.nn.functional as tf
 import time

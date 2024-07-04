@@ -10,7 +10,7 @@
 
 import numpy as np
 import sys
-from sdc_message import *
+from sedacs.message import *
 
 class ptable:
     """A simple periodic table.

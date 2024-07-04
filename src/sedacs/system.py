@@ -16,9 +16,9 @@ global mdtrajLib
 try: import mdtraj as md; mdtrajLib=True
 except: mdtrajLib=False
 
-from sdc_ptable import ptable
-from sdc_message import *
-from sdc_utils import *
+from sedacs.periodic_table import ptable
+from sedacs.message import *
+from sedacs.utils import *
 
 #from sdc_out import *
 try:
@@ -28,7 +28,7 @@ except ImportError as e:
     mpiLib = False
 from multiprocessing import Pool
 if(mpiLib): 
-    from sdc_mpi import * 
+    from sedacs.mpi import * 
 import time
 
 ## Chemical system type 

@@ -7,7 +7,7 @@ So far: Harmonic ffields.
 """
 import numpy as np
 
-from sdc_system import *
+from sedacs.system import *
 
 def get_sdc_classical_forces(coords,types,symbols,latticeVectors,nl,nlTrX,nlTrY,nlTrZ,fFieldName,verb=False):
     if(verb):

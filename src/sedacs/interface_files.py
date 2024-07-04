@@ -5,7 +5,7 @@ global engineUp
 engineUp = False
 import os
 import subprocess
-from sdc_system import *
+from sedacs.system import *
 from tempfile import TemporaryFile
 
 ## Write a matrix

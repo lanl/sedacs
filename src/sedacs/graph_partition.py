@@ -9,7 +9,7 @@ import numpy as np
 global metisLib
 try: import metis; metisLib = True 
 except: metisLib = False
-from sdc_graph import *
+from sedacs.graph import *
 
 ## Partition
 # @brief This will partition a graph based on a defined method

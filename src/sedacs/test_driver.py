@@ -4,8 +4,8 @@
 This is used to run all the tests within the modules
 """
 
-from sdc_system import *
-from sdc_ptable import *
+from sedacs.system import *
+from sedacs.periodic_table import *
 
 ## For coloring text
 class textcolors:

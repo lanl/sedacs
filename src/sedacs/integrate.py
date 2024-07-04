@@ -3,8 +3,8 @@
 """
 
 import numpy as np
-from sdc_interface_files import *
-from sdc_interface_modules import *
+from sedacs.interface_files import *
+from sedacs.interface_modules import *
 
 ## Do time step integration.
 # @brief 

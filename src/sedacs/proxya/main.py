@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 import numpy as np
-from sdc_system import *
+from sedacs.system import *
 from proxy_a import *
-from sdc_ptable import ptable
+from sedacs.periodic_table import ptable
 
 pt = ptable()
 latticeVectors,symbols,types,coords = read_pdb_file("coords.pdb",lib="None",verb=True)
