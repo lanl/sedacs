@@ -3,8 +3,9 @@
 import time
 
 from sedacs.driver import *
-from sedacs.hamiltonian import *
 from sedacs.graph_partition import *
+from sedacs.hamiltonian import *
+from sedacs.system import System
 
 
 ## Single point calculation
@@ -20,7 +21,7 @@ def get_singlePoint(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hi
     graphOnRank = None
     for partIndex in range(partIndex1, partIndex2):
         print("Rank, part", rank, partIndex)
-        subSy = system(len(partsCoreHalo[partIndex]))
+        subSy = System(len(partsCoreHalo[partIndex]))
         subSy.symbols = sy.symbols
         tic = time.perf_counter()
         subSy.coords, subSy.types = extract_subsystem(sy.coords, sy.types, sy.symbols, partsCoreHalo[partIndex])
@@ -107,7 +108,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     # print(graphNL)
     # print(fullGraph)
     # Get the neighbors of atom 1234 (by the graph)
-    subSy = system(fullGraphRho[AtToPrint, 0])
+    subSy = System(fullGraphRho[AtToPrint, 0])
     subSy.symbols = sy.symbols
     subSy.coords, subSy.types = extract_subsystem(
         sy.coords, sy.types, sy.symbols, fullGraph[AtToPrint, 1 : fullGraph[AtToPrint, 0] + 1]

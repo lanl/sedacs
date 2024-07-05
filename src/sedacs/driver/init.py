@@ -2,6 +2,7 @@
 
 from sedacs.driver import *
 from sedacs.engine import *
+from sedacs.system import System
 
 
 ## Getting arguments
@@ -67,7 +68,7 @@ def init(args):
     eng.interface = sdc.engine["InterfaceType"]
 
     # Read the coordinates
-    sy = system(1)
+    sy = System(1)
     sy.latticeVectors, sy.symbols, sy.types, sy.coords = read_coords_file(sdc.coordsFileName, lib="None", verb=True)
     sy.nats = len(sy.coords[:, 0])
     sy.vels = np.zeros((sy.nats, 3))
@@ -102,7 +103,7 @@ def init(args):
 
     # Get the neighbors of atom 1234
     AtToPrint = 0
-    subSy = system(nl[AtToPrint, 0])
+    subSy = System(nl[AtToPrint, 0])
     subSy.symbols = sy.symbols
     subSy.coords, subSy.types = extract_subsystem(
         sy.coords, sy.types, sy.symbols, nl[AtToPrint, 1 : nl[AtToPrint, 0] + 1]

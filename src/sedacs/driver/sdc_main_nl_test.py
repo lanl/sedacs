@@ -4,7 +4,7 @@
 
 import argparse
 from sedacs.parser import *
-from sedacs.system import *
+from sedacs.system import System
 from proxy_a import *
 import time
 try:
@@ -45,7 +45,7 @@ numranks = comm.Get_size()
 sdc = sdc_input("input.in",True)
 
 #Read the coordinates
-sy = system(1)
+sy = System(1)
 sy.latticeVectors,sy.symbols,sy.types,sy.coords = \
     read_coords_file(sdc.coordsFileName,lib="None",verb=True)
 sy.nats = len(sy.coords[:,0])

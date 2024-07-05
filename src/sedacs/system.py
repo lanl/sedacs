@@ -44,7 +44,7 @@ import time
 ## Chemical system type
 # @brief To be used only when really needed!
 #
-class system:
+class System:
     """A prototype for the system type."""
 
     def __init__(self, nats=1):
@@ -124,7 +124,7 @@ class trajectory:
 
     def __init__(self, sys=None, nats=1, nframes=1, timestep=0.00025):
         if sys is None:
-            self.system = system(nats)
+            self.system = System(nats)
         else:
             self.system = sys
             nats = sys.nats
@@ -137,7 +137,7 @@ class trajectory:
     if mdtrajLib:
 
         def from_mdtraj(self, traj):
-            self.system = system()
+            self.system = System()
             self.system.from_mdtraj(traj)
             self.coords = 10.0 * traj.xyz.astype(float)
             if traj.unitcell_vectors is not None:

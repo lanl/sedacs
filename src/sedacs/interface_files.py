@@ -5,7 +5,7 @@ global engineUp
 engineUp = False
 import os
 import subprocess
-from sedacs.system import *
+from sedacs.system import System
 from tempfile import TemporaryFile
 
 

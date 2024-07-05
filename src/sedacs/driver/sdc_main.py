@@ -3,10 +3,13 @@
 """
 
 import argparse
-from sedacs.parser import *
-from sedacs.system import *
-from proxy_a import *
 import time
+
+from proxy_a import *
+
+from sedacs.parser import *
+from sedacs.system import System
+
 try:
     from mpi4py import MPI
     mpi = True
@@ -14,7 +17,6 @@ except ImportError as e:
     mpi = False
 from sedacs.graph import *
 from sedacs.graph_partition import *
-
 
 parser = argparse.ArgumentParser(description='Test driver for sedacs')
 
@@ -46,7 +48,7 @@ numranks = comm.Get_size()
 sdc = sdc_input("input.in",True)
 
 #Read the coordinates
-sy = system(1)
+sy = System(1)
 sy.latticeVectors,sy.symbols,sy.types,sy.coords = \
     read_coords_file(sdc.coordsFileName,lib="None",verb=True)
 sy.nats = len(sy.coords[:,0])
@@ -102,7 +104,7 @@ partIndex2 = (rank+1)*partsPerRank
 print(rank,numranks,partIndex1,partIndex2)
 for partIndex in range(partIndex1,partIndex2):
     print("Rank, part",rank,partIndex)
-    subSy = system(len(partsCoreHalo[partIndex]))
+    subSy = System(len(partsCoreHalo[partIndex]))
     subSy.symbols = sy.symbols
     subSy.coords,subSy.types = extract_subsystem(sy.coords,sy.types,sy.symbols,partsCoreHalo[partIndex])
     partFileName = "subSy"+str(rank)+"_"+str(partIndex)+".pdb"
