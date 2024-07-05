@@ -119,7 +119,7 @@ orbs = {orbs}"""
 # @param time Time at each frame (ps)
 
 
-class trajectory:
+class Trajectory:
     """A prototype for the trajectory type."""
 
     def __init__(self, sys=None, nats=1, nframes=1, timestep=0.00025):
