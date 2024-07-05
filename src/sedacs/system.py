@@ -44,6 +44,13 @@ __all__ = [
     "Trajectory",
     "rand",
     "get_random_coordinates",
+    "parameters_to_vectors",
+    "vectors_to_parameters",
+    "coords_cart_to_frac",
+    "coords_frac_to_cart",
+    "get_volBox",
+    "coords_dvec_nlist",
+    "build_nlist",
 ]
 
 
