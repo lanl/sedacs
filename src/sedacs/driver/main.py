@@ -3,10 +3,10 @@
 import argparse
 import time
 
-from sedacs.mods.sdc_graph import *
-from sedacs.mods.sdc_parser import *
-from sedacs.mods.sdc_partition import *
-from sedacs.mods.sdc_system import *
+from sedacs.graph import *
+from sedacs.parser import *
+from sedacs.graph_partition import *
+from sedacs.system import *
 from sedacs.proxy_a import *
 
 try:

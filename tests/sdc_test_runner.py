@@ -2,9 +2,9 @@
 This is used to run individual tests
 """
 
-from sdc_system import *
+from sedacs.system import *
 from sedacs.periodic_table import *
-from sdc_partition import *
+from sedacs.graph_partition import *
 
 
 ## For coloring text

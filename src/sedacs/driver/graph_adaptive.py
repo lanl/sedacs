@@ -3,8 +3,8 @@
 import time
 
 from sedacs.driver import *
-from sedacs.mods.sdc_hamiltonian import *
-from sedacs.mods.sdc_partition import *
+from sedacs.hamiltonian import *
+from sedacs.graph_partition import *
 
 
 ## Single point calculation

@@ -1,7 +1,7 @@
 """Initialize sedac driver"""
 
 from sedacs.driver import *
-from sedacs.mods.sdc_engine import *
+from sedacs.engine import *
 
 
 ## Getting arguments
