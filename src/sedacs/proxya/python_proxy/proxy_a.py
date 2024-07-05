@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """proxy code a
 A prototype engine that:
     - Reads the total number of atoms 

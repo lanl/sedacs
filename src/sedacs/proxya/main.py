@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import numpy as np
 from sedacs.system import *
 from proxy_a import *

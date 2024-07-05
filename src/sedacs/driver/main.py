@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Main sedacs prototype driver"""
 
 import argparse

@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """system
 Some functions to create, read, and manupulate coordinates of a chemical system
 

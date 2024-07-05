@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """ Some mpi wrappers using MPI4PY
 
 """ 

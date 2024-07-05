@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """utils 
 Some auxiliary functions that might be used in several modules
 

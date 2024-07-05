@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """ simple test runner
 This is used to run individual tests
 """

@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """ test driver 
 This is used to run all the tests within the modules
 """

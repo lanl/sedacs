@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """ Periodic table of elements.
  
  This data was generated with pybabel and openbable packages

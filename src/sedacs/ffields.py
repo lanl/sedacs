@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """ffields
 Some functions to create force fields/potentials
 
