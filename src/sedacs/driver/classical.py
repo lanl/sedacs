@@ -17,7 +17,7 @@ def do_MD(init_coords, types, symbols, latticeVectors, nl, nlTrX, nlTrY, nlTrZ, 
     init_coords = get_random_coordinates(nats)
     for i in range(2):
         symbols[i] = "C"
-    p = ptable()
+    p = PeriodicTable()
     atomicnumbers = np.zeros(nats, dtype=int)
     for i in range(nats):
         atomicnumbers[i] = p.get_atomic_number(symbols[types[i]])

@@ -1,9 +1,9 @@
 import numpy as np
 from sedacs.system import *
 from proxy_a import *
-from sedacs.periodic_table import ptable
+from sedacs.periodic_table import PeriodicTable
 
-pt = ptable()
+pt = PeriodicTable()
 latticeVectors,symbols,types,coords = read_pdb_file("coords.pdb",lib="None",verb=True)
 nats = len(coords[:,1])
 write_xyz_coordinates(coords,types,symbols)

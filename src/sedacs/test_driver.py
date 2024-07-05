@@ -34,7 +34,7 @@ def run_my_test(testName, failedTests):
 # make a list using system calls based on the grep results
 testNames = [
     "parameters_to_vectors",
-    "ptable",
+    "PeriodicTable",
     "read_xyz_file",
     "write_xyz_coordinates",
     "get_volBox",

@@ -86,7 +86,7 @@ def get_latte_dm(box, symbols, types, coords):
     zmat = genX(smat, method="Diag", verbose=True)
 
     # Initializing a periodic table
-    pt = ptable()
+    pt = PeriodicTable()
 
     # Getting number of electrons
     numel = 0

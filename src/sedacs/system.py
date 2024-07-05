@@ -23,8 +23,8 @@ try:
 except:
     mdtrajLib = False
 
-from sedacs.periodic_table import ptable
 from sedacs.message import *
+from sedacs.periodic_table import PeriodicTable
 from sedacs.utils import *
 
 # from sdc_out import *
@@ -64,7 +64,7 @@ class system:
         # latticeVectors[1,:] = first lattice vector.
         self.latticeVectors = np.zeros((3, 3), dtype=float)
         ## Symbols for each atom type, e.g, the element symbol of the first atom is symbols[types[0]]
-        self.symbols = ptable().symbols[self.types]
+        self.symbols = PeriodicTable().symbols[self.types]
         ## Number of atomic orbital for each type
         self.orbs = np.ones(self.nats, dtype=int)
 
@@ -800,7 +800,7 @@ def write_xyz_coordinates(fileName, coords, types, symbols):
 def test_write_xyz_coordinates(exit1):
     passed = True
     try:
-        pt = ptable()
+        pt = PeriodicTable()
         nats = len(pt.symbols)
         nsymb = int(8)
         symbols = [] * nsymb
@@ -912,7 +912,7 @@ def read_xyz_trajectory(fileName, lib="None", verb=True):
 def test_read_xyz_trajectory(exit1):
     passed = True
     try:
-        pt = ptable()
+        pt = PeriodicTable()
         nsymb = int(8)
         symbols = [] * nsymb
         symbols[:] = pt.symbols[0:nsymb]
@@ -1010,7 +1010,7 @@ def coords_cart_to_frac(cart_coords, latticeVectors):
 def test_coords_cart_to_frac(exit1):
     passed = True
     try:
-        pt = ptable()
+        pt = PeriodicTable()
         nats = len(pt.symbols)
         coords = np.zeros((nats, 3))
         for i in range(len(pt.symbols)):
@@ -1047,7 +1047,7 @@ def coords_frac_to_cart(frac_coords, latticeVectors):
 def test_coords_frac_to_cart(exit1):
     passed = True
     try:
-        pt = ptable()
+        pt = PeriodicTable()
         nats = len(pt.symbols)
         coords = np.zeros((nats, 3))
         for i in range(len(pt.symbols)):
@@ -1132,7 +1132,7 @@ def coords_dvec_nlist(coords_in, nn, nl, nlTr, latticeVectors, rank=0, numranks=
 def test_coords_dvec_nlist(exit1):
     passed = True
     try:
-        pt = ptable()
+        pt = PeriodicTable()
         nats = len(pt.symbols)
         coords = np.zeros((nats, 3))
         for i in range(len(pt.symbols)):
@@ -1638,7 +1638,7 @@ def build_nlist(coords_cart, latticeVectors, rcut, rank=0, numranks=1, verb=Fals
 def test_build_nlist(exit1):
     passed = True
     try:
-        pt = ptable()
+        pt = PeriodicTable()
         nats = len(pt.symbols)
         coords = np.zeros((nats, 3))
         for i in range(len(pt.symbols)):

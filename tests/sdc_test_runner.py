@@ -3,7 +3,7 @@ This is used to run individual tests
 """
 
 from sdc_system import *
-from sdc_ptable import *
+from sedacs.periodic_table import *
 from sdc_partition import *
 
 

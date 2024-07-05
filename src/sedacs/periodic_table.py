@@ -11,7 +11,7 @@ import sys
 from sedacs.message import *
 
 
-class ptable:
+class PeriodicTable:
     """A simple periodic table."""
 
     def __init__(self):
@@ -1244,7 +1244,7 @@ def test_ptable(exit1):
     passed = False
     try:
         # Get values for Carbon
-        pt = ptable()
+        pt = PeriodicTable()
         atnum = pt.get_atomic_number("C")
         passed = True
 
@@ -1291,7 +1291,7 @@ def test_ptable(exit1):
 
 def print_element_data(elementSymbol):
     """Prints element data"""
-    pt = ptable()
+    pt = PeriodicTable()
     if elementSymbol != "Bl":
         atnum = pt.get_atomic_number(elementSymbol)
         print("Element name: ", pt.names[atnum])
