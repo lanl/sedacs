@@ -8,6 +8,8 @@ Other sources includes NIST: http://www.nist.gov/pml/data/ion_energy.cfm
 
 import numpy as np
 
+__all__ = ["PeriodicTable", "print_element_data"]
+
 
 class PeriodicTable:
     """A simple periodic table."""
