@@ -7,8 +7,6 @@ Other sources includes NIST: http://www.nist.gov/pml/data/ion_energy.cfm
 """
 
 import numpy as np
-import sys
-from sedacs.message import *
 
 
 class PeriodicTable:
@@ -1239,56 +1237,6 @@ class PeriodicTable:
         return np.where(self.symbols == symb)[0][0]
 
 
-def test_ptable(exit1):
-    """Quick test for this module"""
-    passed = False
-    try:
-        # Get values for Carbon
-        pt = PeriodicTable()
-        atnum = pt.get_atomic_number("C")
-        passed = True
-
-        if atnum != 6:
-            passed = False
-            # print("0")
-        if pt.names[atnum] != "Carbon":
-            passed = False
-            # print("1")
-        if abs(pt.mass[atnum] - 12.0) > 1.0e-4:
-            passed = False
-            # print("2")
-        if abs(pt.vdwr[atnum] - 1.7) > 1.0e-4:
-            err = True
-            passed = False
-            # print("3")
-        if abs(pt.covr[atnum] - 0.76) > 1.0e-4:
-            passed = False
-            # print("4")
-        if abs(pt.ip[atnum] - 11.2603) > 1.0e-4:
-            passed = False
-            # print("5")
-        if abs(pt.ea[atnum] - 1.262118) > 1.0e-4:
-            passed = False
-            # print("6")
-        if abs(pt.en[atnum] - 2.55) > 1.0e-4:
-            passed = False
-            # print("7")
-        if pt.maxbonds[atnum] != 4:
-            passed = False
-            # print("8")
-        if pt.numel[atnum] != 4:
-            passed = False
-            # print("9")
-        if pt.econf[atnum] != "1s22s22p2":
-            passed = False
-            # print("10")
-    #
-    except:
-        passed = False
-
-    return passed
-
-
 def print_element_data(elementSymbol):
     """Prints element data"""
     pt = PeriodicTable()
@@ -1305,27 +1253,3 @@ def print_element_data(elementSymbol):
         print("Element number of electrons = ", pt.numel[atnum])
         print("Element electron configuration = ", pt.econf[atnum])
         print("Element atomic number = ", pt.get_atomic_number(elementSymbol))
-
-
-if __name__ == "__main__":
-    n = len(sys.argv)
-    if n == 1:
-        print("Give a task name (test or info). Example:\n")
-        print("./ptable test\n")
-        exit(0)
-    else:
-        task = sys.argv[1]
-
-    if task == "test":
-        tname = sys.argv[2]
-        if tname == "ptable":
-            passed = test_ptable(True)
-
-    elif task == "info":
-        if n < 3:
-            print("Give any element symbol as input. Example:\n")
-            print("./ptable info C\n")
-            exit(0)
-        else:
-            elementSymbol = sys.argv[2]
-            print_element_data(elementSymbol)
