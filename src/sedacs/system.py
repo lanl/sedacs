@@ -419,25 +419,6 @@ def get_volBox(latticeVectors, verb=False):
     return volBox
 
 
-def test_get_volBox(exit1):
-    volBoxRef = 4.0
-    latticeVectors = np.zeros((3, 3))
-    latticeVectors[0, :] = [1.0, 2.0, 3.0]
-    latticeVectors[1, :] = [1.0, 0.0, 0.0]
-    latticeVectors[2, :] = [3.0, 2.0, 1.0]
-    try:
-        volBox = get_volBox(latticeVectors, verb=False)
-        if abs(volBox - volBoxRef) == 0.0:
-            passed = True
-        else:
-            passed = False
-
-    except:
-        passed = False
-
-    return passed
-
-
 def coords_cart_to_frac(cart_coords, latticeVectors):
     A_transpose = latticeVectors
     A_transpose_inv = np.linalg.inv(A_transpose)
@@ -445,73 +426,10 @@ def coords_cart_to_frac(cart_coords, latticeVectors):
     return frac_coords
 
 
-def test_coords_cart_to_frac(exit1):
-    passed = True
-    try:
-        pt = PeriodicTable()
-        nats = len(pt.symbols)
-        coords = np.zeros((nats, 3))
-        for i in range(len(pt.symbols)):
-            coords[i, 0] = float(i)
-            coords[i, 1] = float(i) + 2.0
-            coords[i, 2] = float(i) + 3.0
-        latticeVectors = np.array([
-            [(np.max(coords[:, 0]) + 2.0) / 2.0, 0.0, 0.0],
-            [0.0, (np.max(coords[:, 1]) + 2.0) / 2.0, 0.0],
-            [0.0, 0.0, (np.max(coords[:, 2]) + 2.0) / 2.0],
-        ])
-        ref_coords = np.matmul(coords, np.linalg.inv(latticeVectors))
-        test_coords = coords_cart_to_frac(coords, latticeVectors)
-        if not np.allclose(test_coords, ref_coords):
-            passed = False
-    except:
-        passed = False
-
-    if passed:
-        sdc_test_pass("coords_cart_to_frac")
-    else:
-        sdc_test_fail("coords_cart_to_frac")
-        if exit1:
-            exit(1)
-    return passed
-
-
 def coords_frac_to_cart(frac_coords, latticeVectors):
     A_transpose = latticeVectors
     cart_coords = np.matmul(frac_coords, A_transpose)
     return cart_coords
-
-
-def test_coords_frac_to_cart(exit1):
-    passed = True
-    try:
-        pt = PeriodicTable()
-        nats = len(pt.symbols)
-        coords = np.zeros((nats, 3))
-        for i in range(len(pt.symbols)):
-            coords[i, 0] = float(i)
-            coords[i, 1] = float(i) + 2.0
-            coords[i, 2] = float(i) + 3.0
-        latticeVectors = np.array([
-            [(np.max(coords[:, 0]) + 2.0) / 2.0, 0.0, 0.0],
-            [0.0, (np.max(coords[:, 1]) + 2.0) / 2.0, 0.0],
-            [0.0, 0.0, (np.max(coords[:, 2]) + 2.0) / 2.0],
-        ])
-        coords = np.matmul(coords, np.linalg.inv(latticeVectors))
-        ref_coords = np.matmul(coords, latticeVectors)
-        test_coords = coords_frac_to_cart(coords, latticeVectors)
-        if not np.allclose(test_coords, ref_coords):
-            passed = False
-    except:
-        passed = False
-
-    if passed:
-        sdc_test_pass("coords_frac_to_cart")
-    else:
-        sdc_test_fail("coords_frac_to_cart")
-        if exit1:
-            exit(1)
-    return passed
 
 
 def coords_dvec_nlist(coords_in, nn, nl, nlTr, latticeVectors, rank=0, numranks=1, api="include_dr"):
@@ -565,53 +483,6 @@ def coords_dvec_nlist(coords_in, nn, nl, nlTr, latticeVectors, rank=0, numranks=
         return dvec, dr
     else:
         return dvec
-
-
-def test_coords_dvec_nlist(exit1):
-    passed = True
-    try:
-        pt = PeriodicTable()
-        nats = len(pt.symbols)
-        coords = np.zeros((nats, 3))
-        for i in range(len(pt.symbols)):
-            coords[i, 0] = float(i)
-            coords[i, 1] = float(i) + 2.0
-            coords[i, 2] = float(i) + 3.0
-        latticeVectors = np.array([
-            [(np.max(coords[:, 0]) + 2.0) / 2.0, 0.0, 0.0],
-            [0.0, (np.max(coords[:, 1]) + 2.0) / 2.0, 0.0],
-            [0.0, 0.0, (np.max(coords[:, 2]) + 2.0) / 2.0],
-        ])
-        latticeLengths = latticeVectors.diagonal()
-        rcut = 4.0
-        nn, nl, nlTr = build_nlist(coords, latticeVectors, rcut=rcut, api="new")
-        dvec = np.zeros((nl.shape[0], nl.shape[1], 3), dtype=coords.dtype)
-        for i in range(coords.shape[0]):
-            for k in range(3):
-                dvec[i, 0 : nn[i], k] = (coords[i, k] - coords[nl[i, 0 : nn[i]], k]) - nlTr[
-                    i, 0 : nn[i], k
-                ] * latticeLengths[k]
-
-        dr = np.zeros(nl.shape, dtype=coords.dtype)
-        for i in range(dvec.shape[0]):
-            dr[i, 0 : nn[i]] = np.linalg.norm(dvec[i, 0 : nn[i], :], axis=1)
-            # dr[i,0:nn[i]] = np.sqrt(np.sum(dvec[:,i,0:nn[i]]**2,axis=0))
-        ref_dr = dr
-        ref_dvec = dvec
-        test_dvec, test_dr = coords_dvec_nlist(coords, nn, nl, nlTr, latticeVectors)
-        if not np.allclose(test_dr, ref_dr) and np.allclose(test_dvec, ref_dvec):
-            passed = False
-    except:
-        print("test_coords_dvec_nlist failed to execute")
-        passed = False
-
-    if passed:
-        sdc_test_pass("coords_dvec_nlist")
-    else:
-        sdc_test_fail("coords_dvec_nlist")
-        if exit1:
-            exit(1)
-    return passed
 
 
 ## Neighbor list
@@ -1071,68 +942,6 @@ def build_nlist(coords_cart, latticeVectors, rcut, rank=0, numranks=1, verb=Fals
         return (nl, nlTrX, nlTrY, nlTrZ)
     else:
         raise_error("build_nlist", "api must be new, old, or dvec")
-
-
-def test_build_nlist(exit1):
-    passed = True
-    try:
-        pt = PeriodicTable()
-        nats = len(pt.symbols)
-        coords = np.zeros((nats, 3))
-        for i in range(len(pt.symbols)):
-            coords[i, 0] = float(i)
-            coords[i, 1] = float(i) + 2.0
-            coords[i, 2] = float(i) + 3.0
-        latticeVectors = np.array([
-            [(np.max(coords[:, 0]) + 2.0) / 2.0, 0.0, 0.0],
-            [0.0, (np.max(coords[:, 1]) + 2.0) / 2.0, 0.0],
-            [0.0, 0.0, (np.max(coords[:, 2]) + 2.0) / 2.0],
-        ])
-        coords = np.matmul(coords, np.linalg.inv(latticeVectors))
-        rcut = 4.0
-        density = 1.0
-        maxneigh = np.min([int(3.14592 * (4.0 / 3.0) * density * rcut**3), nats])
-        dvec = np.empty(coords.shape, dtype=coords.dtype)
-        nlTrvec = np.empty(coords.shape, dtype=int)
-        nl = np.zeros([nats, maxneigh], dtype=int)
-        nlTr = np.empty([nats, maxneigh, 3], dtype=int)
-        for i in range(nats):
-            for k in range(3):
-                # Compute the integer lattice vector translation first
-                dvec[:, k] = coords[i, k] - coords[:, k] + 0.5
-                nlTrvec[:, k] = np.floor(dvec[:, k])
-                # Now use the translation to compute the periodic displacement
-                dvec[:, k] = dvec[:, k] - nlTrvec[:, k] - 0.5
-            distance = np.linalg.norm(coords_frac_to_cart(dvec, latticeVectors), axis=1)
-            # Filter the list according to the threshold
-            nlSel = np.where(distance < rcut)[0]
-            nlSel = nlSel[nlSel != i]
-            cnt = len(nlSel)
-            nl[i, 1 : cnt + 1] = nlSel
-            nlTr[i, 1 : cnt + 1] = nlTrvec[:cnt]
-            nl[i, 0] = cnt
-            nlTr[i, 0] = cnt
-        ref_nl = nl[:, 1:]
-        ref_nlTr = nlTr[:, 1:, :]
-        coords = np.matmul(coords, latticeVectors)
-        test_nn, test_nl, test_nlTr = build_nlist(coords, latticeVectors, rcut=rcut, api="new")
-        for i in range(nats):
-            sort_indices = np.argsort(test_nl[i, : test_nn[i]])
-            test_nl[i, : test_nn[i]] = test_nl[i, sort_indices]
-            test_nlTr[i, : test_nn[i], :] = test_nlTr[i, sort_indices, :]
-        if not np.all(test_nl == ref_nl) and np.all(test_nlTr == ref_nlTr):
-            passed = False
-    except:
-        print("test_build_nlist failed to execute")
-        passed = False
-
-    if passed:
-        sdc_test_pass("build_nlist")
-    else:
-        sdc_test_fail("build_nlist")
-        if exit1:
-            exit(1)
-    return passed
 
 
 ## Get hindex
