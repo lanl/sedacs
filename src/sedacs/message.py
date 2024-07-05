@@ -1,34 +1,41 @@
-""" Standarized messages.
- 
- This will provide some standard messages used throughout the code
+"""Standarized messages.
+
+This will provide some standard messages used throughout the code
 """
 
 import sys
 
+
 class textcolor:
-    green = '\033[92m'
-    yellow = '\033[93m'
-    red = '\033[91m'
-    normal = '\033[0m'
+    green = "\033[92m"
+    yellow = "\033[93m"
+    red = "\033[91m"
+    normal = "\033[0m"
+
 
 def sdc_status_at(name):
-    print("\n >>> At ",name,"...\n") 
+    print("\n >>> At ", name, "...\n")
 
-def sdc_error_at(name,message=None):
-    print("\n !!!ERROR at",name,"\n")
-    if(message != None):
-        print("    ",message,"\n")
+
+def sdc_error_at(name, message=None):
+    print("\n !!!ERROR at", name, "\n")
+    if message != None:
+        print("    ", message, "\n")
     exit(0)
 
+
 def sdc_warning_at(name):
-    print("\n !!!WARNING at",name,"\n")
+    print("\n !!!WARNING at", name, "\n")
+
 
 def sdc_test_fail(name):
-    print("  Test for ",name,"... " + textcolor.red + "Failed" + textcolor.normal)
+    print("  Test for ", name, "... " + textcolor.red + "Failed" + textcolor.normal)
+
 
 def sdc_test_pass(name):
-    print("  Test for ",name,"... " + textcolor.green + "Passed" + textcolor.normal)
+    print("  Test for ", name, "... " + textcolor.green + "Passed" + textcolor.normal)
+
 
 def sdc_fail_at(name):
-    print("\n !!!ERROR at",name,"\n")
+    print("\n !!!ERROR at", name, "\n")
     exit(1)

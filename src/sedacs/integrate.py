@@ -1,37 +1,31 @@
-"""Do MD timestep using GJF w half velocity
- 
-"""
+"""Do MD timestep using GJF w half velocity"""
 
 import numpy as np
 from sedacs.interface_files import *
 from sedacs.interface_modules import *
 
+
 ## Do time step integration.
-# @brief 
+# @brief
 # @param
 # @param
 # @param
-# @param 
-# @verb Verbosity 
+# @param
+# @verb Verbosity
 #
 def do_timestep(coords, vels, forces, masses, gamma, dt, kT=None, verb=False):
+    n = np.shape(coords[:, :])
 
-    n=np.shape(coords[:,:])
+    kT = 8.610e-5 * 300.0
 
-    kT = 8.610e-5 * 300.0   
-    
-    vels[:,:] = vels[:,:] + dt * forces[:,:] / 2.0 / masses[:,:]
-    coords[:,:] = coords[:,:] + dt * vels[:,:] / 2.0 
-    
-    if ((gamma > 0.0) and (kT != None)):
-        c = (1-gamma*dt/2.0)/(1+gamma*dt/2.0)
-        vels[:,:] = c*vels[:,:] + np.sqrt((1-c**2)*kT/masses[:,:])*np.random.normal(0,1,n)
+    vels[:, :] = vels[:, :] + dt * forces[:, :] / 2.0 / masses[:, :]
+    coords[:, :] = coords[:, :] + dt * vels[:, :] / 2.0
 
-    coords[:,:] = coords[:,:] + dt * vels[:,:] / 2.0 
-    vels[:,:] = vels[:,:] + dt * forces[:,:] / 2.0 / masses[:,:]
-    
+    if (gamma > 0.0) and (kT != None):
+        c = (1 - gamma * dt / 2.0) / (1 + gamma * dt / 2.0)
+        vels[:, :] = c * vels[:, :] + np.sqrt((1 - c**2) * kT / masses[:, :]) * np.random.normal(0, 1, n)
+
+    coords[:, :] = coords[:, :] + dt * vels[:, :] / 2.0
+    vels[:, :] = vels[:, :] + dt * forces[:, :] / 2.0 / masses[:, :]
 
     return coords, vels
-
-
-
