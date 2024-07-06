@@ -112,7 +112,7 @@ def get_random_coordinates(nats):
 # @return H 2D numpy array of Hamiltonian elements
 # @param verb Verbosity. If True is passed, information is printed
 #
-def proxyA_get_hamiltonian(coords, atomTypes=np.zeros((1), dtype=int), verb=False):
+def get_hamiltonian(coords, atomTypes=np.zeros((1), dtype=int), verb=False):
     """Construct simple toy s-Hamiltonian"""
     N = len(coords[:, 1])
     Nocc = int(N / 4)
@@ -153,7 +153,7 @@ def proxyA_get_hamiltonian(coords, atomTypes=np.zeros((1), dtype=int), verb=Fals
 #
 # @return D Density matrix
 #
-def get_densityMatrix(H, Nocc, verb=False):
+def get_density_matrix(H, Nocc, verb=False):
     """Calcualted the full density matrix from H"""
     if verb:
         print("Computing the Density matrix")
@@ -186,7 +186,7 @@ def get_densityMatrix(H, Nocc, verb=False):
 #
 # @return D Density matrix
 #
-def get_densityMatrix_accel(H, N, Nocc, lib, verb=False):
+def get_density_matrix_gpu(H, N, Nocc, lib, verb=False):
     """Calcualted the full density matrix from H"""
     if verb:
         print("Computing the Density matrix using GPU/AI accel library")
@@ -221,14 +221,14 @@ if __name__ == "__main__":
     verb = True
     coords = get_random_coordinates(nats)
 
-    H = proxyA_get_hamiltonian(coords)
+    H = get_hamiltonian(coords)
 
     gpuLibIn = True  ## need to pass from input file or command line
     occ = int(float(nats) / 2.0)  # Get the total occupied orbitals
 
     if gpuLibIn == False:
         print("Using CPU for DM construction. Consider installing accelerator library...")
-        D = get_densityMatrix(H, occ)
+        D = get_density_matrix(H, occ)
 
     # print("Hamiltonian matrix=",H)
     # print("Density matrix=",D)
