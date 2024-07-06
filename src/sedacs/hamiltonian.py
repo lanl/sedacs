@@ -40,7 +40,7 @@ def sdc_get_hamiltonian(eng, coords, types, symbols, verb):
 
     # Using files as a form of communication and transfering data.
     elif eng.interface == "File":
-        ham = sdc_get_hamiltonian_files(eng, coords, types, symbols, verb=False)
+        ham = get_hamiltonian_files(eng, coords, types, symbols, verb=False)
 
     else:
         print("ERROR!!!: Interface type not recognized. Use any of the following: Module,File,Socket,MDI")

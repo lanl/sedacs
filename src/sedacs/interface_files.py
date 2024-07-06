@@ -1,12 +1,17 @@
 # Import the proper engine
-from proxy_a import *
 
-global engineUp
-engineUp = False
 import os
 import subprocess
-from sedacs.system import System
-from tempfile import TemporaryFile
+
+import numpy as np
+
+# from sedacs.proxies.first_level import *
+from sedacs.system_io import write_xyz_coordinates
+
+is_engine_up = False
+
+
+__all__ = ["get_instruction", "send_instruction", "get_hamiltonian_files"]
 
 
 ## Write a matrix
@@ -74,13 +79,13 @@ def send_instruction(instruction, fileName):
 # @param symbols Symbols for each atom type, e.g, the element symbol of the first atom is `symbols[types[0]]`
 # @param verb Verbosity level
 #
-def sdc_get_hamiltonian_files(eng, coords, atomTypes, symbols, verb):
+def get_hamiltonian_files(engine, coords, atomTypes, symbols, verb):
     # Write coordinates in a file
-    dataFileName = eng.path + "/data.dat"
-    instrFileName = eng.path + "/instructions.dat"
+    dataFileName = engine.path + "/data.dat"
+    instrFileName = engine.path + "/instructions.dat"
     # Run the server and keep it running
-    if not eng.up:
-        cmd = eng.run
+    if not engine.up:
+        cmd = engine.run
         subprocess.Popen(["nohup", cmd], stdout=open("/dev/null", "w"))
 
     write_xyz_coordinates(dataFileName, coords, atomTypes, symbols)
@@ -105,10 +110,10 @@ def sdc_get_hamiltonian_files(eng, coords, atomTypes, symbols, verb):
 
     print("INSTRUCTION", instr)
     if go:
-        ham = read_matrix(dataFileName)
+        hamiltonian = read_matrix(dataFileName)
+    else:
+        return None  # FIXME: This is not the best way to handle this!
 
-    print(ham)
-
-    eng.up = True
-
-    return ham
+    print(hamiltonian)
+    engine.up = True
+    return hamiltonian
