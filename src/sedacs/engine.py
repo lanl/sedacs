@@ -1,18 +1,18 @@
-"""engine 
+"""engine
 This module will be used to store information about the code
 we will be interfacing to.
- 
+
 """
 
 
-## Engine type 
+## Engine type
 # @brief This will contain the information that sedacs needs
 # in order to use an external quantum chemistry code.
-# 
-class engine:
-    """A prototype for the engine type.
-    """
-    def __init__(self,idIn):
+#
+class Engine:
+    """A prototype for the engine type."""
+
+    def __init__(self, idIn):
         ## Name of the engine
         self.name = "ProxyA"
         ## Interface type
@@ -23,15 +23,15 @@ class engine:
         self.id = idIn
         ## Engine execution file absolute path
         self.run = "/home/engine/engine.py"
-        ## Engine status. A logical variable to check the status of the engine. 
-        self.up = False 
+        ## Engine status. A logical variable to check the status of the engine.
+        self.up = False
 
 
 ### Engine input reader. This will use the parser module.
-## @brief This will be used to read the 
+## @brief This will be used to read the
 ## input variables used in the code.
 ##
-#def sdc_engine_input(fileName,engine):
+# def sdc_engine_input(fileName,engine):
 #    """Simple engine input parser
 #    """
 #        ## Keys and values read from the input file
@@ -42,5 +42,3 @@ class engine:
 #        engine.name = engine_dict["Name"]
 #        engine.path = engine_dict["Path"]
 #        engine.run = engine_dict["Executable"]
-
-

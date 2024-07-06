@@ -61,7 +61,7 @@ def init(args):
     sdc = Input(args.input_file, True)
 
     # Initialize the engine (quantum chemistry code)
-    eng = engine(rank)
+    eng = Engine(rank)
     eng.name = sdc.engine["Name"]
     eng.path = sdc.engine["Path"]
     eng.run = sdc.engine["Executable"]
