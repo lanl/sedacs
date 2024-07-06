@@ -34,6 +34,8 @@ try:
 except:
     gpuLib = False
 
+__all__ = ["rand", "get_random_coordinates", "get_hamiltonian", "get_density_matrix", "get_density_matrix_gpu"]
+
 
 ## Simple random number generator
 # This is important in order to compare across codes
