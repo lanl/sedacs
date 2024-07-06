@@ -7,7 +7,7 @@ import numpy as np
 # @brief This will be used to store and read the values for all the
 # input variables used in the code.
 #
-class sdc_input:
+class Input:
     """Simple input parser"""
 
     def __init__(self, fileName, verb=False):
@@ -214,4 +214,4 @@ class sdc_input:
 
 if __name__ == "__main__":
     # Initialize the input variables
-    inp = sdc_input("input.in", True)
+    inp = Input("input.in", True)

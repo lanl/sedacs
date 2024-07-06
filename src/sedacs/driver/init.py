@@ -58,7 +58,7 @@ def init(args):
         numranks = 1
 
     # Initialize the code by reading the input file
-    sdc = sdc_input(args.input_file, True)
+    sdc = Input(args.input_file, True)
 
     # Initialize the engine (quantum chemistry code)
     eng = engine(rank)

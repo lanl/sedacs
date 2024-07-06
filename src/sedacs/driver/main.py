@@ -44,7 +44,7 @@ rank = comm.Get_rank()
 numranks = comm.Get_size()
 
 # Initialize the code by reading the input file
-sdc = sdc_input("input.in", True)
+sdc = Input("input.in", True)
 
 # Read the coordinates
 sy = System(1)
