@@ -27,9 +27,9 @@ try:
 
     if arch == "nvda":
         print("loading nvidia...")
-        lib = ctypes.CDLL(str(pwd) + "/../../gpu/nvda/libnvda.so")
+        lib = ctypes.CDLL(str(pwd) + "../gpu/nvda/libnvda.so")
     if arch == "amd":
-        lib = ctypes.CDLL(str(pwd) + "/../../gpu/amd/libamd.so")
+        lib = ctypes.CDLL(str(pwd) + "../gpu/amd/libamd.so")
 
 except:
     gpuLib = False
