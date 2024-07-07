@@ -3,23 +3,22 @@ Some functions for partition a graph
 
 """
 
-import os, sys
+try:
+    import metis
+
+    metisLib = True
+except ImportError:
+    metisLib = False
 
 try:
     import networkx as nx
 
     nxLib = True
-except:
+except ImportError:
     nxLib = False
+
 import numpy as np
 
-global metisLib
-try:
-    import metis
-
-    metisLib = True
-except:
-    metisLib = False
 from sedacs.graph import *
 
 __all__ = [
