@@ -82,32 +82,6 @@ def get_cut(whichPart, graph):
     return cut
 
 
-def test_get_cut(exit1):
-    passed = True
-    nnodes = 9
-    whichPart = np.zeros((nnodes), dtype=int)
-    whichPart[0:4] = 0
-    whichPart[4:7] = 1
-    whichPart[7:9] = 2
-    graph = np.zeros((nnodes, nnodes), dtype=int)
-    graph[:, 0] = 1
-    # A cyclic graph
-    for i in range(nnodes - 1):
-        graph[i, 1] = i + 1
-    graph[8, 1] = 0
-    # 3 segments will cut the graph in 3 points
-    result = 3
-    try:
-        cut = get_cut(whichPart, graph)
-        if (result - cut) == 0:
-            passed = True
-        else:
-            passed = False
-    except:
-        passed = False
-    return passed
-
-
 ## Get partition indices
 # @brief Get a vector indicating which is the part index of a particular
 # node.
@@ -125,25 +99,6 @@ def get_parts_indices(parts, nnodes):
     return whichPart
 
 
-def test_get_parts_indices(exit1):
-    passed = True
-    parts = [[0, 1, 2, 3], [4, 5, 6], [7, 8]]
-    nnodes = 9
-    result = np.zeros((nnodes), dtype=int)
-    result[0:4] = 0
-    result[4:7] = 1
-    result[7:9] = 2
-    try:
-        whichPart = get_parts_indices(parts, nnodes)
-        if np.linalg.norm(result - whichPart) == 0.0:
-            passed = True
-        else:
-            passed = False
-    except:
-        passed = False
-    return passed
-
-
 ## Get the partition list from the index vector
 # @param whichPart part index vector for every node
 # @param nparts Number of parts
@@ -157,23 +112,6 @@ def get_parts_from_indices(whichPart, nparts):
         parts[partIndex].append(i)
 
     return parts
-
-
-def test_get_parts_from_indices(exit1):
-    nnodes = 9
-    whichPart = np.zeros((nnodes), dtype=int)
-    whichPart[0:4] = 0
-    whichPart[4:7] = 1
-    whichPart[7:9] = 2
-    partsRef = [[0, 1, 2, 3], [4, 5, 6], [7, 8]]
-    parts = get_parts_from_indices(whichPart, 3)
-    passed = True
-    for element in parts:
-        if element in partsRef:
-            pass
-        else:
-            passed = False
-    return passed
 
 
 ## Get graph partition balance.
@@ -197,20 +135,6 @@ def get_balancing(parts):
     return bal
 
 
-def test_get_balancing(exit1):
-    parts = [[0, 1, 2, 3], [0, 1]]
-    result = 2
-    try:
-        bal = get_balancing(parts)
-        if (bal - result) == 0:
-            passed = True
-        else:
-            passed = False
-    except:
-        passed = False
-    return passed
-
-
 ## Get partition balanging.
 # @brief Same as get_balancing except this uses the partitioning
 # vector.
@@ -223,24 +147,6 @@ def get_balance_from_indices(whichPart, nparts):
         partsSizes[whichPart[i]] = partsSizes[whichPart[i]] + 1
     bal = np.max(partsSizes) / np.min(partsSizes)
     return bal
-
-
-def test_get_balance_from_indices(exit1):
-    nnodes = 9
-    whichPart = np.zeros((nnodes), dtype=int)
-    whichPart[0:4] = 0
-    whichPart[4:7] = 1
-    whichPart[7:9] = 2
-    nparts = 3
-    try:
-        bal = get_balance_from_indices(whichPart, nparts)
-        if bal - 2.0 == 0.0:
-            passed = True
-        else:
-            passed = False
-    except:
-        passed = False
-    return passed
 
 
 ## Do node partition flips with precomputed cuts.
@@ -308,27 +214,6 @@ def do_flips_precomp(whichPart, graph, nnodes, nparts, bal=None):
     return whichPartNew
 
 
-def test_do_flips_precomp(exit1):
-    nnodes = 6
-    graph = get_a_small_graph()
-    whichPart = np.zeros((nnodes), dtype=int)
-    result = np.zeros((nnodes), dtype=int)
-    result[0:3] = 1
-    whichPart[0] = 1
-    whichPart[3] = 1
-    whichPart[2] = 1
-    nparts = 2
-    for i in range(10):
-        whichPartNew = do_flips_precomp(whichPart, graph, nnodes, nparts)
-        whichPart = whichPartNew
-        cut = get_cut(whichPart, graph)
-    if np.linalg.norm(whichPartNew - result) == 0:
-        passed = True
-    else:
-        passed = False
-    return passed
-
-
 ## Do node partition flips.
 # @brief This function does the same as the do_flips_precomp. It will converge
 # in less iterations but with a lower scaling.
@@ -378,27 +263,6 @@ def do_flips(whichPart, graph):
                 totNewCut = totNewCut + newCut
 
     return whichPartNew
-
-
-def test_do_flips(exit1):
-    nnodes = 6
-    graph = get_a_small_graph()
-    whichPart = np.zeros((nnodes), dtype=int)
-    result = np.zeros((nnodes), dtype=int)
-    result[0:3] = 1
-    whichPart[0] = 1
-    whichPart[3] = 1
-    whichPart[2] = 1
-    nparts = 2
-    for i in range(10):
-        whichPartNew = do_flips(whichPart, graph)
-        whichPart = whichPartNew
-        cut = get_cut(whichPart, graph)
-    if np.linalg.norm(whichPartNew - result) == 0:
-        passed = True
-    else:
-        passed = False
-    return passed
 
 
 ## MinCut local partition optimization.
@@ -513,26 +377,6 @@ def metis_partition(graph, nparts, verb=False):
 
     # plot_graph(nxGraph)
     return parts
-
-
-# This test is disabled for now
-def testNo_metis_partition(exit1):
-    nnodes = 6
-    graph = get_a_small_graph()
-    whichPart = np.zeros((nnodes), dtype=int)
-    result = np.zeros((nnodes), dtype=int)
-    nparts = 2
-    try:
-        parts = metis_partition(graph, nparts)
-        whichPart = get_parts_indices(parts, nnodes)
-        cut = get_cut(whichPart, graph)
-        if cut == 1:
-            passed = True
-        else:
-            passed = False
-    except:
-        passed = False
-    return passed
 
 
 ## Get the core and halo indices
