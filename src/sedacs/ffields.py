@@ -6,10 +6,13 @@ So far: Harmonic ffields.
 
 import numpy as np
 
-from sedacs.system import *
+from sedacs.message import sdc_error_at, sdc_status_at
+
+__all__ = ["get_sdc_classical_forces", "harmonic_potential"]
 
 
 def get_sdc_classical_forces(coords, types, symbols, latticeVectors, nl, nlTrX, nlTrY, nlTrZ, fFieldName, verb=False):
+    forces = None
     if verb:
         sdc_status_at("get_sdc_classical_force")
     if fFieldName == "HarmonicAll":
@@ -27,8 +30,8 @@ def harmonic_potential(coords, nl, nlTrX, nlTrY, nlTrZ, verb=False):
     # Get the forces on each atom
     nats = len(coords[:, 0])
     forces = np.zeros((nats, 3))
-    dVect = np.zeros((3))
-    forcesIJ = np.zeros((3))
+    dVect = np.zeros(3)
+    forcesIJ = np.zeros(3)
     for i in range(nats):
         for j in range(1, nl[i, 0] + 1):
             jj = nl[i, j]
