@@ -194,7 +194,7 @@ def do_flips_precomp(whichPart, graph, nnodes, nparts, bal=None):
             cutsI[i, partIndexII] = cutsI[i, partIndexII] - 1
 
     # whichPartNew = whichPart
-    # if(bal != None):
+    # if(bal is not None):
     #    if(bal < 1.1):
     #        for i in range(nnodes):
     #            whichPartNew[i] = np.argmax(cutsI[i,:])

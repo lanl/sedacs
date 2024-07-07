@@ -59,7 +59,7 @@ def read_coords_file(fileName, lib="None", verb=True):
 #
 def read_xyz_file(fileName, lib="None", verb=True):
     """xyz file parser: Reads in an xyz file with lattice informations."""
-    if (lib == "None") or (lib == None):
+    if (lib == "None") or (lib is None):
         fileIn = open(fileName, "r")
         count = -1
         latticeVectors = np.zeros((3, 3))
@@ -263,7 +263,7 @@ def read_pdb_file(fileName, lib="None", verb=False):
     """Reads a pdb file"""
     if verb:
         print("\nIn read_pdb_file...\n")
-    if (lib == "None") or (lib == None):
+    if (lib == "None") or (lib is None):
         fileIn = open(fileName, "r")
         count = 0
         latticeVectors = np.zeros((3, 3))

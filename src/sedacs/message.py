@@ -21,7 +21,7 @@ def sdc_status_at(name):
 
 def sdc_error_at(name, message=None):
     print("\n !!!ERROR at", name, "\n")
-    if message != None:
+    if message is not None:
         print("    ", message, "\n")
     sys.exit(0)
 

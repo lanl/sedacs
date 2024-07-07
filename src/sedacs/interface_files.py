@@ -43,7 +43,7 @@ def get_instruction(fileName):
 # @param fileName The name of the instruction file
 #
 def send_instruction(instruction, fileName):
-    if fileName == None:
+    if fileName is None:
         fileName = "/tmp/instructions.dat"
 
     haveFile = os.path.exists(fileName)

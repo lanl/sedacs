@@ -21,7 +21,7 @@ def do_timestep(coords, vels, forces, masses, gamma, dt, kT=None, verb=False):
     vels[:, :] = vels[:, :] + dt * forces[:, :] / 2.0 / masses[:, :]
     coords[:, :] = coords[:, :] + dt * vels[:, :] / 2.0
 
-    if (gamma > 0.0) and (kT != None):
+    if (gamma > 0.0) and (kT is not None):
         c = (1 - gamma * dt / 2.0) / (1 + gamma * dt / 2.0)
         vels[:, :] = c * vels[:, :] + np.sqrt((1 - c**2) * kT / masses[:, :]) * np.random.normal(0, 1, n)
 
