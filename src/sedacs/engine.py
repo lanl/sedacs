@@ -4,6 +4,8 @@ we will be interfacing to.
 
 """
 
+__all__ = ["Engine"]
+
 
 ## Engine type
 # @brief This will contain the information that sedacs needs
