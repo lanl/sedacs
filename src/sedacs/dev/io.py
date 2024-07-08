@@ -13,8 +13,7 @@ def locate_package(package_name):
         # Get the directory containing the package
         installation_path = os.path.dirname(package_path)
         return Path(installation_path)
-    else:
-        print(f"Package `{package_name}` not found.")
+    raise ModuleNotFoundError(f"Package `{package_name}` not found.")
 
 
 def src_path():
