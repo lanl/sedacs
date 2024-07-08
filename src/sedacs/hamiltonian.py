@@ -6,9 +6,10 @@ this will be done interfacing with an engine.
 
 import sys
 
-import numpy as np
-from sedacs.interface_files import *
-from sedacs.interface_modules import *
+from sedacs.interface_files import get_hamiltonian_files
+from sedacs.interface_modules import sdc_get_hamiltonian_module
+
+__all__ = ["sdc_get_hamiltonian"]
 
 
 ## Build the non-scf Hamiltonian matrix.
