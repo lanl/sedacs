@@ -12,14 +12,13 @@ import time
 
 import numpy as np
 import scipy.linalg as sp
-
-global gpuLib
+from sedacs.dev.io import src_path
 
 
 try:
     import ctypes
 
-    import gpulibInterface as gpu
+    # import gpulibInterface as gpu
 
     gpuLib = True
     arch = "nvda"
@@ -27,9 +26,9 @@ try:
 
     if arch == "nvda":
         print("loading nvidia...")
-        lib = ctypes.CDLL(str(pwd) + "../gpu/nvda/libnvda.so")
+        lib = ctypes.CDLL(str((src_path() / "gpu/nvda/libnvda.so").absolute()))
     if arch == "amd":
-        lib = ctypes.CDLL(str(pwd) + "../gpu/amd/libamd.so")
+        lib = ctypes.CDLL(str((src_path() / "gpu/amd/libamd.so").absolute()))
 
 except:
     gpuLib = False
