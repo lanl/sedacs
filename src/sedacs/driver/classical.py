@@ -2,7 +2,7 @@ import sys
 
 import numpy as np
 
-from sedacs.ffields import get_classical_forces
+from sedacs.force_fields import get_classical_forces
 from sedacs.integrate import do_timestep
 from sedacs.periodic_table import PeriodicTable
 from sedacs.system import get_random_coordinates
