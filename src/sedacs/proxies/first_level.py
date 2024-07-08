@@ -34,7 +34,7 @@ try:
 except:
     gpuLib = False
 
-__all__ = ["rand", "get_random_coordinates", "get_hamiltonian", "get_density_matrix", "get_density_matrix_gpu"]
+__all__ = ["Rand", "get_random_coordinates", "get_hamiltonian", "get_density_matrix", "get_density_matrix_gpu"]
 
 
 ## Simple random number generator
@@ -52,7 +52,7 @@ __all__ = ["rand", "get_random_coordinates", "get_hamiltonian", "get_density_mat
 #   rnd = myRand.get_rand(low,high)
 # \endverbatim
 #
-class rand:
+class Rand:
     """To generate random numbers."""
 
     def __init__(self, seed):
@@ -88,7 +88,7 @@ def get_random_coordinates(nats):
     coords = np.zeros((nats, 3))
     latticeParam = 2.0
     atomsCounter = -1
-    myrand = rand(111)
+    myrand = Rand(111)
     for i in range(length):
         for j in range(length):
             for k in range(length):
