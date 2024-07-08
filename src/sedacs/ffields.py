@@ -8,10 +8,10 @@ import numpy as np
 
 from sedacs.message import sdc_error_at, sdc_status_at
 
-__all__ = ["get_sdc_classical_forces", "harmonic_potential"]
+__all__ = ["get_classical_forces", "harmonic_potential"]
 
 
-def get_sdc_classical_forces(coords, types, symbols, latticeVectors, nl, nlTrX, nlTrY, nlTrZ, fFieldName, verb=False):
+def get_classical_forces(coords, types, symbols, latticeVectors, nl, nlTrX, nlTrY, nlTrZ, fFieldName, verb=False):
     forces = None
     if verb:
         sdc_status_at("get_sdc_classical_force")

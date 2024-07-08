@@ -1,11 +1,11 @@
-from sedacs.ffields import *
+from sedacs.ffields import get_classical_forces
 from sedacs.integrate import *
 from sedacs.periodic_table import *
 from sedacs.system import *
 
 
 def test_ffield(coords, types, symbols, latticeVectors, nl, nlTrX, nlTrY, nlTrZ):
-    forces = get_sdc_classical_forces(
+    forces = get_classical_forces(
         coords, types, symbols, latticeVectors, nl, nlTrX, nlTrY, nlTrZ, "HarmonicAll", verb=True
     )
     print("forces", forces)
@@ -38,7 +38,7 @@ def do_MD(init_coords, types, symbols, latticeVectors, nl, nlTrX, nlTrY, nlTrZ, 
 
     myFile = open("traj.xyz", "w")
     for i in range(0, num_steps):
-        forces = get_sdc_classical_forces(
+        forces = get_classical_forces(
             coords, types, symbols, latticeVectors, nl, nlTrX, nlTrY, nlTrZ, "HarmonicAll", verb=False
         )
 
