@@ -1,7 +1,9 @@
+import numpy as np
+
 from sedacs.ffields import get_classical_forces
-from sedacs.integrate import *
-from sedacs.periodic_table import *
-from sedacs.system import *
+from sedacs.integrate import do_timestep
+from sedacs.periodic_table import PeriodicTable
+from sedacs.system import get_random_coordinates
 
 
 def test_ffield(coords, types, symbols, latticeVectors, nl, nlTrX, nlTrY, nlTrZ):
