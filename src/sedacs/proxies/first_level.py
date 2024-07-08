@@ -34,7 +34,13 @@ try:
 except:
     gpuLib = False
 
-__all__ = ["Rand", "get_random_coordinates", "get_hamiltonian", "get_density_matrix", "get_density_matrix_gpu"]
+__all__ = [
+    "RandomNumberGenerator",
+    "get_random_coordinates",
+    "get_hamiltonian",
+    "get_density_matrix",
+    "get_density_matrix_gpu",
+]
 
 
 ## Simple random number generator
@@ -52,7 +58,7 @@ __all__ = ["Rand", "get_random_coordinates", "get_hamiltonian", "get_density_mat
 #   rnd = myRand.get_rand(low,high)
 # \endverbatim
 #
-class Rand:
+class RandomNumberGenerator:
     """To generate random numbers."""
 
     def __init__(self, seed):
@@ -62,7 +68,7 @@ class Rand:
         self.seed = seed
         self.status = seed * 1000
 
-    def get_rand(self, low, high):
+    def generate(self, low, high):
         """Get a random real number in between low and high."""
         w = high - low
         place = self.a * self.status
@@ -88,18 +94,18 @@ def get_random_coordinates(nats):
     coords = np.zeros((nats, 3))
     latticeParam = 2.0
     atomsCounter = -1
-    myrand = Rand(111)
+    myrand = RandomNumberGenerator(111)
     for i in range(length):
         for j in range(length):
             for k in range(length):
                 atomsCounter = atomsCounter + 1
                 if atomsCounter >= nats:
                     break
-                rnd = myrand.get_rand(-1.0, 1.0)
+                rnd = myrand.generate(-1.0, 1.0)
                 coords[atomsCounter, 0] = i * latticeParam + rnd
-                rnd = myrand.get_rand(-1.0, 1.0)
+                rnd = myrand.generate(-1.0, 1.0)
                 coords[atomsCounter, 1] = j * latticeParam + rnd
-                rnd = myrand.get_rand(-1.0, 1.0)
+                rnd = myrand.generate(-1.0, 1.0)
                 coords[atomsCounter, 2] = k * latticeParam + rnd
     return coords
 

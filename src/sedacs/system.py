@@ -42,7 +42,7 @@ import time
 __all__ = [
     "System",
     "Trajectory",
-    "Rand",
+    "RandomNumberGenerator",
     "get_random_coordinates",
     "parameters_to_vectors",
     "vectors_to_parameters",
@@ -317,7 +317,7 @@ def vectors_to_parameters(Amat, verb=False):
 #   rnd = myRand.get_rand(low,high)
 # \endverbatim
 #
-class Rand:
+class RandomNumberGenerator:
     """To generate random numbers."""
 
     def __init__(self, seed):
@@ -327,7 +327,7 @@ class Rand:
         self.seed = seed
         self.status = seed * 1000
 
-    def get_rand(self, low, high):
+    def generate(self, low, high):
         """Get a random real number in between low and high."""
         w = high - low
         place = self.a * self.status
@@ -358,16 +358,16 @@ def get_random_coordinates(length):
     coords = np.zeros((nats, 3))
     latticeParam = 2.0
     atomsCounter = -1
-    myrand = Rand(123)
+    myrand = RandomNumberGenerator(123)
     for i in range(length):
         for j in range(length):
             for k in range(length):
                 atomsCounter = atomsCounter + 1
-                rnd = myrand.get_rand(-1.0, 1.0)
+                rnd = myrand.generate(-1.0, 1.0)
                 coords[atomsCounter, 0] = i * latticeParam + rnd
-                rnd = myrand.get_rand(-1.0, 1.0)
+                rnd = myrand.generate(-1.0, 1.0)
                 coords[atomsCounter, 1] = j * latticeParam + rnd
-                rnd = myrand.get_rand(-1.0, 1.0)
+                rnd = myrand.generate(-1.0, 1.0)
                 coords[atomsCounter, 2] = k * latticeParam + rnd
     return coords
 
