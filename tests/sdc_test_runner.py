@@ -2,9 +2,11 @@
 This is used to run individual tests
 """
 
-from sedacs.system import *
-from sedacs.periodic_table import *
+import sys
+
 from sedacs.graph_partition import *
+from sedacs.periodic_table import *
+from sedacs.system import *
 
 
 ## For coloring text
@@ -34,7 +36,7 @@ if len(sys.argv) <= 1:
     print("\nNo test was passed ...")
     print("\nUssage:")
     print("\n          ./sdc_test_runner.py <test_name>\n")
-    exit(0)
+    sys.exit(0)
 
 testName = sys.argv[1]
 

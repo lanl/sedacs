@@ -1,5 +1,6 @@
 """Graph adaptive solver"""
 
+import sys
 import time
 
 from sedacs.driver import *
@@ -117,6 +118,6 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     if rank == 0:
         write_pdb_coordinates("subSyG_fin.pdb", subSy.coords, subSy.types, subSy.symbols)
         write_xyz_coordinates("subSyG_fin.xyz", subSy.coords, subSy.types, subSy.symbols)
-    exit(0)
+    sys.exit(0)
     if rank == 0:
         print_graph(graphOnRank)

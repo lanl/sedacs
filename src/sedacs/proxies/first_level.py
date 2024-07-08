@@ -222,7 +222,7 @@ if __name__ == "__main__":
     if n == 1:
         print("Give the total number of atoms. Example:\n")
         print("proxy_a 100\n")
-        exit(0)
+        sys.exit(0)
     else:
         nats = int(sys.argv[1])
 

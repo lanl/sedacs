@@ -3,6 +3,8 @@ Some graph functions
 
 """
 
+import sys
+
 import numpy as np
 
 global nxLib
@@ -195,7 +197,7 @@ def collect_graph_from_rho(graph, rho, thresh, nnodes, maxDeg, indices, hindex=N
                 graph[ii, k] = jj
                 if k >= maxDeg + 1:
                     print("!!!ERROR: Max Degree parameter is too small")
-                    exit(0)
+                    sys.exit(0)
         graph[ii, 0] = k
 
     return graph

@@ -4,6 +4,8 @@ this will be done interfacing with an engine.
 
 """
 
+import sys
+
 import numpy as np
 from sedacs.interface_files import *
 from sedacs.interface_modules import *
@@ -31,12 +33,12 @@ def sdc_get_hamiltonian(eng, coords, types, symbols, verb):
     # Using any available library. We will use MDI here.
     elif eng.interface == "MDI":
         print("MDI interface not implemented yet")
-        exit(0)
+        sys.exit(0)
 
     # Using unix sockets to interface the codes
     elif eng.interface == "Socket":
         print("Sockets not implemented yet")
-        exit(0)
+        sys.exit(0)
 
     # Using files as a form of communication and transfering data.
     elif eng.interface == "File":
@@ -44,6 +46,6 @@ def sdc_get_hamiltonian(eng, coords, types, symbols, verb):
 
     else:
         print("ERROR!!!: Interface type not recognized. Use any of the following: Module,File,Socket,MDI")
-        exit(0)
+        sys.exit(0)
 
     return ham

@@ -1,9 +1,12 @@
 # Pytorch kernels
 
-from sedacs.system import *
+import sys
+import time
+
 import torch as tc
 import torch.nn.functional as tf
-import time
+
+from sedacs.system import *
 
 
 ## Neighbor list
@@ -89,7 +92,7 @@ def build_nlist_torch(coords, latticeVectors, rcut, device=tc.device("cpu"), ran
         totPerBox[ith] = totPerBox[ith] + 1  # How many per box
         if totPerBox[ith] >= maxInBox:
             print("Exceeding the max in box allowed")
-            exit(0)
+            sys.exit(0)
         inbox[ith, totPerBox[ith]] = i  # Who is in box ith
 
     for i in range(nBox):  # Correcting - from indexing to

@@ -1,5 +1,7 @@
 """sdc prototype parser"""
 
+import sys
+
 import numpy as np
 
 
@@ -62,7 +64,7 @@ class Input:
         ## Will check to make sure there are only valid key name in the input
         err = self.validate_keys(keyVals, validKeys)
         if err:
-            exit(0)
+            sys.exit(0)
 
     ## Check all the key names.
     # @brief Will check to make sure there are only valid key name in the input

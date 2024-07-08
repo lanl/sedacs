@@ -3,6 +3,8 @@ Some functions for partition a graph
 
 """
 
+import sys
+
 try:
     import metis
 
@@ -370,7 +372,7 @@ def metis_partition(graph, nparts, verb=False):
     """Partitions using metis"""
     if metisLib == False:
         print("\n ERROR: Consider installing Metis library \n")
-        exit(0)
+        sys.exit(0)
     if verb:
         print("\nMetis partition:")
     nxGraph = get_nx_graph(graph, 1.0)

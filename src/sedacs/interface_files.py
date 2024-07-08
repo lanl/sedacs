@@ -2,6 +2,7 @@
 
 import os
 import subprocess
+import sys
 
 import numpy as np
 
@@ -89,7 +90,7 @@ def get_hamiltonian_files(engine, coords, atomTypes, symbols, verb):
         subprocess.Popen(["nohup", cmd], stdout=open("/dev/null", "w"))
 
     write_xyz_coordinates(dataFileName, coords, atomTypes, symbols)
-    # exit(0)
+    # sys.exit(0)
     send_instruction("GET_HAMILTONIAN", instrFileName)
 
     instr = get_instruction(instrFileName)
@@ -105,7 +106,7 @@ def get_hamiltonian_files(engine, coords, atomTypes, symbols, verb):
         if instruction == "START":
             go = True
         if instruction == "STOP":
-            exit(0)
+            sys.exit(0)
     instructionFile.close()
 
     print("INSTRUCTION", instr)

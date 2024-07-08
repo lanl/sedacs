@@ -1,5 +1,7 @@
 """Initialize sedac driver"""
 
+import sys
+
 from sedacs.driver import *
 from sedacs.engine import *
 from sedacs.system import System
@@ -29,7 +31,7 @@ def get_args():
                 args.device = tc.device("cpu")
         else:
             print("Pytorch is not available")
-            exit(0)
+            sys.exit(0)
     return args
 
 

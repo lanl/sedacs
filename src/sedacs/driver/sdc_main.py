@@ -3,6 +3,7 @@
 """
 
 import argparse
+import sys
 import time
 
 from proxy_a import *
@@ -73,7 +74,7 @@ if rank == 0:
 #subSy.coords,subSy.types = extract_subsystem(sy.coords,sy.types,sy.symbols,nl[1234,1:nl[1234,0]])
 #if rank == 0:
 #    write_pdb_coordinates("subSy.pdb",subSy.coords,subSy.types,subSy.symbols)
-#exit(0)
+#sys.exit(0)
 
 
 #Get initial graph (from a neighbor list)

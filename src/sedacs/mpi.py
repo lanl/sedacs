@@ -1,7 +1,8 @@
 """Some mpi wrappers using MPI4PY"""
 
-import numpy as np
 import sys
+
+import numpy as np
 
 try:
     from mpi4py import MPI
@@ -47,11 +48,11 @@ def send_and_receive(dataSend, fromRank, toRank, rank, comm):
 def collect_matrix_from_chunks(chunk, nDim, rowsPerChunk, rank, numranks, comm):
     if not mpiLib:
         print("\nERROR: Consider installing mpi4py")
-        exit(0)
+        sys.exit(0)
 
     if nDim < rowsPerChunk:
         print("\nERROR: nDim should be larger than rowsPerChunk")
-        exit(0)
+        sys.exit(0)
 
     maxChunkDim = nDim - (numranks - 1) * rowsPerChunk
 
@@ -89,7 +90,7 @@ def collect_matrix_from_chunks(chunk, nDim, rowsPerChunk, rank, numranks, comm):
 def collect_and_sum_matrices(matOnRank, rank, numranks, comm):
     if not mpiLib:
         print("\nERROR: Consider installing mpi4py")
-        exit(0)
+        sys.exit(0)
     nDim = len(matOnRank[:, 0])
     mDim = len(matOnRank[0, :])
     fullMat = np.zeros([nDim, mDim], dtype=int)
@@ -120,11 +121,11 @@ def collect_and_sum_matrices(matOnRank, rank, numranks, comm):
 def collect_matrix_from_chunks_v1(chunk, nDim, rowsPerChunk, rank, numranks, comm):
     if not mpiLib:
         print("\nERROR: Consider installing mpi4py")
-        exit(0)
+        sys.exit(0)
 
     if nDim < rowsPerChunk:
         print("\nERROR: nDim should be larger than rowsPerChunk")
-        exit(0)
+        sys.exit(0)
 
     maxChunkDim = nDim - (numranks - 1) * rowsPerChunk
 
@@ -143,7 +144,7 @@ def collect_matrix_from_chunks_v1(chunk, nDim, rowsPerChunk, rank, numranks, com
     comm.Allgatherv(chunk, [fullMat, nDim * mDim, displacements, MPI.INT])
 
     print("recv", fullMat)
-    exit(0)
+    sys.exit(0)
 
     return fullMat
 
@@ -153,7 +154,7 @@ if __name__ == "__main__":
     n = len(sys.argv)
     if n == 1:
         print("Give the name of the function to be tested. Example: collect_matrix_from_chunks\n")
-        exit(0)
+        sys.exit(0)
     else:
         test = str(sys.argv[1])
 

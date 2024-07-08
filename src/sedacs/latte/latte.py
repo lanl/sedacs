@@ -1,7 +1,9 @@
-import os, sys
+import os
+import sys
+from multiprocessing import Pool
+
 import numpy as np
 from scipy.linalg import eigh
-from multiprocessing import Pool
 
 
 ###
@@ -584,7 +586,7 @@ def get_btypeInt(noint, btype, atele, ele1, ele2, nats, verbose):
             btypeInt[2, i] = 3
         else:
             print("Warning! Missed assigning a bond type in readtb")
-            exit(0)
+            sys.exit(0)
 
         if btypeInt[1, i] > lMax:
             lMax = btypeInt[1, i]
@@ -785,7 +787,7 @@ def build_integralMap(noint, btype, atele, ele1, ele2, nats, verbose):
             btypeInt[2, i] = 3
         else:
             print("Warning! Missed assigning a bond type in readtb")
-            exit(0)
+            sys.exit(0)
 
         if btypeInt[1, i] > lMax:
             lMax = btypeInt[1, i]
@@ -1286,7 +1288,7 @@ def read_bondints(electronsFileName, bondintsFileName, verbose):
             btype_int[2, i] = 2
         else:
             print("Warning! Missed assigning a bond type in readtb")
-            exit(0)
+            sys.exit(0)
 
     # return(noelem,ele,ele,basis,atocc,hes,hep,hed,hef,mass,hubbardu,btype_int,)
     return (
@@ -1439,7 +1441,7 @@ def genX(smat, method, verbose):
         pass
     else:
         print("ERROR: Method not implemented")
-        exit(0)
+        sys.exit(0)
 
     if verbose:
         print("\nZmat Matrix")

@@ -5,6 +5,8 @@ So far: Creates random coordinates; reads and writes xyz and pdb files;
 creates a neighbor list.
 """
 
+import sys
+
 import numpy as np
 
 global aseLib
@@ -580,13 +582,13 @@ def build_nlist_integer(coords, latticeVectors, rcut, rank=0, numranks=1, verb=F
 
         if ix > nx or ix < 0:
             print("Error in box index")
-            exit(0)
+            sys.exit(0)
         if iy > ny or iy < 0:
             print("Error in box index")
-            exit(0)
+            sys.exit(0)
         if iz > nz or iz < 0:
             print("Error in box index")
-            exit(0)
+            sys.exit(0)
 
         ith = ix + iy * nx + iz * nx * ny  # Get small box index
         boxOfI[i] = ith
@@ -603,7 +605,7 @@ def build_nlist_integer(coords, latticeVectors, rcut, rank=0, numranks=1, verb=F
         totPerBox[ith] = totPerBox[ith] + 1  # How many per box
         if totPerBox[ith] >= maxInBox:
             print("Exceeding the max in box allowed")
-            exit(0)
+            sys.exit(0)
         inbox[ith, totPerBox[ith]] = i  # Who is in box ith
 
     for i in range(nBox):  # Correcting - from indexing to
@@ -813,7 +815,7 @@ def build_nlist(coords_cart, latticeVectors, rcut, rank=0, numranks=1, verb=Fals
         totPerBox[ith] = totPerBox[ith] + 1  # For now this is the atom index in the box
         if totPerBox[ith] >= maxInBox:
             print("Exceeding the max in box allowed")
-            exit(0)
+            sys.exit(0)
         inbox[ith, totPerBox[ith]] = i  # Who is in box ith
 
     for i in range(nBox):  # Now this array will hold the total number of atoms in each box

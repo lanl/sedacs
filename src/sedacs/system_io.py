@@ -1,3 +1,5 @@
+import sys
+
 import numpy as np
 
 from sedacs.system import parameters_to_vectors
@@ -126,7 +128,7 @@ def read_xyz_file(fileName, lib="None", verb=True):
     if lib == "Ase":  # https://wiki.fysik.dtu.dk/ase/ase/atoms.html
         if aseLib == False:
             print("\n ERROR: Consider installing ASE library (https://wiki.fysik.dtu.dk/ase/ase/atoms.html) \n")
-            exit(0)
+            sys.exit(0)
         system = ase.io.read(fileName)
         coords = system.get_positions()
         symbols = []  # Symbols for each atom type
