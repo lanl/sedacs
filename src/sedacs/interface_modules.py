@@ -1,15 +1,17 @@
-from proxy_a import *
-import ctypes as ct
+import ctypes
 import os
+
+import numpy as np
 
 # import the shared library
 fortlibFileName = os.environ["PROXYA_FORTRAN_PATH"] + "/proxya_fortran.so"
 
 try:
-    fortlib = ct.CDLL(fortlibFileName)
-    f = fortlib.proxya_get_hamiltonian
-except:
+    fortlib = ctypes.CDLL(fortlibFileName)
+    get_hamiltonian_fortran = fortlib.proxya_get_hamiltonian
+except Exception as e:
     fortlib = None
+    raise e
 
 __all__ = ["get_hamiltonian_module"]
 
@@ -33,20 +35,22 @@ def get_hamiltonian_module(eng, coords, atomTypes, symbols, verb):
             coords_in[3 * i + 2] = coords[i, 2]
 
         # Specify arguments type as a pointers
-        f.argtypes = [
-            ct.c_int,
-            ct.c_int,
-            ct.POINTER(ct.c_double),
-            ct.POINTER(ct.c_int),
-            ct.POINTER(ct.c_double),
-            ct.c_bool,
+        get_hamiltonian_fortran.argtypes = [
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.c_double),
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_double),
+            ctypes.c_bool,
         ]
         # Passing a pointer to Fotran
-        coords_ptr = coords.ctypes.data_as(ct.POINTER(ct.c_double))
-        atomTypes_ptr = atomTypes.ctypes.data_as(ct.POINTER(ct.c_int))
-        ham = np.zeros((norbs, norbs))
-        ham_ptr = ham.ctypes.data_as(ct.POINTER(ct.c_double))
+        coords_ptr = coords.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+        atomTypes_ptr = atomTypes.ctypes.data_as(ctypes.POINTER(ctypes.c_int))
+        hamiltonian = np.zeros((norbs, norbs))
+        ham_ptr = hamiltonian.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
 
-        err = f(ct.c_int(nats), ct.c_int(norbs), coords_ptr, atomTypes_ptr, ham_ptr, ct.c_bool(verb))
+        err = get_hamiltonian_fortran(
+            ctypes.c_int(nats), ctypes.c_int(norbs), coords_ptr, atomTypes_ptr, ham_ptr, ctypes.c_bool(verb)
+        )
 
-    return ham
+    return hamiltonian
