@@ -36,7 +36,7 @@ except:
 __all__ = [
     "RandomNumberGenerator",
     "get_random_coordinates",
-    "get_hamiltonian",
+    "get_hamiltonian_proxy",
     "get_density_matrix",
     "get_density_matrix_gpu",
 ]
@@ -119,7 +119,7 @@ def get_random_coordinates(nats):
 # @return H 2D numpy array of Hamiltonian elements
 # @param verb Verbosity. If True is passed, information is printed
 #
-def get_hamiltonian(coords, atomTypes=np.zeros((1), dtype=int), verb=False):
+def get_hamiltonian_proxy(coords, atomTypes=np.zeros((1), dtype=int), verb=False):
     """Construct simple toy s-Hamiltonian"""
     N = len(coords[:, 1])
     Nocc = int(N / 4)
@@ -228,7 +228,7 @@ if __name__ == "__main__":
     verb = True
     coords = get_random_coordinates(nats)
 
-    H = get_hamiltonian(coords)
+    H = get_hamiltonian_proxy(coords)
 
     gpuLibIn = True  ## need to pass from input file or command line
     occ = int(float(nats) / 2.0)  # Get the total occupied orbitals
