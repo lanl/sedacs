@@ -7,7 +7,7 @@ this will be done interfacing with an engine.
 import sys
 
 from sedacs.interface_files import get_hamiltonian_files
-from sedacs.interface_modules import sdc_get_hamiltonian_module
+from sedacs.interface_modules import get_hamiltonian_module
 
 __all__ = ["sdc_get_hamiltonian"]
 
@@ -29,7 +29,7 @@ def sdc_get_hamiltonian(eng, coords, types, symbols, verb):
     # Tight interface using modules or an external code compiled as a library
     elif eng.interface == "Module":
         # We will call proxyA directly as it will be loaded as a module.
-        ham = sdc_get_hamiltonian_module(eng, coords, types, symbols, verb=False)
+        ham = get_hamiltonian_module(eng, coords, types, symbols, verb=False)
 
     # Using any available library. We will use MDI here.
     elif eng.interface == "MDI":
