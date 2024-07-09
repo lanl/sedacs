@@ -6,12 +6,13 @@ A prototype engine that:
     - Computes the Density matrix from the Hamiltonian
 """
 
+import ctypes
 import os
 import sys
-import time
 
 import numpy as np
 import scipy.linalg as sp
+import sedacs.interface_modules
 from sedacs.dev.io import src_path
 
 
@@ -146,6 +147,9 @@ def get_hamiltonian_proxy(coords, atomTypes=np.zeros((1), dtype=int), verb=False
             H[i, j] = tmp
             H[j, i] = tmp
     return H
+
+
+sedacs.interface_modules.get_hamiltonian_proxy = get_hamiltonian_proxy
 
 
 ## Computes the Density matrix from a given Hamiltonian.
