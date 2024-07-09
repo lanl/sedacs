@@ -20,7 +20,7 @@ def get_hamiltonian_proxy(*args, **kwargs):
 
 def get_hamiltonian_module(eng, coords, atomTypes, symbols, verb):
     if eng.name == "ProxyA":
-        ham = proxyA_get_hamiltonian(coords, atomTypes=np.zeros((1), dtype=int), verb=False)
+        hamiltonian = get_hamiltonian_proxy(coords, atomTypes=np.zeros((1), dtype=int), verb=False)
 
     elif eng.name == "ProxyAFortran":
         nats = len(coords[:, 0])
