@@ -1,12 +1,20 @@
 """Graph adaptive solver"""
 
-import sys
 import time
 
-from sedacs.driver import *
-from sedacs.graph_partition import *
-from sedacs.hamiltonian import *
-from sedacs.system import System
+from sedacs.graph import add_graphs, collect_graph_from_rho, print_graph
+from sedacs.graph_partition import get_coreHaloIndices, graph_partition
+from sedacs.hamiltonian import sdc_get_hamiltonian
+from sedacs.mpi import collect_and_sum_matrices
+from sedacs.system import System, extract_subsystem
+from sedacs.system_io import write_pdb_coordinates, write_xyz_coordinates
+
+try:
+    from mpi4py import MPI
+
+    is_mpi_available = True
+except ModuleNotFoundError:
+    is_mpi_available = False
 
 
 def get_density_matrix(*args, **kwargs):
@@ -70,7 +78,7 @@ def get_singlePoint(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hi
         # dvalsOnRank = collect_dValsOnRank(dVals)
         # evalsOnRank = collect_eValsOnRank(eVals)
 
-    if mpiON:
+    if is_mpi_available:
         fullGraphRho = collect_and_sum_matrices(graphOnRank, rank, numranks, comm)
         # dValsFull = collect_dValsFull(dValsOnRank) #MPI functions # Newton-Raphosn from graph paper???
         # eValsFull = collect_eValsFull(dValsOnRank) #MPI functions # Newton-Raphosn from graph paper???
@@ -122,6 +130,4 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     if rank == 0:
         write_pdb_coordinates("subSyG_fin.pdb", subSy.coords, subSy.types, subSy.symbols)
         write_xyz_coordinates("subSyG_fin.xyz", subSy.coords, subSy.types, subSy.symbols)
-    sys.exit(0)
-    if rank == 0:
         print_graph(graphOnRank)
