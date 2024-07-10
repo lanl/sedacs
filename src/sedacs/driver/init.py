@@ -1,10 +1,49 @@
 """Initialize sedac driver"""
 
-import sys
+import argparse
+import time
 
-from sedacs.driver import *
-from sedacs.engine import *
-from sedacs.system import System
+import numpy as np
+
+from sedacs.engine import Engine
+from sedacs.graph import get_initial_graph
+from sedacs.parser import Input
+from sedacs.system import System, build_nlist, extract_subsystem, get_hindex
+from sedacs.system_io import read_coords_file, write_xyz_coordinates
+
+MPI = None
+try:
+    from mpi4py import MPI
+
+    is_mpi_available = True
+except ImportError:
+    is_mpi_available = False
+
+torch = None
+try:
+    import torch
+
+    from sedacs.torch import build_nlist_torch
+
+    is_torch_available = True
+except ImportError:
+    is_torch_available = False
+
+
+def available_device():
+    if is_torch_available:
+        if torch.cuda.is_available():
+            print("Using CUDA")
+            return torch.device("cuda")
+
+        if torch.backends.mps.is_available():
+            print("Using MPS")
+            return torch.device("mps")
+
+        print("Using CPU")
+        return torch.device("cpu")
+
+    raise Exception("Pytorch is not available!")
 
 
 ## Getting arguments
@@ -18,20 +57,8 @@ def get_args():
     parser.add_argument("--input-file", help="Specify input file", required=False, type=str, default="input.in")
 
     args = parser.parse_args()
-
     if args.use_torch:
-        if tcAvail:
-            if tc.cuda.is_available():
-                print("Using CUDA")
-                args.device = tc.device("cuda")
-            elif tc.backends.mps.is_available():
-                print("Using MPS")
-                args.device = tc.device("mps")
-            else:
-                args.device = tc.device("cpu")
-        else:
-            print("Pytorch is not available")
-            sys.exit(0)
+        args.device = available_device()
     return args
 
 
@@ -50,7 +77,7 @@ def get_args():
 # `nl[i,1:nl[i,0]]` = neigbors of i. Self neighbor i to i is not included explicitly.
 #
 def init(args):
-    if mpiON:
+    if is_mpi_available:
         comm = MPI.COMM_WORLD
         rank = comm.Get_rank()
         numranks = comm.Get_size()
@@ -86,7 +113,7 @@ def init(args):
             sy.coords, sy.latticeVectors, sdc.rcut, api="old", rank=rank, numranks=numranks, verb=False
         )
         # nl,nlTrX,nlTrY,nlTrZ = build_nlist_integer(sy.coords,sy.latticeVectors,sdc.rcut,rank=rank,numranks=numranks,verb=False)
-    if mpiON:
+    if is_mpi_available:
         comm.Barrier()
 
     toc = time.perf_counter()
