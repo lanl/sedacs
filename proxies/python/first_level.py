@@ -12,6 +12,7 @@ import sys
 
 import numpy as np
 import scipy.linalg as sp
+import sedacs.driver
 import sedacs.interface_modules
 from sedacs.dev.io import src_path
 
@@ -182,6 +183,9 @@ def get_density_matrix(H, Nocc, verb=False):
     if verb:
         print("Chemical potential = ", mu)
     return D
+
+
+sedacs.driver.get_density_matrix = get_density_matrix
 
 
 ## Computes the Density matrix from a given Hamiltonian.
