@@ -9,6 +9,10 @@ from sedacs.hamiltonian import *
 from sedacs.system import System
 
 
+def get_density_matrix(*args, **kwargs):
+    pass
+
+
 ## Single point calculation
 # @brief Construct a connectivity graph based on constructing density matrices
 # of parts of the system.
@@ -44,7 +48,7 @@ def get_singlePoint(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hi
         norbs = subSy.nats
         occ = int(float(norbs) / 2.0)  # Get the total occupied orbitals
         tic = time.perf_counter()
-        rho = get_densityMatrix(ham, occ)
+        rho = get_density_matrix(ham, occ)
         # print(rho)
 
         ## MAKSIM
