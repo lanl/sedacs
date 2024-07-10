@@ -16,6 +16,8 @@ try:
 except ModuleNotFoundError:
     is_mpi_available = False
 
+__all__ = ["get_singlePoint", "get_adaptiveDM"]
+
 
 def get_density_matrix(*args, **kwargs):
     pass

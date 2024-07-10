@@ -30,6 +30,9 @@ except ImportError:
     is_torch_available = False
 
 
+__all__ = ["available_device", "init"]
+
+
 def available_device():
     if is_torch_available:
         if torch.cuda.is_available():

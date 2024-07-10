@@ -7,6 +7,8 @@ from sedacs.integrate import do_timestep
 from sedacs.periodic_table import PeriodicTable
 from sedacs.system import get_random_coordinates
 
+__all__ = ["do_MD"]
+
 
 def test_ffield(coords, types, symbols, latticeVectors, nl, nlTrX, nlTrY, nlTrZ):
     forces = get_classical_forces(
