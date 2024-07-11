@@ -9,7 +9,7 @@ import sys
 from sedacs.interface_files import get_hamiltonian_files
 from sedacs.interface_modules import get_hamiltonian_module
 
-__all__ = ["sdc_get_hamiltonian"]
+__all__ = ["get_hamiltonian"]
 
 
 ## Build the non-scf Hamiltonian matrix.
@@ -20,7 +20,7 @@ __all__ = ["sdc_get_hamiltonian"]
 # @param symbols Symbols for every atom type
 # @verb Verbosity
 #
-def sdc_get_hamiltonian(eng, coords, types, symbols, verb):
+def get_hamiltonian(eng, coords, types, symbols, verb):
     # Call the proper interface
     # If there is no interface, one should write its own Hamiltonian
     if eng.interface == "None":

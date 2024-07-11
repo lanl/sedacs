@@ -4,7 +4,7 @@ import time
 
 from sedacs.graph import add_graphs, collect_graph_from_rho, print_graph
 from sedacs.graph_partition import get_coreHaloIndices, graph_partition
-from sedacs.hamiltonian import sdc_get_hamiltonian
+from sedacs.hamiltonian import get_hamiltonian
 from sedacs.io import write_pdb_coordinates, write_xyz_coordinates
 from sedacs.mpi import collect_and_sum_matrices
 from sedacs.system import System, extract_subsystem
@@ -52,7 +52,7 @@ def get_singlePoint(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hi
         # for kk in range(subSy.nats):
         #    subSy.coords[0,kk] = subSy.coords[0,kk] + sy.latticeVectors[0,:] * nlTrX[partsCoreHalo[partIndex][kk]]
 
-        ham = sdc_get_hamiltonian(eng, subSy.coords, subSy.types, subSy.symbols, verb=False)
+        ham = get_hamiltonian(eng, subSy.coords, subSy.types, subSy.symbols, verb=False)
         toc = time.perf_counter()
         print("Time for get_hamiltonian", toc - tic, "(s)")
         norbs = subSy.nats
