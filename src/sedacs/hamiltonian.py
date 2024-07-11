@@ -20,33 +20,31 @@ __all__ = ["get_hamiltonian"]
 # @param symbols Symbols for every atom type
 # @verb Verbosity
 #
-def get_hamiltonian(eng, coords, types, symbols, verb):
+def get_hamiltonian(engine, coords, types, symbols, verbose=False):
     # Call the proper interface
     # If there is no interface, one should write its own Hamiltonian
-    if eng.interface == "None":
+    if engine.interface == "None":
         print("ERROR!!! - Write your own Hamiltonian")
+        return None
 
     # Tight interface using modules or an external code compiled as a library
-    elif eng.interface == "Module":
+    if engine.interface == "Module":
         # We will call proxyA directly as it will be loaded as a module.
-        ham = get_hamiltonian_module(eng, coords, types, symbols, verb=False)
+        return get_hamiltonian_module(engine, coords, types, symbols, verb=verbose)
 
     # Using any available library. We will use MDI here.
-    elif eng.interface == "MDI":
+    if engine.interface == "MDI":
         print("MDI interface not implemented yet")
-        sys.exit(0)
+        return None
 
     # Using unix sockets to interface the codes
-    elif eng.interface == "Socket":
+    if engine.interface == "Socket":
         print("Sockets not implemented yet")
-        sys.exit(0)
+        return None
 
     # Using files as a form of communication and transfering data.
-    elif eng.interface == "File":
-        ham = get_hamiltonian_files(eng, coords, types, symbols, verb=False)
+    if engine.interface == "File":
+        return get_hamiltonian_files(engine, coords, types, symbols, verb=verbose)
 
-    else:
-        print("ERROR!!!: Interface type not recognized. Use any of the following: Module,File,Socket,MDI")
-        sys.exit(0)
-
-    return ham
+    print("ERROR!!!: Interface type not recognized. Use any of the following: Module,File,Socket,MDI")
+    return None

@@ -52,7 +52,7 @@ def get_singlePoint(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hi
         # for kk in range(subSy.nats):
         #    subSy.coords[0,kk] = subSy.coords[0,kk] + sy.latticeVectors[0,:] * nlTrX[partsCoreHalo[partIndex][kk]]
 
-        ham = get_hamiltonian(eng, subSy.coords, subSy.types, subSy.symbols, verb=False)
+        ham = get_hamiltonian(eng, subSy.coords, subSy.types, subSy.symbols, verbose=False)
         toc = time.perf_counter()
         print("Time for get_hamiltonian", toc - tic, "(s)")
         norbs = subSy.nats
