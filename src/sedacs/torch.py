@@ -3,10 +3,19 @@
 import sys
 import time
 
-import torch as tc
+MPI = None
+try:
+    from mpi4py import MPI
+
+    is_mpi_available = True
+except ImportError:
+    is_mpi_available = False
+
+import numpy as np
+import torch
 import torch.nn.functional as tf
 
-from sedacs.system import *
+from sedacs.system import collect_matrix_from_chunks, get_volBox
 
 
 ## Neighbor list
@@ -16,16 +25,12 @@ from sedacs.system import *
 # @param nl neighbor list type: a simple 2D array indicating the neighbors of each atom.
 # @param rank MPI rank
 #
-def build_nlist_torch(coords, latticeVectors, rcut, device=tc.device("cpu"), rank=0, numranks=1, verb=False):
+def build_nlist_torch(coords, latticeVectors, rcut, device=torch.device("cpu"), rank=0, numranks=1, verb=False):
     if verb:
         print("Building neighbor list ...")
 
-    mpiON = False
-    if mpiLib and (numranks > 1):
-        mpiON = True
-
     nats = len(coords[:, 0])
-    if mpiON:
+    if numranks > 1:
         comm = MPI.COMM_WORLD
     natsPerRank = int(nats / numranks)
     if rank == numranks - 1:
@@ -119,11 +124,11 @@ def build_nlist_torch(coords, latticeVectors, rcut, device=tc.device("cpu"), ran
                         j += 1
     # Move arrays to device
     tic = time.perf_counter()
-    neighbox_d = tc.tensor(neighbox, device=device)
-    inbox_d = tc.tensor(inbox, device=device)
-    boxOfI_d = tc.tensor(boxOfI, device=device)
-    latticeVectors_d = tc.tensor(latticeVectors.astype(np.float32), device=device)
-    coords_d = tc.tensor(coords.astype(np.float32), device=device)
+    neighbox_d = torch.tensor(neighbox, device=device)
+    inbox_d = torch.tensor(inbox, device=device)
+    boxOfI_d = torch.tensor(boxOfI, device=device)
+    latticeVectors_d = torch.tensor(latticeVectors.astype(np.float32), device=device)
+    coords_d = torch.tensor(coords.astype(np.float32), device=device)
     t_copy = time.perf_counter() - tic
     if rank == 0 and verb:
         print("Time for copying arrays to device = ", t_copy, " sec")
@@ -134,19 +139,19 @@ def build_nlist_torch(coords, latticeVectors, rcut, device=tc.device("cpu"), ran
         # Get the list of all atoms in neighboring boxes
         boxneighs = inbox[neighbox[boxOfI[i]]]
         # Shorten the long dimension for speedup on CPU
-        max_nonzero_elems = tc.max(tc.count_nonzero(boxneighs != -1, axis=1))
+        max_nonzero_elems = torch.max(torch.count_nonzero(boxneighs != -1, axis=1))
         boxneighs = boxneighs[:, 0:max_nonzero_elems].flatten()
         # Filter and flatten the list
         # boxneighs = boxneighs[np.where(boxneighs != -1)]
         # Calculate the distances to all atoms in neighboring boxes
-        dvec = tc.zeros((len(boxneighs), 3), dtype=tc.float64)
+        dvec = torch.zeros((len(boxneighs), 3), dtype=torch.float64)
         #        dvec = dvec + coords[None,None,i]
-        orthovec = tc.diagonal(latticeVectors)
+        orthovec = torch.diagonal(latticeVectors)
         for k in range(3):
             dvec[:, k] = (coords[i, k] - coords[boxneighs, k] + orthovec[k] / 2.0) % orthovec[k] - orthovec[k] / 2.0
-        distance = tc.linalg.norm(dvec, axis=1)
+        distance = torch.linalg.norm(dvec, axis=1)
         # Filter the list according to the threshold
-        nlVect = boxneighs[tc.where(distance < rcut)]
+        nlVect = boxneighs[torch.where(distance < rcut)]
         # nlVect = boxneighs[np.where(np.logical_and(distance < rcut,distance > 1.0E-12))]
         nlVect = nlVect[nlVect != -1]
         nlVect = nlVect[nlVect != i]
@@ -168,14 +173,14 @@ def build_nlist_torch(coords, latticeVectors, rcut, device=tc.device("cpu"), ran
         t_boxneighs = time.perf_counter() - tic
 
         # Shorten the long dimension for speedup on CPU
-        max_nonzero_elems = tc.max(tc.count_nonzero(boxneighs != -1, axis=1))
+        max_nonzero_elems = torch.max(torch.count_nonzero(boxneighs != -1, axis=1))
         boxneighs = boxneighs[:, 0:max_nonzero_elems]
-        orthovec = tc.diagonal(latticeVectors)
+        orthovec = torch.diagonal(latticeVectors)
 
         # Build initial distance vector array from repeating coords rows
         tic = time.perf_counter()
-        repeats = tc.tensor([boxneighs.shape[1] * boxneighs.shape[2]], device=device).repeat(nats_this)
-        dvec = tc.repeat_interleave(coords[i0 : i1 + 1], repeats, axis=0)
+        repeats = torch.tensor([boxneighs.shape[1] * boxneighs.shape[2]], device=device).repeat(nats_this)
+        dvec = torch.repeat_interleave(coords[i0 : i1 + 1], repeats, axis=0)
         t_repeat_coords = time.perf_counter() - tic
 
         # Reshape boxneighs for vectorized distance calc
@@ -185,7 +190,7 @@ def build_nlist_torch(coords, latticeVectors, rcut, device=tc.device("cpu"), ran
         tic = time.perf_counter()
         for k in range(3):
             dvec[:, k] = (dvec[:, k] - coords[boxneighs, k] + orthovec[k] / 2.0) % orthovec[k] - orthovec[k] / 2.0
-        distance = tc.linalg.norm(dvec, axis=1)
+        distance = torch.linalg.norm(dvec, axis=1)
         t_distance = time.perf_counter() - tic
 
         # Reshape arrays to form neighbor list
@@ -195,10 +200,10 @@ def build_nlist_torch(coords, latticeVectors, rcut, device=tc.device("cpu"), ran
         # Build the neighbor list using a distance threshold mask
         tic = time.perf_counter()
         nlMask = distance < rcut
-        nlVect = tc.where(nlMask, boxneighs, -1)
-        nlVect, indices = tc.sort(nlVect, axis=1, descending=True)
+        nlVect = torch.where(nlMask, boxneighs, -1)
+        nlVect, indices = torch.sort(nlVect, axis=1, descending=True)
         nlVect = tf.pad(nlVect, (1, maxneigh - nlVect.shape[1] - 1), "constant", value=0)
-        nlVect[:, 0] = tc.count_nonzero(nlMask, axis=1)
+        nlVect[:, 0] = torch.count_nonzero(nlMask, axis=1)
         t_build_nlvect = time.perf_counter() - tic
 
         # Copy the neighbor list back to the host
@@ -240,7 +245,7 @@ def build_nlist_torch(coords, latticeVectors, rcut, device=tc.device("cpu"), ran
 
     # Gather the neighbor list
     nl = np.empty([nats, maxneigh], dtype=int)
-    if mpiON:
+    if is_mpi_available:
         tic = time.perf_counter()
         nl = collect_matrix_from_chunks(nlChunk, nats, natsPerRank, rank, numranks, comm)
         t_gather_nl = time.perf_counter() - tic
