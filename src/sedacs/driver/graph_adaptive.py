@@ -5,9 +5,9 @@ import time
 from sedacs.graph import add_graphs, collect_graph_from_rho, print_graph
 from sedacs.graph_partition import get_coreHaloIndices, graph_partition
 from sedacs.hamiltonian import sdc_get_hamiltonian
+from sedacs.io import write_pdb_coordinates, write_xyz_coordinates
 from sedacs.mpi import collect_and_sum_matrices
 from sedacs.system import System, extract_subsystem
-from sedacs.system_io import write_pdb_coordinates, write_xyz_coordinates
 
 try:
     from mpi4py import MPI

@@ -7,7 +7,7 @@ import sys
 import numpy as np
 
 # from sedacs.proxies.first_level import *
-from sedacs.system_io import write_xyz_coordinates
+from sedacs.io import write_xyz_coordinates
 
 is_engine_up = False
 

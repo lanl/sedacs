@@ -2,8 +2,7 @@ import textwrap
 import unittest
 
 import numpy as np
-from sedacs.periodic_table import PeriodicTable
-from sedacs.system_io import (
+from sedacs.io import (
     are_files_equivalent,
     read_pdb_file,
     read_xyz_file,
@@ -11,6 +10,7 @@ from sedacs.system_io import (
     write_pdb_coordinates,
     write_xyz_coordinates,
 )
+from sedacs.periodic_table import PeriodicTable
 
 
 class TestReaders(unittest.TestCase):
