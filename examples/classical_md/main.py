@@ -1,6 +1,10 @@
 """Main sedacs prototype driver"""
 
-from sdc_loadMods import *
+import sys
+
+import numpy as np
+from sedacs.driver.classical import do_MD
+from sedacs.driver.init import get_args, init
 
 # Pass arguments from comand line
 args = get_args()
