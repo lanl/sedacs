@@ -12,15 +12,12 @@ __all__ = ["get_classical_forces", "harmonic_potential"]
 
 
 def get_classical_forces(coords, types, symbols, latticeVectors, nl, nlTrX, nlTrY, nlTrZ, fFieldName, verb=False):
-    forces = None
     if verb:
         sdc_status_at("get_sdc_classical_force")
     if fFieldName == "HarmonicAll":
-        forces = harmonic_potential(coords, nl, nlTrX, nlTrY, nlTrZ, verb=False)
-    else:
-        sdc_error_at("get_sdc_classical_force", message="No valid force filed name")
+        return harmonic_potential(coords, nl, nlTrX, nlTrY, nlTrZ, verb=False)
 
-    return forces
+    sdc_error_at("get_sdc_classical_force", message="No valid force filed name")
 
 
 def harmonic_potential(coords, nl, nlTrX, nlTrY, nlTrZ, verb=False):
