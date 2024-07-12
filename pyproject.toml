@@ -52,6 +52,10 @@ test = [
     "pytest>=8.2.2",
     "pytest-cov>=5.0.0",
 ]
+doc = [
+    "sphinx>=7.3.7",
+    "sphinx-rtd-theme>=2.0.0",
+]
 
 
 [tool.setuptools]
