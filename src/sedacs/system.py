@@ -772,7 +772,6 @@ def build_nlist(coords_cart, latticeVectors, rcut, rank=0, numranks=1, verb=Fals
     boxSize = rcut
 
     latticeLength = np.linalg.norm(latticeVectors, axis=1)
-
     boxVectors = rcut * np.array([
         latticeVectors[0] / latticeLength[0],
         latticeVectors[1] / latticeLength[1],
