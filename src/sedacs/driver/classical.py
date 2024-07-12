@@ -1,5 +1,3 @@
-import sys
-
 import numpy as np
 
 from sedacs.force_fields import get_classical_forces
@@ -15,7 +13,6 @@ def test_ffield(coords, types, symbols, latticeVectors, nl, nlTrX, nlTrY, nlTrZ)
         coords, types, symbols, latticeVectors, nl, nlTrX, nlTrY, nlTrZ, "HarmonicAll", verb=True
     )
     print("forces", forces)
-    sys.exit(0)
 
 
 def do_MD(init_coords, types, symbols, latticeVectors, nl, nlTrX, nlTrY, nlTrZ, init_vels, dt, num_steps, gamma=0.1):
@@ -56,5 +53,3 @@ def do_MD(init_coords, types, symbols, latticeVectors, nl, nlTrX, nlTrY, nlTrZ, 
                 print(symbols[types[j]], coords[j, 0], coords[j, 1], coords[j, 2], file=myFile)
 
             print(coords[0, :])
-
-    sys.exit(0)
