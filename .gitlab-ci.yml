@@ -13,6 +13,8 @@ variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
   PDM_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pdm"
   OMPI_MCA_mca_base_component_show_load_errors: 0
+  OMPI_CC: gcc # Set the Open MPI C compiler to gcc
+  OMPI_CXX: g++ # Set the Open MPI C++ compiler to g++
 
 # https://pip.pypa.io/en/stable/topics/caching/
 cache:
@@ -31,6 +33,7 @@ before_script:
   - conda --version # For debugging
   - conda create -n myenv python=3.10 -y
   - conda install -c conda-forge openmpi cmake -y
+  - export PATH=$CONDA_PREFIX/bin:$PATH  # Ensure the conda bin directory is in PATH
   - source activate myenv
   - python --version ; pip --version # For debugging
   - pip install pdm
