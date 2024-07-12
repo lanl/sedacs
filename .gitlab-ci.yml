@@ -5,7 +5,7 @@
 
 # Official language image. Look for the different tagged releases at:
 # https://hub.docker.com/r/library/python/tags/
-image: python:latest
+image: continuumio/miniconda3:latest
 
 # Change pip's cache directory to be inside the project directory since we can
 # only cache local items.
@@ -20,32 +20,40 @@ cache:
     - .cache/pip
     - .cache/pdm
 
-stages:          # List of stages for jobs, and their order of execution
+stages: # List of stages for jobs, and their order of execution
   - setup
   - build
   - test
   - deploy
 
 before_script:
-  - python --version ; pip --version  # For debugging
+  - conda update --yes conda
+  - conda --version # For debugging
+  - conda create -n myenv python=3.10 -y
+  - conda install -c conda-forge openmpi cmake -y
+  - source activate myenv
+  - python --version ; pip --version # For debugging
   - pip install pdm
-  - pdm --version  # For debugging
+  - pdm --version # For debugging
 
 setup:
   stage: setup
   script:
+    - source activate myenv
     - pdm install
 
 test:
   stage: test
   script:
-    - pip install ruff tox  # you can also use tox
+    - source activate myenv
+    - pip install ruff tox # you can also use tox
     - pip install --editable ".[test]"
     - tox -e py,ruff
 
 run:
   stage: build
   script:
+    - source activate myenv
     - pip install .
     # run the command here
   artifacts:
@@ -55,6 +63,7 @@ run:
 pages:
   stage: deploy
   script:
+    - source activate myenv
     - pip install sphinx sphinx-rtd-theme
     - cd docs
     - make html
@@ -68,6 +77,7 @@ pages:
 deploy:
   stage: deploy
   script:
+    - source activate myenv
     - echo "Deploying application..."
     - echo "Application successfully deployed."
   environment: production
