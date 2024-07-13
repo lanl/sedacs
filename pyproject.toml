@@ -47,6 +47,7 @@ distribution = true
 [tool.pdm.dev-dependencies]
 dev = [
     "ipython>=8.25.0",
+    "tox-pdm>=0.7.2",
 ]
 test = [
     "pytest>=8.2.2",
