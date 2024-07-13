@@ -32,8 +32,7 @@ before_script:
   - conda update --yes conda
   - conda --version # For debugging
   - conda create -n myenv python=3.10 -y
-  - conda install -c conda-forge openmpi cmake mpi4py scipy mdtraj -y
-  - export PATH=$CONDA_PREFIX/bin:$PATH  # Ensure the conda bin directory is in PATH
+  - conda install -c conda-forge cmake c-compiler compilers cxx-compiler openmpi openmpi-mpicc -y # See https://github.com/conda-forge/openmpi-feedstock/issues/61#issuecomment-753001160
   - source activate myenv
   - python --version ; pip --version # For debugging
   - pip install pdm
