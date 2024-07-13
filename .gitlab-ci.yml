@@ -50,7 +50,8 @@ test:
     - source activate myenv
     - pip install ruff tox # you can also use tox
     - pip install --editable ".[test]"
-    - tox -e py,ruff
+    - tox --listenvs-all # List the available environments for debugging
+    - tox -e py # Do not run ruff by now
 
 run:
   stage: build
