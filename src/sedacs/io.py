@@ -117,7 +117,7 @@ def read_xyz_file(fileName, lib="None", verb=True):
                         types[count - 2] = typesIndex
                     else:
                         types[count - 2] = symbols.index(newSymbol)
-
+        fileIn.close()
         if noBox:
             # If there is no box we create one by taking the coordinate
             # limits given by the positions of the atoms
