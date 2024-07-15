@@ -1,9 +1,9 @@
 import numpy as np
 
+from proxies.python.first_level import get_random_coordinates
 from sedacs.force_fields import get_classical_forces
 from sedacs.integrate import do_timestep
 from sedacs.periodic_table import PeriodicTable
-from sedacs.system import get_random_coordinates
 
 __all__ = ["do_MD"]
 
