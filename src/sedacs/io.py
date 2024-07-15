@@ -306,6 +306,7 @@ def read_pdb_file(fileName, lib="None", verb=False):
                     coordsxList.append(float(linesSplit[5]))
                     coordsyList.append(float(linesSplit[6]))
                     coordszList.append(float(linesSplit[7]))
+        fileIn.close()
 
     coords = np.zeros((count, 3))
     for i in range(count):
