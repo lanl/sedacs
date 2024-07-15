@@ -1,23 +1,17 @@
 """Main sedacs prototype driver"""
 
 import argparse
-import sys
 import time
 
-from proxy_a import *
-
-from sedacs.parser import *
-from sedacs.system import System
-
-try:
-    from mpi4py import MPI
-
-    mpi = True
-except ImportError:
-    mpi = False
-
+import numpy as np
+from mpi4py import MPI
 from sedacs.graph import *
 from sedacs.graph_partition import *
+from sedacs.io import read_coords_file
+from sedacs.parser import Input
+from sedacs.system import System, build_nlist
+
+# from proxies.python.first_level import *
 
 parser = argparse.ArgumentParser(description="Test driver for sedacs")
 
@@ -37,9 +31,9 @@ if args.use_torch:
         else:
             print("Using CPU")
             args.device = tc.device("cpu")
-        from sedacs.torch import *
-    except ImportError as e:
-        raise ImportError("Unable to import pytorch")
+        from sedacs.torch import build_nlist_torch
+    except ImportError:
+        raise
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -70,4 +64,3 @@ if rank == 0:
             print(
                 "Neighs (x-coords) of {0} ({1})= ".format(kk, nl[kk, 0]), nl_this, "(", sy.coords[nl_this], ")", file=of
             )
-sys.exit(0)
