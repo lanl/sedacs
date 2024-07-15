@@ -13,10 +13,11 @@ authors = [
     {name = "Alejandro Lopez-Bezanilla", email = "alopezb@cadejo.lanl.gov"},
 ]
 dependencies = [
-    "torch>=2.3.1",
-    "mpi4py>=3.1.6",
-    "scipy>=1.14.0",
-    "mdtraj>=1.10.0",
+    "torch>=2",
+    "mpi4py>=3",
+    "scipy>=1",
+    "mdtraj>=1",
+    "metis>=0.2a5",
 ]
 requires-python = ">=3.10"
 readme = "README.md"
