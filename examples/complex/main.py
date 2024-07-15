@@ -2,20 +2,23 @@
 """Main sedacs prototype driver"""
 
 import argparse
-from sdc_parser import *
-from sdc_system import *
-from proxy_a import *
 import time
 
 try:
     from mpi4py import MPI
 
     mpi = True
-except ImportError as e:
+except ImportError:
     mpi = False
-from sdc_graph import *
-from sdc_partition import *
 
+import numpy as np
+from sedacs.graph import get_initial_graph, print_graph
+from sedacs.graph_partition import get_coreHaloIndices, graph_partition
+from sedacs.io import read_coords_file, write_pdb_coordinates
+from sedacs.parser import Input
+from sedacs.system import System, build_nlist, extract_subsystem
+
+from proxies.python.first_level import get_density_matrix, get_hamiltonian_proxy
 
 parser = argparse.ArgumentParser(description="Test driver for sedacs")
 
@@ -36,8 +39,8 @@ if args.use_torch:
         else:
             print("Using CPU")
             args.device = tc.device("cpu")
-        from sdc_torch import *
-    except ImportError as e:
+        from sedacs.torch import build_nlist_torch
+    except ImportError:
         raise ImportError("Unable to import pytorch")
 
 comm = MPI.COMM_WORLD
@@ -45,10 +48,10 @@ rank = comm.Get_rank()
 numranks = comm.Get_size()
 
 # Initialize the code by reading the input file
-sdc = sdc_input("input.in", True)
+sdc = Input("input.in", True)
 
 # Read the coordinates
-sy = system(1)
+sy = System(1)
 sy.latticeVectors, sy.symbols, sy.types, sy.coords = read_coords_file(sdc.coordsFileName, lib="None", verb=True)
 sy.nats = len(sy.coords[:, 0])
 
@@ -86,7 +89,7 @@ graph = get_initial_graph(sy.coords, nl, sdc.rcut, sdc.maxDeg, True)
 print_graph(graph)
 
 # Partition the graph
-parts = partition(graph, sdc.partitionType, sdc.nparts, True)
+parts = graph_partition(graph, sdc.partitionType, sdc.nparts, True)
 
 njumps = 1
 partsCoreHalo = []
@@ -109,13 +112,13 @@ partIndex2 = (rank + 1) * partsPerRank
 print(rank, numranks, partIndex1, partIndex2)
 for partIndex in range(partIndex1, partIndex2):
     print("Rank, part", rank, partIndex)
-    subSy = system(len(partsCoreHalo[partIndex]))
+    subSy = System(len(partsCoreHalo[partIndex]))
     subSy.symbols = sy.symbols
     subSy.coords, subSy.types = extract_subsystem(sy.coords, sy.types, sy.symbols, partsCoreHalo[partIndex])
     partFileName = "subSy" + str(rank) + "_" + str(partIndex) + ".pdb"
     write_pdb_coordinates(partFileName, subSy.coords, subSy.types, subSy.symbols)
-    ham = get_hamiltonian(subSy.coords, atomTypes=np.zeros((1), dtype=int), verb=False)
+    ham = get_hamiltonian_proxy(subSy.coords, atomTypes=np.zeros((1), dtype=int), verb=False)
     norbs = subSy.nats
-    ham = get_hamiltonian(subSy.coords)
+    ham = get_hamiltonian_proxy(subSy.coords)
     occ = int(float(norbs) / 2.0)  # Get the total occupied orbitals
-    rho = get_densityMatrix(ham, occ)
+    rho = get_density_matrix(ham, occ)
