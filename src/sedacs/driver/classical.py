@@ -8,13 +8,6 @@ from sedacs.periodic_table import PeriodicTable
 __all__ = ["do_MD"]
 
 
-def test_ffield(coords, types, symbols, latticeVectors, nl, nlTrX, nlTrY, nlTrZ):
-    forces = get_classical_forces(
-        coords, types, symbols, latticeVectors, nl, nlTrX, nlTrY, nlTrZ, "HarmonicAll", verb=True
-    )
-    print("forces", forces)
-
-
 def do_MD(init_coords, types, symbols, latticeVectors, nl, nlTrX, nlTrY, nlTrZ, init_vels, dt, num_steps, gamma=0.1):
     nats = len(init_coords[:, 0])
     init_coords = get_random_coordinates(nats)
