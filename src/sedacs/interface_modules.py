@@ -17,7 +17,7 @@ __all__ = ["get_hamiltonian_module"]
 
 
 def get_hamiltonian_proxy(*args, **kwargs):
-    pass
+    raise NotImplementedError("implement this in an external module!")
 
 
 def get_hamiltonian_module(eng, coords, atomTypes, symbols, verb):

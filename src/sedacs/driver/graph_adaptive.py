@@ -20,7 +20,7 @@ __all__ = ["get_singlePoint", "get_adaptiveDM"]
 
 
 def get_density_matrix(*args, **kwargs):
-    pass
+    raise NotImplementedError("implement this in an external module!")
 
 
 ## Single point calculation
