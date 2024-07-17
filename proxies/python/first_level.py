@@ -6,7 +6,6 @@ A prototype engine that:
     - Computes the Density matrix from the Hamiltonian
 """
 
-import ctypes
 import os
 import sys
 
@@ -15,7 +14,6 @@ import scipy.linalg as sp
 import sedacs.driver
 import sedacs.interface_modules
 from sedacs.dev.io import src_path
-
 
 try:
     import ctypes
@@ -34,6 +32,7 @@ try:
 
 except:
     gpuLib = False
+
 
 __all__ = [
     "RandomNumberGenerator",
