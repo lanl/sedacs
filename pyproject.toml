@@ -13,11 +13,8 @@ authors = [
     {name = "Alejandro Lopez-Bezanilla", email = "alopezb@cadejo.lanl.gov"},
 ]
 dependencies = [
-    "torch>=2",
-    "mpi4py>=3",
     "scipy>=1",
     "mdtraj>=1",
-    "metis>=0.2a5",
 ]
 requires-python = ">=3.8"
 readme = "README.md"
@@ -35,6 +32,19 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Physics",
     "Topic :: Scientific/Engineering :: Chemistry",
+]
+
+[project.optional-dependencies]
+mpi = [
+    "mpi4py>=3",
+]
+torch = [
+    "torch>=2",
+]
+full = [
+    "mpi4py>=3",
+    "torch>=2",
+    "metis>=0.2a5",
 ]
 
 [build-system]
