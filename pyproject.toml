@@ -13,13 +13,10 @@ authors = [
     {name = "Alejandro Lopez-Bezanilla", email = "alopezb@cadejo.lanl.gov"},
 ]
 dependencies = [
-    "torch>=2",
-    "mpi4py>=3",
     "scipy>=1",
-    "mdtraj>=1",
-    "metis>=0.2a5",
+    "numpy>=1",
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
 classifiers = [
@@ -29,12 +26,27 @@ classifiers = [
     "License :: OSI Approved :: BSD License",
     "Operating System :: MacOS",
     "Operating System :: POSIX",
+    "Operating System :: Microsoft :: Windows",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Physics",
     "Topic :: Scientific/Engineering :: Chemistry",
+]
+
+[project.optional-dependencies]
+mdtraj = [
+    "mdtraj>=1",
+]
+mpi = [
+    "mpi4py>=3",
+]
+torch = [
+    "torch>=2",
+]
+graph = [
+    "metis>=0.2a5"
 ]
 
 [build-system]
