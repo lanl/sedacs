@@ -35,6 +35,9 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
+mdtraj = [
+    "mdtraj>=1",
+]
 mpi = [
     "mpi4py>=3",
 ]
@@ -42,9 +45,10 @@ torch = [
     "torch>=2",
 ]
 full = [
+    "mdtraj>=1",
+    "metis>=0.2a5",
     "mpi4py>=3",
     "torch>=2",
-    "metis>=0.2a5",
 ]
 
 [build-system]
