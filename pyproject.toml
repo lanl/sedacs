@@ -45,12 +45,6 @@ mpi = [
 torch = [
     "torch>=2",
 ]
-full = [
-    "mdtraj>=1",
-    "metis>=0.2a5",
-    "mpi4py>=3",
-    "torch>=2",
-]
 
 [build-system]
 requires = ["setuptools", "wheel"]
