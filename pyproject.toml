@@ -45,6 +45,9 @@ mpi = [
 torch = [
     "torch>=2",
 ]
+graph = [
+    "metis>=0.2a5"
+]
 
 [build-system]
 requires = ["setuptools", "wheel"]
