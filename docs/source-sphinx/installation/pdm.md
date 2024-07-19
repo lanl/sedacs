@@ -18,7 +18,7 @@ This method installs PDM into an isolated environment.
 
 #### Linux/macOS
 
-```bash
+```sh
 curl -sSL https://pdm-project.org/install-pdm.py | python3 -
 ```
 
@@ -36,7 +36,7 @@ You can also install PDM using various package managers.
 
 #### Homebrew (Linux/macOS)
 
-```bash
+```sh
 brew install pdm
 ```
 
@@ -49,13 +49,13 @@ scoop install pdm
 
 #### uv (Cross-platform)
 
-```bash
+```sh
 uv tool install pdm
 ```
 
 #### pipx (Cross-platform)
 
-```bash
+```sh
 pipx install pdm
 # To install the head version from GitHub repository
 pipx install git+https://github.com/pdm-project/pdm.git@main#egg=pdm
@@ -65,7 +65,7 @@ pipx install pdm[all]
 
 #### asdf (Cross-platform)
 
-```bash
+```sh
 asdf plugin add pdm
 asdf local pdm latest
 asdf install pdm
@@ -75,7 +75,7 @@ asdf install pdm
 
 PDM can be installed via pip, suitable for all platforms.
 
-```bash
+```sh
 pip install --user pdm
 ```
 
@@ -83,7 +83,7 @@ pip install --user pdm
 
 Keep PDM up-to-date by running:
 
-```bash
+```sh
 pdm self update
 ```
 

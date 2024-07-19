@@ -19,7 +19,7 @@ You can selectively install these components using `pdm install -G <group>`. Her
 
 Install only the dependencies you need by specifying their respective groups:
 
-```bash
+```sh
 pdm install -G mdtraj  # Installs only MDTraj
 pdm install -G mpi     # Installs only mpi4py
 pdm install -G torch   # Installs only PyTorch
@@ -30,13 +30,13 @@ pdm install -G graph   # Installs only METIS
 
 You can install multiple dependencies at once by listing their groups together:
 
-```bash
+```sh
 pdm install -G mdtraj,torch  # Installs MDTraj and PyTorch
 ```
 
 or
 
-```bash
+```sh
 pdm install -G mdtraj -G torch
 ```
 
@@ -44,7 +44,7 @@ pdm install -G mdtraj -G torch
 
 To install all available optional dependencies at once:
 
-```bash
+```sh
 pdm install -G:all  # Installs all optional dependencies
 ```
 
@@ -57,7 +57,7 @@ pdm install -G:all  # Installs all optional dependencies
 
 While the above commands install the dependencies directly, you may also lock them first, which helps in ensuring that subsequent installations are consistent:
 
-```bash
+```sh
 pdm lock -G mdtraj  # Locks only MDTraj
 pdm lock -G:all     # Locks all optional dependencies
 pdm sync
@@ -83,7 +83,7 @@ graph = ["metis"]
 
 To install the project along with a specific optional dependency from PyPI or locally, use the following command:
 
-```bash
+```sh
 pip install '.[mdtraj]'       # Installs the project from source with MDTraj
 pip install 'sedacs[mdtraj]'  # Installs the project with MDTraj
 ```
@@ -94,7 +94,7 @@ This command installs the main project along with the `mdtraj` package. Replace 
 
 If your work requires multiple optional dependencies simultaneously, specify each group within the brackets separated by commas:
 
-```bash
+```sh
 pip install 'sedacs[mdtraj,mpi]'  # Installs the project with MDTraj and mpi4py
 ```
 
@@ -102,7 +102,7 @@ pip install 'sedacs[mdtraj,mpi]'  # Installs the project with MDTraj and mpi4py
 
 To install all defined optional dependencies at once, you can use:
 
-```bash
+```sh
 pip install 'sedacs[mdtraj,mpi,torch,graph]'  # Installs all optional dependencies
 ```
 

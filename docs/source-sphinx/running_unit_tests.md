@@ -11,7 +11,7 @@ Before running the tests, ensure that Python is installed on your system. It is 
 
 Install `pytest` and `pytest-cov` using pip with the following command:
 
-```bash
+```sh
 pip install -U pytest pytest-cov
 ```
 
@@ -21,7 +21,7 @@ This command installs `pytest`, our testing framework, and `pytest-cov`, a plugi
 
 If you are using Conda, you can install `pytest` and `pytest-cov` with the following commands:
 
-```bash
+```sh
 conda install -c anaconda pytest
 conda install -c conda-forge pytest-cov
 ```
@@ -32,7 +32,7 @@ These commands install `pytest` and `pytest-cov` from the Anaconda and conda-for
 
 Navigate to the root directory of the project and execute:
 
-```bash
+```sh
 pytest
 ```
 
@@ -42,7 +42,7 @@ This command will discover and run all tests located in the `tests` directory.
 
 If you are using `pdm` as your package manager and build tool, you can run the tests through `pdm` to ensure all dependencies are managed properly:
 
-```bash
+```sh
 pdm run pytest
 ```
 
