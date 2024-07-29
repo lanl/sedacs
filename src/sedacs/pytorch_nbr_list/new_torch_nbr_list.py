@@ -2,21 +2,11 @@ import torch
 from torch import Tensor
 import numpy as np
 from util import generate_system, generate_nbr_list
-#from matscipy.neighbours import neighbour_list
 import time
 import math 
 
 DUMMY_IND = -1
-'''
-def matscipy_nbr_list(coords, box, cutoff):
-    pbc = np.array([True, True, True])
-    sender, receiver = neighbour_list(quantities="ij",
-                                          pbc=pbc,
-                                          cell=box,
-                                          positions=coords,
-                                          cutoff=cutoff)
-    return sender, receiver
-'''
+
 def fractional_cell_size(lattice_vecs, cutoff):
     xx = lattice_vecs[0, 0]
     yy = lattice_vecs[1, 1]
@@ -50,6 +40,19 @@ def coords_frac_to_cart(frac_coords, lattice_vecs):
     cart_coords = torch.matmul(frac_coords, A_transpose)
     return cart_coords
 
+def calculate_distance(coords, candid_ids, lattice_lengths):
+    '''
+    Calculate distance to each candidate
+    '''
+    N = coords.shape[0]
+    lattice_lengths = lattice_lengths[None,:]
+    neigh_position = coords[candid_ids]
+    disp = coords[:, None, :] - neigh_position
+    # displacement trick (based on minumum image convention)
+    disp = ((disp + 0.5 * lattice_lengths) % lattice_lengths) - 0.5 * lattice_lengths
+    dists = torch.linalg.norm(disp, dim=2)
+    return dists
+
 def self_mask(idx):
     '''
     Mask the self interactions
@@ -65,7 +68,7 @@ def unflatten_cell_buffer(arr,
                            dim: int):  
     cells_per_side = tuple([int(x) for x in torch.flip(cells_per_side,dims=(0,))])
 
-    return torch.reshape(arr, cells_per_side + (-1,) + arr.shape[1:])
+    return torch.reshape(arr, cells_per_side + (-1,))
 
 
 def calculate_cell_dimensions(lattice_lengths, min_cell_size):
@@ -100,7 +103,7 @@ def count_flattened_cell_sizes(coords, lattice_vectors, cell_size):
      cell_count] = calculate_cell_dimensions(lattice_lengths, cell_size)
     # count the atom size in each box
     cell_inds = (coords / cell_size_per_dim[None, :]).to(torch.int32)
-    # to be able to use index add in one go, flattened to cells and indices
+    # to be able to use index add in one go, use the flattened cells (3d -> 1d)
     offset_vals = calculate_flattened_cell_offset(cells_per_side)
     # calculate the flat. cell ind. for each atom
     particle_flat_cell_inds = torch.sum(cell_inds * offset_vals, dtype=torch.int32, dim=1)
@@ -110,7 +113,6 @@ def count_flattened_cell_sizes(coords, lattice_vectors, cell_size):
                                                  torch.ones_like(particle_flat_cell_inds))    
     return flat_cell_sizes
 
-@torch.compile(dynamic=True)
 def populate_cells(coords, cell_size_per_dim, cells_per_side, cell_count, max_cell_capacity):
     '''
     Assign atoms to their cells, each cell stores the indices of the atoms it holds
@@ -126,14 +128,13 @@ def populate_cells(coords, cell_size_per_dim, cells_per_side, cell_count, max_ce
     # sort to group the atoms which belong to the same cell together
     sorted_flat_cell_ids, sorted_flat_cell_id_map = torch.sort(particle_flat_cell_inds)
     # empty ones are DUMMY_IND, flat version of the cells
-    cells = DUMMY_IND + torch.zeros((cell_count * max_cell_capacity, 1), dtype=torch.int32,
+    cells = DUMMY_IND + torch.zeros((cell_count * max_cell_capacity,), dtype=torch.int32,
                              device=device)
     
     sorted_atom_ids = atom_ids[sorted_flat_cell_id_map]
-    sorted_atom_ids = torch.reshape(sorted_atom_ids, (N, 1))
     # find the exact spot for each atom in the cell index
-    # Here we get the column indices using mod, it is collision free as we know no
-    # cell has more than the max capacity.
+    # Here we get the column indices using mod, it is collision free as we know
+    # no cell has more atoms than the max capacity.
     sorted_cell_ids = atom_ids % max_cell_capacity 
     # for a matrix with [N,K]:
     # to go from 2d index (i, j) to flat index: i * K + j
@@ -144,7 +145,7 @@ def populate_cells(coords, cell_size_per_dim, cells_per_side, cell_count, max_ce
     
     return cells
 
-@torch.compile(dynamic=True)
+#@torch.compile(dynamic=True)
 def shift_array(arr, dindex):
     '''
     For each dimension, shift +1, -1 to concatanate neighbor cells
@@ -168,44 +169,43 @@ def shift_array(arr, dindex):
     
     return arr
 
-@torch.compile(dynamic=True)
+#@torch.compile(dynamic=True)
 def generate_candidates(cells, N):
     '''
     Generate the candidate neighbors for each atom
     '''
     # go through 27 neighbors for each cell and concat. the neighboring cells together
-    def neighboring_cells():
-      for dindex in np.ndindex(3,3,3):
-        yield torch.tensor(dindex, dtype=torch.int32, device=cells.device) - 1
-    idx = cells
-    cell_idx = [idx,]
-    for dindex in neighboring_cells():
-        if torch.all(dindex == 0):
+    all_shifts = torch.tensor(list(np.ndindex(3,3,3)), dtype=torch.int32) - 1
+    cell_nbr_candidates = [cells,]
+    for shift in all_shifts:
+        if torch.all(shift == 0):
             continue
-        cell_idx += [shift_array(idx, dindex)]
-    cell_idx = torch.concatenate(cell_idx, axis=-2)
+        cell_nbr_candidates += [shift_array(cells, shift)]
+    # cx, cy, cz, num of candids
+    # where num of candids = 27 * max cell capacity
+    cell_nbr_candidates = torch.concatenate(cell_nbr_candidates, axis=-1)
+    all_shifts = torch.tensor(list(np.ndindex(3,3,3)), dtype=torch.int32)
+    num_candids = cell_nbr_candidates.shape[-1]
+    cell_dims, max_cell_capacity = cells.shape[:3], cells.shape[3]
+    target_shape = (*cell_dims, max_cell_capacity, num_candids)
+    # add new dimension for "max cell capacity"
+    cell_nbr_candidates = cell_nbr_candidates[..., None, :]
+    cell_nbr_candidates = torch.broadcast_to(cell_nbr_candidates, target_shape)
+    # N+1 because of the "-1" values used for padding 
+    neighbor_idx = DUMMY_IND + torch.zeros((N+1, num_candids), dtype=torch.int32, device=device)
+    scatter_indices = torch.reshape(cells, (-1,))
+    nbr_candidates = torch.reshape(cell_nbr_candidates, (-1, num_candids))
+    neighbor_idx[scatter_indices] = nbr_candidates
     
-    cell_idx = cell_idx[..., None, :, :]
-    cell_idx = torch.broadcast_to(cell_idx, idx.shape[:-1] + cell_idx.shape[-2:])
-    
-    def copy_values_from_cell(value, cell_value, cell_id):
-      scatter_indices = torch.reshape(cell_id, (-1,))
-      cell_value = torch.reshape(cell_value, (-1,) + cell_value.shape[-2:])
-      value[scatter_indices] = cell_value
-      return value
-    
-    neighbor_idx = DUMMY_IND + torch.zeros((N + 1,) + cell_idx.shape[-2:], dtype=torch.int32, device=device)
-    neighbor_idx = copy_values_from_cell(neighbor_idx, cell_idx, idx)
-    return neighbor_idx[:-1, :, 0]
+    #remove the extra row
+    return neighbor_idx[:-1]
 
-@torch.compile(dynamic=True)
+#@torch.compile(dynamic=True)
 def create_sparse_neighbor_list(coords, lattice_lengths, candid_ids, cutoff: float):
-    N = coords.shape[0]
-    lattice_lengths = lattice_lengths[None,:]
-    neigh_position = coords[candid_ids]
-    disp = coords[:, None, :] - neigh_position
-    disp = ((disp + 0.5 * lattice_lengths) % lattice_lengths) - 0.5 * lattice_lengths
-    dists = torch.linalg.norm(disp, dim=2)
+    '''
+    Create COO based sparse neighbor list
+    '''
+    dists = calculate_distance(coords, candid_ids, lattice_lengths)
     mask = (dists < cutoff) & (candid_ids != -1)
     cumsum = torch.cumsum(mask, dim=1)
     max_occupancy = torch.max(cumsum[:, -1])
@@ -214,21 +214,20 @@ def create_sparse_neighbor_list(coords, lattice_lengths, candid_ids, cutoff: flo
     source, target = index[:,0], candid_ids[index[:,0], index[:,1]]
     return source, target
 
-@torch.compile(dynamic=True)
+#@torch.compile(dynamic=True)
 def create_dense_neighbor_list(coords, lattice_lengths, candid_ids, cutoff: float):
-    N = coords.shape[0]
-    lattice_lengths = lattice_lengths[None,:]
-    neigh_position = coords[candid_ids]
-    disp = coords[:, None, :] - neigh_position
-    disp = ((disp + 0.5 * lattice_lengths) % lattice_lengths) - 0.5 * lattice_lengths
-    dists = torch.linalg.norm(disp, dim=2)
+    '''
+    Create ELLPACK based dense neighbor list
+    '''
+    dists = calculate_distance(coords, candid_ids, lattice_lengths)
     mask = (dists < cutoff) & (candid_ids != -1)
-    
     cumsum = torch.cumsum(mask, dim=1)
     max_occupancy = torch.max(cumsum[:, -1])
     DUMMY_IND = -1
     
     out_idx = DUMMY_IND + torch.zeros(candid_ids.shape, dtype=torch.int32, device=coords.device)
+    # This assumes the max_occupancy < # candidates, never equal
+    # which should be the case
     index = torch.where(mask, cumsum - 1, candid_ids.shape[1] - 1)
     p_index = torch.arange(candid_ids.shape[0])[:, None]
     out_idx[p_index, index] = candid_ids
@@ -241,46 +240,52 @@ def create_dense_neighbor_list(coords, lattice_lengths, candid_ids, cutoff: floa
 density = 0.1
 cutoff = 10.0
 cell_size = 10.0
-device="cuda"
-np_dtype = np.float32
-torch_dtype = torch.float32
+device="cpu"
+np_dtype = np.float64
+torch_dtype = torch.float64
 
-for i in range(10):
-    N = 100000 + i
-    coords_orig, lattice_vectors_orig = generate_system(N, density, dtype=np_dtype)
-    lattice_vectors_orig = lattice_vectors_orig
-    use_fraq=False
-    lattice_vectors_orig = torch.from_numpy(lattice_vectors_orig).to(device)
-    coords_orig = torch.from_numpy(coords_orig).to(device)
 
-    start = time.perf_counter()
+N = 10000
+coords_orig, lattice_vectors_orig = generate_system(N, density, dtype=np_dtype)
+lattice_vectors_orig = lattice_vectors_orig
+use_fraq=False
+lattice_vectors = torch.from_numpy(lattice_vectors_orig).to(torch_dtype).to(device)
+coords = torch.from_numpy(coords_orig).to(torch_dtype).to(device)
 
-    lattice_vectors = lattice_vectors_orig
-    coords = coords_orig
+start = time.perf_counter()
 
-        
-    lattice_lengths = torch.linalg.norm(lattice_vectors, dim=1)
-    cell_size_per_dim, cells_per_side, cell_count = calculate_cell_dimensions(lattice_lengths, cell_size)
 
-    cell_sizes = count_flattened_cell_sizes(coords, lattice_vectors, cell_size)
-    max_cell_capacity = torch.max(cell_sizes)
+    
+lattice_lengths = torch.linalg.norm(lattice_vectors, dim=1)
+cell_size_per_dim, cells_per_side, cell_count = calculate_cell_dimensions(lattice_lengths, cell_size)
 
-    cells = populate_cells(coords, cell_size_per_dim, cells_per_side, cell_count, max_cell_capacity)
+cell_sizes = count_flattened_cell_sizes(coords, lattice_vectors, cell_size)
+# add 1 as buffer
+max_cell_capacity = torch.max(cell_sizes) + 1
 
-    candid_ids = generate_candidates(cells, N)
-    candid_ids = self_mask(candid_ids)
+cells = populate_cells(coords, cell_size_per_dim, cells_per_side, cell_count, max_cell_capacity)
 
-    N = coords.shape[0]
-    s,t = create_sparse_neighbor_list(coords, lattice_lengths, candid_ids, cutoff)
-    #new_nbr_2d = create_dense_neighbor_list(coords, lattice_lengths, candid_ids, cutoff)
-    torch.cuda.synchronize()
-    end = time.perf_counter()
-    #new_nbr_2d = create_dense_neighbor_list(coords, lattice_lengths, candid_ids, cutoff)
-    print(end-start)
-    '''
-    nbr_list_2d, id1, id2 = generate_nbr_list(coords.cpu().numpy(), lattice_vectors.cpu().numpy(), cutoff,device=device)
-    nbr_list_2d = torch.sort(nbr_list_2d, dim=1)[0]
-    new_nbr_2d = torch.sort(new_nbr_2d, dim=1)[0]
+candid_ids = generate_candidates(cells, N)
+candid_ids = self_mask(candid_ids)
 
-    print(torch.all(nbr_list_2d == new_nbr_2d))
-    '''
+new_nbr_2d = create_dense_neighbor_list(coords, lattice_lengths, candid_ids, cutoff)
+end = time.perf_counter()
+print(end - start)
+nbr_list_2d, id1, id2 = generate_nbr_list(coords.cpu().numpy(), lattice_vectors.cpu().numpy(), cutoff,device=device)
+nbr_list_2d = torch.sort(nbr_list_2d, dim=1, descending=True)[0]
+new_nbr_2d = torch.sort(new_nbr_2d, dim=1, descending=True)[0]
+
+print(torch.all(nbr_list_2d == new_nbr_2d))
+
+
+dists = calculate_distance(coords, candid_ids, lattice_lengths)
+mask = (dists < cutoff) & (candid_ids != -1)
+cumsum = torch.cumsum(mask, dim=1)
+max_occupancy = torch.max(cumsum[:, -1])
+DUMMY_IND = -1
+
+out_idx = DUMMY_IND + torch.zeros(candid_ids.shape, dtype=torch.int32, device=coords.device)
+index = torch.where(mask, cumsum - 1, candid_ids.shape[1] - 1)
+p_index = torch.arange(candid_ids.shape[0])[:, None]
+out_idx[p_index, index] = candid_ids
+
