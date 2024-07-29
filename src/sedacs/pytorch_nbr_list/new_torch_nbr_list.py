@@ -4,6 +4,7 @@ import numpy as np
 from util import generate_system, generate_nbr_list
 import time
 import math 
+import itertools
 
 DUMMY_IND = -1
 
@@ -53,6 +54,7 @@ def calculate_distance(coords, candid_ids, lattice_lengths):
     dists = torch.linalg.norm(disp, dim=2)
     return dists
 
+@torch.compile(dynamic=True)
 def self_mask(idx):
     '''
     Mask the self interactions
@@ -145,7 +147,6 @@ def populate_cells(coords, cell_size_per_dim, cells_per_side, cell_count, max_ce
     
     return cells
 
-#@torch.compile(dynamic=True)
 def shift_array(arr, dindex):
     '''
     For each dimension, shift +1, -1 to concatanate neighbor cells
@@ -169,18 +170,17 @@ def shift_array(arr, dindex):
     
     return arr
 
-#@torch.compile(dynamic=True)
+@torch.compile(dynamic=True)
 def generate_candidates(cells, N):
     '''
     Generate the candidate neighbors for each atom
     '''
     # go through 27 neighbors for each cell and concat. the neighboring cells together
-    all_shifts = torch.tensor(list(np.ndindex(3,3,3)), dtype=torch.int32) - 1
+    all_shifts = list(itertools.product(range(-1,2,1), repeat=3))
+    all_shifts.remove((0,0,0))
     cell_nbr_candidates = [cells,]
-    for shift in all_shifts:
-        if torch.all(shift == 0):
-            continue
-        cell_nbr_candidates += [shift_array(cells, shift)]
+    for (dx, dy, dz) in all_shifts:
+        cell_nbr_candidates += [shift_array(cells, (dx, dy, dz))]
     # cx, cy, cz, num of candids
     # where num of candids = 27 * max cell capacity
     cell_nbr_candidates = torch.concatenate(cell_nbr_candidates, axis=-1)
@@ -192,7 +192,7 @@ def generate_candidates(cells, N):
     cell_nbr_candidates = cell_nbr_candidates[..., None, :]
     cell_nbr_candidates = torch.broadcast_to(cell_nbr_candidates, target_shape)
     # N+1 because of the "-1" values used for padding 
-    neighbor_idx = DUMMY_IND + torch.zeros((N+1, num_candids), dtype=torch.int32, device=device)
+    neighbor_idx = DUMMY_IND + torch.zeros((N+1, num_candids), dtype=torch.int32, device=cells.device)
     scatter_indices = torch.reshape(cells, (-1,))
     nbr_candidates = torch.reshape(cell_nbr_candidates, (-1, num_candids))
     neighbor_idx[scatter_indices] = nbr_candidates
@@ -200,7 +200,7 @@ def generate_candidates(cells, N):
     #remove the extra row
     return neighbor_idx[:-1]
 
-#@torch.compile(dynamic=True)
+@torch.compile(dynamic=True)
 def create_sparse_neighbor_list(coords, lattice_lengths, candid_ids, cutoff: float):
     '''
     Create COO based sparse neighbor list
@@ -214,7 +214,7 @@ def create_sparse_neighbor_list(coords, lattice_lengths, candid_ids, cutoff: flo
     source, target = index[:,0], candid_ids[index[:,0], index[:,1]]
     return source, target
 
-#@torch.compile(dynamic=True)
+@torch.compile(dynamic=True)
 def create_dense_neighbor_list(coords, lattice_lengths, candid_ids, cutoff: float):
     '''
     Create ELLPACK based dense neighbor list
@@ -234,52 +234,60 @@ def create_dense_neighbor_list(coords, lattice_lengths, candid_ids, cutoff: floa
     
     return out_idx[:, :max_occupancy]
 
-def generate_neighbor_list(coords, lattice_vectors, cutoff, is_dense=True):  
+def generate_neighbor_list(coords: Tensor, lattice_vectors: Tensor, cutoff: float, is_dense: bool = True):  
     '''
     Main function to generate neighbor list
     '''
+    coords = coords - coords.min(dim=0, keepdim=True)[0]
     lattice_lengths = torch.linalg.norm(lattice_vectors, dim=1)
     cell_size_per_dim, cells_per_side, cell_count = calculate_cell_dimensions(lattice_lengths, cell_size)
     
     cell_sizes = count_flattened_cell_sizes(coords, lattice_vectors, cell_size)
-    # add 1 as buffer
-    max_cell_capacity = torch.max(cell_sizes) + 1
+    max_cell_capacity = torch.max(cell_sizes)
+    multiple_of = 8
+    max_cell_capacity = (((multiple_of - 1) + max_cell_capacity) // multiple_of) * multiple_of
     
     cells = populate_cells(coords, cell_size_per_dim, cells_per_side, cell_count, max_cell_capacity)
     
     candid_ids = generate_candidates(cells, N)
     candid_ids = self_mask(candid_ids)
-    
     if is_dense:
-        return create_dense_neighbor_list(coords, lattice_lengths, candid_ids, cutoff)
+        return create_dense_neighbor_list(coords, lattice_lengths, candid_ids, cutoff) 
     else:
         return create_sparse_neighbor_list(coords, lattice_lengths, candid_ids, cutoff)
-        
-
-    
+            
 
 density = 0.1
 cutoff = 10.0
 cell_size = 10.0
-device="cpu"
+device="cuda"
 np_dtype = np.float64
 torch_dtype = torch.float64
+all_times = []
+for i in range(100):
+    N = 100000
+    coords_orig, lattice_vectors_orig = generate_system(N, density, dtype=np_dtype)
+    lattice_vectors_orig = lattice_vectors_orig
+    use_fraq=False
+    lattice_vectors = torch.from_numpy(lattice_vectors_orig).to(torch_dtype).to(device)
+    coords = torch.from_numpy(coords_orig).to(torch_dtype).to(device)
+    coords = coords + 0.5
+    torch.cuda.synchronize()
+    start = time.perf_counter()
+    new_nbr_2d = generate_neighbor_list(coords, lattice_vectors, cutoff, is_dense=True)
+    torch.cuda.synchronize()
+    end = time.perf_counter()
+    print(end - start)
+    print(new_nbr_2d[0].shape)
+    if i > 0:
+        all_times.append(end-start)
+    '''
+    nbr_list_2d, id1, id2 = generate_nbr_list(coords.cpu().numpy(), lattice_vectors.cpu().numpy(), cutoff,device=device)
+    nbr_list_2d = torch.sort(nbr_list_2d, dim=1, descending=True)[0]
+    new_nbr_2d = torch.sort(new_nbr_2d, dim=1, descending=True)[0]
 
-
-N = 10000
-coords_orig, lattice_vectors_orig = generate_system(N, density, dtype=np_dtype)
-lattice_vectors_orig = lattice_vectors_orig
-use_fraq=False
-lattice_vectors = torch.from_numpy(lattice_vectors_orig).to(torch_dtype).to(device)
-coords = torch.from_numpy(coords_orig).to(torch_dtype).to(device)
-
-start = time.perf_counter()
-new_nbr_2d = generate_neighbor_list(coords, lattice_vectors, cutoff, is_dense=True)
-end = time.perf_counter()
-print(end - start)
-nbr_list_2d, id1, id2 = generate_nbr_list(coords.cpu().numpy(), lattice_vectors.cpu().numpy(), cutoff,device=device)
-nbr_list_2d = torch.sort(nbr_list_2d, dim=1, descending=True)[0]
-new_nbr_2d = torch.sort(new_nbr_2d, dim=1, descending=True)[0]
-
-print(torch.all(nbr_list_2d == new_nbr_2d))
-
+    print(torch.all(nbr_list_2d == new_nbr_2d))
+    '''
+    
+print(np.mean(all_times))
+print(np.median(all_times))
