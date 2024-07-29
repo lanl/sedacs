@@ -33,20 +33,27 @@ def fractional_cell_size(lattice_vecs, cutoff):
     nmin = torch.where(nmin == 0, 1, nmin)
     return 1 / nmin
 
-@torch.jit.script
 def coords_cart_to_frac(cart_coords, lattice_vecs):
+    '''
+    Convert cart. coordinates to fractional ones
+    '''
     A_transpose = lattice_vecs
     A_transpose_inv = torch.linalg.inv(A_transpose)
     frac_coords = torch.matmul(cart_coords, A_transpose_inv)
     return frac_coords
 
-@torch.jit.script
 def coords_frac_to_cart(frac_coords, lattice_vecs):
+    '''
+    Convert frac. coordinates to cart. ones
+    '''
     A_transpose = lattice_vecs
     cart_coords = torch.matmul(frac_coords, A_transpose)
     return cart_coords
 
 def self_mask(idx):
+    '''
+    Mask the self interactions
+    '''
     self_mask = idx == torch.reshape(torch.arange(idx.shape[0], dtype=torch.int32, device=idx.device),
                                    (idx.shape[0], 1))
     return torch.where(self_mask, DUMMY_IND, idx)
@@ -83,6 +90,9 @@ def calculate_flattened_cell_offset(cells_per_side):
     return offsets.to(torch.int32)
 
 def count_flattened_cell_sizes(coords, lattice_vectors, cell_size):
+    '''
+    Count # atoms per cell in a flattened fashion
+    '''
     lattice_lengths = torch.linalg.norm(lattice_vectors, axis=1)
     
     [cell_size_per_dim, 
@@ -92,66 +102,82 @@ def count_flattened_cell_sizes(coords, lattice_vectors, cell_size):
     cell_inds = (coords / cell_size_per_dim[None, :]).to(torch.int32)
     # to be able to use index add in one go, flattened to cells and indices
     offset_vals = calculate_flattened_cell_offset(cells_per_side)
+    # calculate the flat. cell ind. for each atom
     particle_flat_cell_inds = torch.sum(cell_inds * offset_vals, dtype=torch.int32, dim=1)
     flat_cell_sizes = torch.zeros(cell_count, dtype=torch.int32, device=coords.device)
+    # reduce the counts
     flat_cell_sizes = flat_cell_sizes.index_add_(0, particle_flat_cell_inds, 
                                                  torch.ones_like(particle_flat_cell_inds))    
     return flat_cell_sizes
 
 @torch.compile(dynamic=True)
 def populate_cells(coords, cell_size_per_dim, cells_per_side, cell_count, max_cell_capacity):
+    '''
+    Assign atoms to their cells, each cell stores the indices of the atoms it holds
+    '''
     N = coords.shape[0]
     device=coords.device
-    particle_id = torch.arange(N, device=device, dtype=torch.int32)
+    atom_ids = torch.arange(N, device=device, dtype=torch.int32)
     
-    # count the atom size in each box
     cell_inds = (coords / cell_size_per_dim).to(torch.int32)
-    # to be able to use index add in one go, flattened to cells and indices
     offset_vals = calculate_flattened_cell_offset(cells_per_side)
+    # atom to flat cell id
     particle_flat_cell_inds = torch.sum(cell_inds * offset_vals, dtype=torch.int32, dim=1)
-    sort_map = torch.argsort(particle_flat_cell_inds)
-    # empty ones are DUMMY_IND
-    cell_id = DUMMY_IND + torch.zeros((cell_count * max_cell_capacity, 1), dtype=torch.int32,
+    # sort to group the atoms which belong to the same cell together
+    sorted_flat_cell_ids, sorted_flat_cell_id_map = torch.sort(particle_flat_cell_inds)
+    # empty ones are DUMMY_IND, flat version of the cells
+    cells = DUMMY_IND + torch.zeros((cell_count * max_cell_capacity, 1), dtype=torch.int32,
                              device=device)
-    sorted_hash = particle_flat_cell_inds[sort_map]
-    sorted_id = particle_id[sort_map]
-    sorted_id = torch.reshape(sorted_id, (N, 1))
     
-    sorted_cell_id = particle_id % max_cell_capacity
-    sorted_cell_id = sorted_hash * max_cell_capacity + sorted_cell_id
+    sorted_atom_ids = atom_ids[sorted_flat_cell_id_map]
+    sorted_atom_ids = torch.reshape(sorted_atom_ids, (N, 1))
+    # find the exact spot for each atom in the cell index
+    # Here we get the column indices using mod, it is collision free as we know no
+    # cell has more than the max capacity.
+    sorted_cell_ids = atom_ids % max_cell_capacity 
+    # for a matrix with [N,K]:
+    # to go from 2d index (i, j) to flat index: i * K + j
+    sorted_cell_ids = sorted_flat_cell_ids * max_cell_capacity + sorted_cell_ids
     
-    cell_id[sorted_cell_id] = sorted_id
-    cell_id = unflatten_cell_buffer(cell_id, cells_per_side, 3)
+    cells[sorted_cell_ids] = sorted_atom_ids
+    cells = unflatten_cell_buffer(cells, cells_per_side, 3)
     
-    return cell_id
+    return cells
 
 @torch.compile(dynamic=True)
 def shift_array(arr, dindex):
+    '''
+    For each dimension, shift +1, -1 to concatanate neighbor cells
+    '''
     dx, dy, dz = dindex
     
-    if dx < 0:
+    if dx > 0:
         arr = torch.concatenate((arr[1:], arr[:1]))
-    elif dx > 0:
+    elif dx < 0:
         arr = torch.concatenate((arr[-1:], arr[:-1]))
     
-    if dy < 0:
+    if dy > 0:
         arr = torch.concatenate((arr[:, 1:], arr[:, :1]), axis=1)
-    elif dy > 0:
+    elif dy < 0:
         arr = torch.concatenate((arr[:, -1:], arr[:, :-1]), axis=1)
     
-    if dz < 0:
+    if dz > 0:
         arr = torch.concatenate((arr[:, :, 1:], arr[:, :, :1]), axis=2)
-    elif dz > 0:
+    elif dz < 0:
         arr = torch.concatenate((arr[:, :, -1:], arr[:, :, :-1]), axis=2)
     
     return arr
 
 @torch.compile(dynamic=True)
-def generate_candidates(cell_ids, N):
+def generate_candidates(cells, N):
+    '''
+    Generate the candidate neighbors for each atom
+    '''
+    # go through 27 neighbors for each cell and concat. the neighboring cells together
     def neighboring_cells():
-      for dindex in np.ndindex(*([3] * 3)):
-        yield torch.tensor(dindex, dtype=torch.int32, device=cell_ids.device) - 1
-    idx = cell_ids
+      for dindex in np.ndindex(3,3,3):
+        yield torch.tensor(dindex, dtype=torch.int32, device=cells.device) - 1
+    idx = cells
     cell_idx = [idx,]
     for dindex in neighboring_cells():
         if torch.all(dindex == 0):
@@ -239,9 +265,9 @@ for i in range(10):
     cell_sizes = count_flattened_cell_sizes(coords, lattice_vectors, cell_size)
     max_cell_capacity = torch.max(cell_sizes)
 
-    cell_ids = populate_cells(coords, cell_size_per_dim, cells_per_side, cell_count, max_cell_capacity)
+    cells = populate_cells(coords, cell_size_per_dim, cells_per_side, cell_count, max_cell_capacity)
 
-    candid_ids = generate_candidates(cell_ids, N)
+    candid_ids = generate_candidates(cells, N)
     candid_ids = self_mask(candid_ids)
 
     N = coords.shape[0]
