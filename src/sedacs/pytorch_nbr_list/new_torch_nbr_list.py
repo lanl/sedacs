@@ -234,6 +234,27 @@ def create_dense_neighbor_list(coords, lattice_lengths, candid_ids, cutoff: floa
     
     return out_idx[:, :max_occupancy]
 
+def generate_neighbor_list(coords, lattice_vectors, cutoff, is_dense=True):  
+    '''
+    Main function to generate neighbor list
+    '''
+    lattice_lengths = torch.linalg.norm(lattice_vectors, dim=1)
+    cell_size_per_dim, cells_per_side, cell_count = calculate_cell_dimensions(lattice_lengths, cell_size)
+    
+    cell_sizes = count_flattened_cell_sizes(coords, lattice_vectors, cell_size)
+    # add 1 as buffer
+    max_cell_capacity = torch.max(cell_sizes) + 1
+    
+    cells = populate_cells(coords, cell_size_per_dim, cells_per_side, cell_count, max_cell_capacity)
+    
+    candid_ids = generate_candidates(cells, N)
+    candid_ids = self_mask(candid_ids)
+    
+    if is_dense:
+        return create_dense_neighbor_list(coords, lattice_lengths, candid_ids, cutoff)
+    else:
+        return create_sparse_neighbor_list(coords, lattice_lengths, candid_ids, cutoff)
+        
 
     
 
@@ -253,22 +274,7 @@ lattice_vectors = torch.from_numpy(lattice_vectors_orig).to(torch_dtype).to(devi
 coords = torch.from_numpy(coords_orig).to(torch_dtype).to(device)
 
 start = time.perf_counter()
-
-
-    
-lattice_lengths = torch.linalg.norm(lattice_vectors, dim=1)
-cell_size_per_dim, cells_per_side, cell_count = calculate_cell_dimensions(lattice_lengths, cell_size)
-
-cell_sizes = count_flattened_cell_sizes(coords, lattice_vectors, cell_size)
-# add 1 as buffer
-max_cell_capacity = torch.max(cell_sizes) + 1
-
-cells = populate_cells(coords, cell_size_per_dim, cells_per_side, cell_count, max_cell_capacity)
-
-candid_ids = generate_candidates(cells, N)
-candid_ids = self_mask(candid_ids)
-
-new_nbr_2d = create_dense_neighbor_list(coords, lattice_lengths, candid_ids, cutoff)
+new_nbr_2d = generate_neighbor_list(coords, lattice_vectors, cutoff, is_dense=True)
 end = time.perf_counter()
 print(end - start)
 nbr_list_2d, id1, id2 = generate_nbr_list(coords.cpu().numpy(), lattice_vectors.cpu().numpy(), cutoff,device=device)
@@ -276,16 +282,4 @@ nbr_list_2d = torch.sort(nbr_list_2d, dim=1, descending=True)[0]
 new_nbr_2d = torch.sort(new_nbr_2d, dim=1, descending=True)[0]
 
 print(torch.all(nbr_list_2d == new_nbr_2d))
-
-
-dists = calculate_distance(coords, candid_ids, lattice_lengths)
-mask = (dists < cutoff) & (candid_ids != -1)
-cumsum = torch.cumsum(mask, dim=1)
-max_occupancy = torch.max(cumsum[:, -1])
-DUMMY_IND = -1
-
-out_idx = DUMMY_IND + torch.zeros(candid_ids.shape, dtype=torch.int32, device=coords.device)
-index = torch.where(mask, cumsum - 1, candid_ids.shape[1] - 1)
-p_index = torch.arange(candid_ids.shape[0])[:, None]
-out_idx[p_index, index] = candid_ids
 
