@@ -65,6 +65,7 @@ dev = [
 test = [
     "pytest>=8",
     "pytest-cov>=5",
+    "matscipy>=1",
 ]
 doc = [
     "sphinx>=7",
