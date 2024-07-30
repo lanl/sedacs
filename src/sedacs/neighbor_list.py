@@ -1,14 +1,15 @@
 import torch
 from torch import Tensor
-import numpy as np
-from util import generate_system, generate_nbr_list
-import time
 import math 
 import itertools
+from typing import Union
 
-DUMMY_IND = -1
+DUMMY_IND = -1 # dummy neighbor index TODO: find a way do store this info
 
-def fractional_cell_size(lattice_vecs, cutoff):
+__all__ = ["generate_neighbor_list"]
+
+
+def fractional_cell_size(lattice_vecs: Tensor, cutoff: float):
     xx = lattice_vecs[0, 0]
     yy = lattice_vecs[1, 1]
     zz = lattice_vecs[2, 2]
@@ -24,7 +25,7 @@ def fractional_cell_size(lattice_vecs, cutoff):
     nmin = torch.where(nmin == 0, 1, nmin)
     return 1 / nmin
 
-def coords_cart_to_frac(cart_coords, lattice_vecs):
+def coords_cart_to_frac(cart_coords: Tensor, lattice_vecs: Tensor):
     '''
     Convert cart. coordinates to fractional ones
     '''
@@ -33,7 +34,7 @@ def coords_cart_to_frac(cart_coords, lattice_vecs):
     frac_coords = torch.matmul(cart_coords, A_transpose_inv)
     return frac_coords
 
-def coords_frac_to_cart(frac_coords, lattice_vecs):
+def coords_frac_to_cart(frac_coords: Tensor, lattice_vecs: Tensor):
     '''
     Convert frac. coordinates to cart. ones
     '''
@@ -41,7 +42,7 @@ def coords_frac_to_cart(frac_coords, lattice_vecs):
     cart_coords = torch.matmul(frac_coords, A_transpose)
     return cart_coords
 
-def calculate_distance(coords, candid_ids, lattice_lengths):
+def calculate_distance(coords: Tensor, candid_ids: Tensor, lattice_lengths: Tensor):
     '''
     Calculate distance to each candidate
     '''
@@ -54,7 +55,7 @@ def calculate_distance(coords, candid_ids, lattice_lengths):
     dists = torch.linalg.norm(disp, dim=2)
     return dists
 
-def calculate_mask(candid_ids, coords, lattice_lengths, cutoff):
+def calculate_mask(candid_ids: Tensor, coords: Tensor, lattice_lengths: Tensor, cutoff: float):
     dists = calculate_distance(coords, candid_ids, lattice_lengths)
     mask = (dists < cutoff) & (candid_ids != -1)
     return mask
@@ -69,8 +70,8 @@ def self_mask(idx):
 
 
 
-def unflatten_cell_buffer(arr,
-                           cells_per_side,
+def unflatten_cell_buffer(arr: Tensor,
+                           cells_per_side: Tensor,
                            dim: int):  
     #cells_per_side = tuple([int(x) for x in torch.flip(cells_per_side,dims=(0,))])
     cells_per_side = tuple([int(x) for x in cells_per_side])
@@ -78,18 +79,17 @@ def unflatten_cell_buffer(arr,
     return torch.reshape(arr, cells_per_side + (-1,))
 
 
-def calculate_cell_dimensions(lattice_lengths, min_cell_size):
+def calculate_cell_dimensions(lattice_lengths: Tensor, min_cell_size: float):
     '''
     We need to modify the cell size to have a balanced clean split
     '''
     cells_per_side = torch.floor(lattice_lengths / min_cell_size).int()
     cell_size_per_dim = lattice_lengths / cells_per_side
     cell_count = torch.prod(cells_per_side)
-    
     return cell_size_per_dim, cells_per_side, cell_count
     
 
-def calculate_flattened_cell_offset(cells_per_side):
+def calculate_flattened_cell_offset(cells_per_side: Tensor):
     '''
     First increment is 1, second one is size of prev. dim
     last one is the mult. of prev 2 dims
@@ -100,11 +100,10 @@ def calculate_flattened_cell_offset(cells_per_side):
     return offsets.to(torch.int32)
 
 @torch.compile(dynamic=True)
-def count_flattened_cell_sizes(cell_inds, lattice_vectors, cell_size):
+def count_flattened_cell_sizes(cell_inds: Tensor, lattice_lengths: Tensor, cell_size: float):
     '''
     Count # atoms per cell in a flattened fashion
     '''
-    lattice_lengths = torch.linalg.norm(lattice_vectors, axis=1)
     
     [cell_size_per_dim, 
      cells_per_side, 
@@ -114,18 +113,17 @@ def count_flattened_cell_sizes(cell_inds, lattice_vectors, cell_size):
     offset_vals = calculate_flattened_cell_offset(cells_per_side)
     # calculate the flat. cell ind. for each atom
     particle_flat_cell_inds = torch.sum(cell_inds * offset_vals, dtype=torch.int32, dim=1)
-    flat_cell_sizes = torch.zeros(cell_count, dtype=torch.int32, device=coords.device)
+    flat_cell_sizes = torch.zeros(cell_count, dtype=torch.int32, device=cell_inds.device)
     # reduce the counts
     flat_cell_sizes = flat_cell_sizes.index_add_(0, particle_flat_cell_inds, 
                                                  torch.ones_like(particle_flat_cell_inds))    
     return flat_cell_sizes
 
-def populate_cells(cell_inds, cells_per_side, cell_count, max_cell_capacity):
+def populate_cells(N: int, cell_inds: Tensor, cells_per_side: Tensor, cell_count: int, max_cell_capacity: int):
     '''
     Assign atoms to their cells, each cell stores the indices of the atoms it holds
     '''
-    N = coords.shape[0]
-    device=coords.device
+    device=cell_inds.device
     atom_ids = torch.arange(N, device=device, dtype=torch.int32)
     
     offset_vals = calculate_flattened_cell_offset(cells_per_side)
@@ -152,7 +150,7 @@ def populate_cells(cell_inds, cells_per_side, cell_count, max_cell_capacity):
     return cells
 
 
-def shift_array(arr, dindex):
+def shift_array(arr: Tensor, dindex: tuple):
     '''
     For each dimension, shift +1, -1 to concatanate neighbor cells
     '''
@@ -176,7 +174,7 @@ def shift_array(arr, dindex):
     return arr
 
 @torch.compile(dynamic=True)
-def generate_candidates(cells, N):
+def generate_candidates(cells: Tensor, N: int):
     '''
     Generate the candidate neighbors for each atom
     '''
@@ -208,7 +206,7 @@ def generate_candidates(cells, N):
     return candid_ids
 
 @torch.compile(dynamic=True)
-def generate_candidates_v2(cell_inds, cells, N):
+def generate_candidates_v2(cell_inds: Tensor, cells: Tensor, N: int):
     '''
     Generate the candidate neighbors for each atom
     '''
@@ -218,6 +216,7 @@ def generate_candidates_v2(cell_inds, cells, N):
     cell_nbr_candidates = [cells,]
     for (dx, dy, dz) in all_shifts:
         cell_nbr_candidates += [shift_array(cells, (dx, dy, dz))]
+
     # cx, cy, cz, num of candids
     # where num of candids = 27 * max cell capacity
     cell_nbr_candidates = torch.concatenate(cell_nbr_candidates, axis=-1)
@@ -229,7 +228,7 @@ def generate_candidates_v2(cell_inds, cells, N):
 
 
 @torch.compile(dynamic=True)
-def create_sparse_neighbor_list(coords, lattice_lengths, candid_ids, cutoff: float):
+def create_sparse_neighbor_list(coords: Tensor, lattice_lengths: Tensor, candid_ids: Tensor, cutoff: float):
     '''
     Create COO based sparse neighbor list
     '''
@@ -242,7 +241,7 @@ def create_sparse_neighbor_list(coords, lattice_lengths, candid_ids, cutoff: flo
     return source, target
 
 @torch.compile(dynamic=True)
-def create_dense_neighbor_list(coords, lattice_lengths, candid_ids, cutoff: float):
+def create_dense_neighbor_list(coords: Tensor, lattice_lengths: Tensor, candid_ids: Tensor, cutoff: float):
     '''
     Create ELLPACK based dense neighbor list
     '''
@@ -260,62 +259,47 @@ def create_dense_neighbor_list(coords, lattice_lengths, candid_ids, cutoff: floa
     
     return out_idx[:, :max_occupancy]
 
-def generate_neighbor_list(coords: Tensor, lattice_vectors: Tensor, cutoff: float, is_dense: bool = True):  
+def generate_neighbor_list(coords: Tensor, lattice_vectors: Union[Tensor, None], cutoff: float, 
+                           is_dense: bool = True,
+                           rank: int = 0, num_ranks: int = 1):  
     '''
     Main function to generate neighbor list
+    For single GPU/CPU: rank = 0, num_ranks = 1.
+    For MPI, every process will hold the neighbors for its own atoms
+
+    TODO: nonperiodic box part needs to be improved for small systems (if it is needed?)
     '''
+    nats = len(coords)
+
+    nats_per_rank = nats // num_ranks
+    my_start = rank * nats_per_rank
+    my_end = my_start + nats_per_rank
+    if rank == num_ranks - 1:
+        my_end = nats
+
+    # shift the coords towards [0,0,0]
     coords = coords - coords.min(dim=0, keepdim=True)[0]
-    lattice_lengths = torch.linalg.norm(lattice_vectors, dim=1)
-    cell_size_per_dim, cells_per_side, cell_count = calculate_cell_dimensions(lattice_lengths, cell_size)
+    if lattice_vectors != None:
+        lattice_lengths = torch.linalg.norm(lattice_vectors, dim=1)
+        is_periodic = True
+    else:
+        lattice_lengths = coords.max(dim=0)[0] + 1.0 # add some buffer room
+        is_periodic = False
+
+    cell_size_per_dim, cells_per_side, cell_count = calculate_cell_dimensions(lattice_lengths, cutoff)
     cell_inds = (coords / cell_size_per_dim[None, :]).to(torch.int32)
     
-    cell_sizes = count_flattened_cell_sizes(cell_inds, lattice_vectors, cell_size)
+    cell_sizes = count_flattened_cell_sizes(cell_inds, lattice_lengths, cutoff)
     max_cell_capacity = torch.max(cell_sizes)
-    print(max_cell_capacity)
     multiple_of = 8
     max_cell_capacity = math.ceil(max_cell_capacity / multiple_of) * multiple_of
     
-    cells = populate_cells(cell_inds, cells_per_side, cell_count, max_cell_capacity)
-    
-    #candid_ids = generate_candidates(cells, N)
-    candid_ids = generate_candidates_v2(cell_inds, cells, N)
+    cells = populate_cells(nats, cell_inds, cells_per_side, cell_count, max_cell_capacity)
+    candid_ids = generate_candidates_v2(cell_inds[my_start:my_end], cells, nats)
+    # trick to make the the nonperitodic work
+    if is_periodic == False:
+        lattice_lengths = lattice_lengths + (cutoff + 1.0)
     if is_dense:
         return create_dense_neighbor_list(coords, lattice_lengths, candid_ids, cutoff) 
     else:
         return create_sparse_neighbor_list(coords, lattice_lengths, candid_ids, cutoff)
-            
-
-density = 0.1
-cutoff = 10.0
-cell_size = 10.0
-device="cuda"
-np_dtype = np.float64
-torch_dtype = torch.float64
-all_times = []
-for i in range(20):
-    N = 100000
-    coords_orig, lattice_vectors_orig = generate_system(N, density, dtype=np_dtype)
-    lattice_vectors_orig = lattice_vectors_orig
-    use_fraq=False
-    lattice_vectors = torch.from_numpy(lattice_vectors_orig).to(torch_dtype).to(device)
-    coords = torch.from_numpy(coords_orig).to(torch_dtype).to(device)
-    coords = coords + 0.5
-    torch.cuda.synchronize()
-    start = time.perf_counter()
-    new_nbr_2d = generate_neighbor_list(coords, lattice_vectors, cutoff, is_dense=True)
-    torch.cuda.synchronize()
-    end = time.perf_counter()
-    print(end - start)
-    print(new_nbr_2d[0].shape)
-    if i > 0:
-        all_times.append(end-start)
-    '''
-    nbr_list_2d, id1, id2 = generate_nbr_list(coords.cpu().numpy(), lattice_vectors.cpu().numpy(), cutoff,device=device)
-    nbr_list_2d = torch.sort(nbr_list_2d, dim=1, descending=True)[0]
-    new_nbr_2d = torch.sort(new_nbr_2d, dim=1, descending=True)[0]
-    print(torch.all(nbr_list_2d == new_nbr_2d))
-    ''' 
-    
-    
-print(np.mean(all_times))
-print(np.median(all_times))
