@@ -42,22 +42,29 @@ def coords_frac_to_cart(frac_coords: Tensor, lattice_vecs: Tensor):
     cart_coords = torch.matmul(frac_coords, A_transpose)
     return cart_coords
 
-def calculate_distance(coords: Tensor, candid_ids: Tensor, lattice_lengths: Tensor):
+def calculate_displacement(coords: Tensor, nbr_ids: Tensor, lattice_lengths: Tensor):
     '''
-    Calculate distance to each candidate
+    Calculate the displacement vectors for each neighbor (provided as NxK tensor)
     '''
     N = coords.shape[0]
     lattice_lengths = lattice_lengths[None,:]
-    neigh_position = coords[candid_ids]
+    neigh_position = coords[nbr_ids]
     disp = coords[:, None, :] - neigh_position
     # displacement trick (based on minumum image convention)
     disp = ((disp + 0.5 * lattice_lengths) % lattice_lengths) - 0.5 * lattice_lengths
+    return disp
+
+def calculate_distance(coords: Tensor, nbr_ids: Tensor, lattice_lengths: Tensor):
+    '''
+    Calculate distance to each neighbor (provided as NxK tensor)
+    '''
+    disp = calculate_displacement(coords, nbr_ids, lattice_lengths)
     dists = torch.linalg.norm(disp, dim=2)
     return dists
 
-def calculate_mask(candid_ids: Tensor, coords: Tensor, lattice_lengths: Tensor, cutoff: float):
-    dists = calculate_distance(coords, candid_ids, lattice_lengths)
-    mask = (dists < cutoff) & (candid_ids != -1)
+def calculate_mask(coords: Tensor, nbr_ids: Tensor, lattice_lengths: Tensor, cutoff: float):
+    dists = calculate_distance(coords, nbr_ids, lattice_lengths)
+    mask = (dists < cutoff) & (nbr_ids != -1)
     return mask
 
 def self_mask(idx):
@@ -232,7 +239,7 @@ def create_sparse_neighbor_list(coords: Tensor, lattice_lengths: Tensor, candid_
     '''
     Create COO based sparse neighbor list
     '''
-    mask = calculate_mask(candid_ids, coords, lattice_lengths, cutoff)
+    mask = calculate_mask(coords, candid_ids, lattice_lengths, cutoff)
     cumsum = torch.cumsum(mask, dim=1)
     max_occupancy = torch.max(cumsum[:, -1])
     
@@ -245,7 +252,7 @@ def create_dense_neighbor_list(coords: Tensor, lattice_lengths: Tensor, candid_i
     '''
     Create ELLPACK based dense neighbor list
     '''
-    mask = calculate_mask(candid_ids, coords, lattice_lengths, cutoff)
+    mask = calculate_mask(coords, candid_ids, lattice_lengths, cutoff)
     cumsum = torch.cumsum(mask, dim=1)
     max_occupancy = torch.max(cumsum[:, -1])
     DUMMY_IND = -1
