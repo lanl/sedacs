@@ -15,6 +15,7 @@ authors = [
 dependencies = [
     "scipy>=1",
     "numpy>=1",
+    "torch>=2",
 ]
 requires-python = ">=3.10"
 readme = "README.md"
@@ -42,9 +43,6 @@ mdtraj = [
 mpi = [
     "mpi4py>=3",
 ]
-torch = [
-    "torch>=2",
-]
 graph = [
     "metis>=0.2a5"
 ]
@@ -65,6 +63,8 @@ dev = [
 test = [
     "pytest>=8",
     "pytest-cov>=5",
+    # the pip version doesn't work with numpy 2+, pulling from master for now
+    "matscipy@git+https://github.com/libAtoms/matscipy",
 ]
 doc = [
     "sphinx>=7",
