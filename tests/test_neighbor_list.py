@@ -67,7 +67,7 @@ class TestNeighborList(unittest.TestCase):
     def test_periodic(self):
         for N in [10000, 20000]:
             coords, box = generate_system(N, density=0.1, dtype=np.float64)
-            coords_t = torch.from_numpy(coords)
+            coords_t = torch.from_numpy(coords).T.contiguous() # torch expects 3xK
             box_t = torch.from_numpy(box)
             for cutoff in [5.0, 10.0]:
                 # dense part
@@ -87,7 +87,7 @@ class TestNeighborList(unittest.TestCase):
     def test_nonperiodic(self):
         for N in [10000, 20000]:
             coords, _ = generate_system(N, density=0.1, dtype=np.float64)
-            coords_t = torch.from_numpy(coords)
+            coords_t = torch.from_numpy(coords).T.contiguous() # torch expects 3xK
             for cutoff in [5.0, 10.0]:
                 target_nbr_list_2d = generate_nbr_list(coords, None, cutoff, False, True)
                 new_nbr_2d = generate_neighbor_list(coords_t, None, cutoff, is_dense=True)
