@@ -96,8 +96,7 @@ def build_nlist_torch(coords, latticeVectors, rcut, device=torch.device("cpu"), 
 
         totPerBox[ith] = totPerBox[ith] + 1  # How many per box
         if totPerBox[ith] >= maxInBox:
-            print("Exceeding the max in box allowed")
-            sys.exit(0)
+            raise ValueError(f"Exceeding the max in box allowed: {totPerBox[ith]} >= { maxInBox}.")
         inbox[ith, totPerBox[ith]] = i  # Who is in box ith
 
     for i in range(nBox):  # Correcting - from indexing to

@@ -47,12 +47,10 @@ def send_and_receive(dataSend, fromRank, toRank, rank, comm):
 #
 def collect_matrix_from_chunks(chunk, nDim, rowsPerChunk, rank, numranks, comm):
     if not mpiLib:
-        print("\nERROR: Consider installing mpi4py")
-        sys.exit(0)
+        raise ImportError("ERROR: Consider installing mpi4py")
 
     if nDim < rowsPerChunk:
-        print("\nERROR: nDim should be larger than rowsPerChunk")
-        sys.exit(0)
+        raise ValueError(f"ERROR: nDim should be larger than rowsPerChunk: {nDim, rowsPerChunk}")
 
     maxChunkDim = nDim - (numranks - 1) * rowsPerChunk
 
@@ -89,8 +87,8 @@ def collect_matrix_from_chunks(chunk, nDim, rowsPerChunk, rank, numranks, comm):
 
 def collect_and_sum_matrices(matOnRank, rank, numranks, comm):
     if not mpiLib:
-        print("\nERROR: Consider installing mpi4py")
-        sys.exit(0)
+        raise ImportError("ERROR: Consider installing mpi4py")
+
     nDim = len(matOnRank[:, 0])
     mDim = len(matOnRank[0, :])
     fullMat = np.zeros([nDim, mDim], dtype=int)
@@ -120,12 +118,10 @@ def collect_and_sum_matrices(matOnRank, rank, numranks, comm):
 
 def collect_matrix_from_chunks_v1(chunk, nDim, rowsPerChunk, rank, numranks, comm):
     if not mpiLib:
-        print("\nERROR: Consider installing mpi4py")
-        sys.exit(0)
+        raise ImportError("\nERROR: Consider installing mpi4py")
 
     if nDim < rowsPerChunk:
-        print("\nERROR: nDim should be larger than rowsPerChunk")
-        sys.exit(0)
+        raise ValueError(f"ERROR: nDim should be larger than rowsPerChunk: {nDim, rowsPerChunk}")
 
     maxChunkDim = nDim - (numranks - 1) * rowsPerChunk
 
@@ -142,9 +138,6 @@ def collect_matrix_from_chunks_v1(chunk, nDim, rowsPerChunk, rank, numranks, com
     print(displacements)
 
     comm.Allgatherv(chunk, [fullMat, nDim * mDim, displacements, MPI.INT])
-
-    print("recv", fullMat)
-    sys.exit(0)
 
     return fullMat
 

@@ -371,8 +371,7 @@ def regular_partition(graph, nparts, verb=False):
 def metis_partition(graph, nparts, verb=False):
     """Partitions using metis"""
     if metisLib == False:
-        print("\n ERROR: Consider installing Metis library \n")
-        sys.exit(0)
+        raise ImportError("Consider installing Metis library")
     if verb:
         print("\nMetis partition:")
     nxGraph = get_nx_graph(graph, 1.0)

@@ -379,6 +379,7 @@ def get_matindlist(nats,elempointer,basis):
     for i in range(nats):
         indi = 0
         for j in range(i):
+
             if(basis[elempointer[j]] == "s"):
                 numorb = 1
             elif(basis[elempointer[j]] == "p"):
@@ -534,9 +535,8 @@ def get_btypeInt(noint,btype,atele,ele1,ele2,nats,verbose):
             btypeInt[1,i] = 3
             btypeInt[2,i] = 3
         else:
-            print("Warning! Missed assigning a bond type in readtb")
-            sys.exit(0)
-        
+            raise ValueError(f"Missed assigning a bond type in readtb: '{btype[i]}' .")
+
         if(btypeInt[1,i] > lMax): lMax = btypeInt[1,i]
         if(btypeInt[2,i] > mpMax): mpMax = btypeInt[2,i]
 
@@ -736,9 +736,8 @@ def build_integralMap(noint,btype,atele,ele1,ele2,nats,verbose):
             btypeInt[1,i] = 3
             btypeInt[2,i] = 3
         else:
-            print("Warning! Missed assigning a bond type in readtb")
-            sys.exit(0)
-        
+            raise ValueError(f"Missed assigning a bond type in readtb: '{btype[i]}' .")
+
         if(btypeInt[1,i] > lMax): lMax = btypeInt[1,i]
         if(btypeInt[2,i] > mpMax): mpMax = btypeInt[2,i]
 
@@ -973,11 +972,11 @@ def read_bondints(electronsFileName,bondintsFileName,verbose):
     if os.path.isfile(bondintsFileName):
         if(verbose >= 1): print("\nWorking with file:",os.path.abspath(bondintsFileName)," ...")
     else:
-        sys.exit("\nI can't find bondints in this directory")
+        raise FileNotFoundError(f"I can't find bondints from this file: {bondintsFileName}")
     if os.path.isfile(electronsFileName):
         if(verbose >= 1): print("\nWorking with file:",os.path.abspath(electronsFileName)," ...")
     else:
-        sys.exit("\nI can't find bondints in this directory")
+        raise FileNotFoundError(f"I can't find electrons from this file: {electronsFileName}")
 
     myBondintsFile = open(bondintsFileName,"r")
     myElectronsFile = open(electronsFileName,"r")
@@ -1330,7 +1329,7 @@ def get_cutoffList_parPool(nats,atele,ele1,ele2,hcut,scut,noint,verbose,parallel
 # This is a python version of genX.F90 LATTE routine 
 #
 ##
-def genX(smat,method,verbose):
+def genX(smat, method, verbose):
 
     if(verbose):
         print("In genX ...")
@@ -1347,11 +1346,10 @@ def genX(smat,method,verbose):
     elif(method == "Cholesky"):
         pass
     else:
-        print("ERROR: Method not implemented")
-        sys.exit(0)
+        raise ValueError(f"Method not implemented: '{method}'")
 
-    if(verbose):
-        print("\nZmat Matrix")
+    if (verbose):
+        print("\nZmat Matrix:")
         print(zmat)
 
     return zmat
