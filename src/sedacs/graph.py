@@ -196,8 +196,8 @@ def collect_graph_from_rho(graph, rho, thresh, nnodes, maxDeg, indices, hindex=N
                 k = k + 1
                 graph[ii, k] = jj
                 if k >= maxDeg + 1:
-                    print("!!!ERROR: Max Degree parameter is too small")
-                    sys.exit(0)
+                    raise ValueError(f"Max Degree parameter is too small: {maxDeg}")
+
         graph[ii, 0] = k
 
     return graph

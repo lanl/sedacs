@@ -1,4 +1,5 @@
 import sys
+import pathlib
 
 import numpy as np
 
@@ -21,14 +22,15 @@ __all__ = [
 #
 def read_coords_file(fileName, lib="None", verb=True):
     """coords file main parser: Reads in an xyz/pdb file with lattice informations."""
-    ext = fileName[len(fileName) - 3 : len(fileName)]
-    if ext == "xyz":
-        latticeVectors, symbols, types, coords = read_xyz_file(fileName, lib=lib, verb=False)
-    elif ext == "pdb":
-        latticeVectors, symbols, types, coords = read_pdb_file(fileName, lib=lib, verb=False)
+    ext = pathlib.Path(fileName).suffix
+    if ext == ".xyz":
+        read_fn = read_xyz_file
+    elif ext == ".pdb":
+        read_fn = read_pdb_file
     else:
-        msg = ext + " not recognized .."
-        raise_error("read_coords_file", msg)
+        raise ValueError(f"Extension '{ext}' not recognized")
+
+    latticeVectors, symbols, types, coords = read_fn(fileName, lib=lib, verbose=False)
 
     return latticeVectors, symbols, types, coords
 
@@ -59,100 +61,108 @@ def read_coords_file(fileName, lib="None", verb=True):
 # NumberOfAtoms = len(coordinates[:,0])
 # @endcode
 #
-def read_xyz_file(fileName, lib="None", verb=True):
+def read_xyz_file(fileName, lib="None", verbose=True):
     """xyz file parser: Reads in an xyz file with lattice informations."""
-    if (lib == "None") or (lib is None):
-        fileIn = open(fileName, "r")
-        count = -1
-        latticeVectors = np.zeros((3, 3))
-        symbols = []  # Symbols for each atom type
-        noBox = False
-        typesIndex = -1
-        for lines in fileIn:
-            linesSplit = lines.split()
 
-            # Adding an exception in case there is a blank second line
-            if (len(linesSplit) == 0) and (count == 0):
-                noBox = True
-                count = count + 1
+    if lib is None or lib == "None":
+        latticeVectors, symbols, types, coords = read_xyz_file_nolib(fileName)
 
-            if len(linesSplit) != 0:
-                count = count + 1
-                if count == 0:
-                    nats = int(linesSplit[0])
-                    coords = np.zeros((nats, 3))
-                    types = np.zeros((nats), dtype=int)
-                if count == 1:
-                    latticeKey = linesSplit[0][0:8]
-                    if (latticeKey == "Lattice=") or (latticeKey == "Lattice"):
-                        linesSplit = lines.split('"')
-                        if linesSplit[0] == "Lattice":
-                            boxInfoList = linesSplit[2].split()
-                        else:
-                            boxInfoList = linesSplit[1].split()
-                        # Reading the lattice vectors
-                        latticeVectors[0, 0] = float(boxInfoList[0])
-                        latticeVectors[0, 1] = float(boxInfoList[1])
-                        latticeVectors[0, 2] = float(boxInfoList[2])
+    if lib == "ase":
+        latticeVectors, symbols, types, coords = read_xyz_file_ase(fileName)
 
-                        latticeVectors[1, 0] = float(boxInfoList[3])
-                        latticeVectors[1, 1] = float(boxInfoList[4])
-                        latticeVectors[1, 2] = float(boxInfoList[5])
-
-                        latticeVectors[2, 0] = float(boxInfoList[6])
-                        latticeVectors[2, 1] = float(boxInfoList[7])
-                        latticeVectors[2, 2] = float(boxInfoList[8])
-
-                    else:
-                        noBox = True
-                if (count >= 2) and (count <= nats + 2):
-                    # Reading the coordinates
-                    coords[count - 2, 0] = float(linesSplit[1])
-                    coords[count - 2, 1] = float(linesSplit[2])
-                    coords[count - 2, 2] = float(linesSplit[3])
-                    newSymbol = linesSplit[0]
-                    if not (newSymbol in symbols):
-                        symbols.append(newSymbol)
-                        typesIndex = typesIndex + 1
-                        types[count - 2] = typesIndex
-                    else:
-                        types[count - 2] = symbols.index(newSymbol)
-        fileIn.close()
-        if noBox:
-            # If there is no box we create one by taking the coordinate
-            # limits given by the positions of the atoms
-            latticeVectors[0, 0] = np.max(coords[:, 0]) - np.min(coords[:, 0]) + 5.0
-            latticeVectors[1, 1] = np.max(coords[:, 1]) - np.min(coords[:, 1]) + 5.0
-            latticeVectors[2, 2] = np.max(coords[:, 2]) - np.min(coords[:, 2]) + 5.0
-
-    if lib == "Ase":  # https://wiki.fysik.dtu.dk/ase/ase/atoms.html
-        if aseLib == False:
-            print("\n ERROR: Consider installing ASE library (https://wiki.fysik.dtu.dk/ase/ase/atoms.html) \n")
-            sys.exit(0)
-        system = ase.io.read(fileName)
-        coords = system.get_positions()
-        symbols = []  # Symbols for each atom type
-        latticeVectors = np.zeros((3, 3))
-        noBox = True  # Ace xyz reader does not read lattice vectors (system.cell = 0)
-        symbolsForEachAtom = system.get_chemical_symbols()
-        types = np.zeros(len(symbolsForEachAtom), dtype=int)
-        typesIndex = -1
-        count = -1
-        for symb in symbolsForEachAtom:
-            count = count + 1
-            if not (symb in symbols):
-                symbols.append(symb)
-                typesIndex = typesIndex + 1
-                types[count] = typesIndex
-            else:
-                types[count] = symbols.index(symb)
-    if verb:
+    if verbose:
         print("latticeVectors", latticeVectors)
         print("symbols", symbols)
         print("coords", coords)
 
     return latticeVectors, symbols, types, coords
 
+def read_xyz_file_nolib(fileName):
+    fileIn = open(fileName, "r")
+    count = -1
+    latticeVectors = np.zeros((3, 3))
+    symbols = []  # Symbols for each atom type
+    noBox = False
+    typesIndex = -1
+    for lines in fileIn:
+        linesSplit = lines.split()
+
+        # Adding an exception in case there is a blank second line
+        if (len(linesSplit) == 0) and (count == 0):
+            noBox = True
+            count = count + 1
+
+        if len(linesSplit) != 0:
+            count = count + 1
+            if count == 0:
+                nats = int(linesSplit[0])
+                coords = np.zeros((nats, 3))
+                types = np.zeros((nats), dtype=int)
+            if count == 1:
+                latticeKey = linesSplit[0][0:8]
+                if (latticeKey == "Lattice=") or (latticeKey == "Lattice"):
+                    linesSplit = lines.split('"')
+                    if linesSplit[0] == "Lattice":
+                        boxInfoList = linesSplit[2].split()
+                    else:
+                        boxInfoList = linesSplit[1].split()
+                    # Reading the lattice vectors
+                    latticeVectors[0, 0] = float(boxInfoList[0])
+                    latticeVectors[0, 1] = float(boxInfoList[1])
+                    latticeVectors[0, 2] = float(boxInfoList[2])
+
+                    latticeVectors[1, 0] = float(boxInfoList[3])
+                    latticeVectors[1, 1] = float(boxInfoList[4])
+                    latticeVectors[1, 2] = float(boxInfoList[5])
+
+                    latticeVectors[2, 0] = float(boxInfoList[6])
+                    latticeVectors[2, 1] = float(boxInfoList[7])
+                    latticeVectors[2, 2] = float(boxInfoList[8])
+
+                else:
+                    noBox = True
+            if (count >= 2) and (count <= nats + 2):
+                # Reading the coordinates
+                coords[count - 2, 0] = float(linesSplit[1])
+                coords[count - 2, 1] = float(linesSplit[2])
+                coords[count - 2, 2] = float(linesSplit[3])
+                newSymbol = linesSplit[0]
+                if not (newSymbol in symbols):
+                    symbols.append(newSymbol)
+                    typesIndex = typesIndex + 1
+                    types[count - 2] = typesIndex
+                else:
+                    types[count - 2] = symbols.index(newSymbol)
+    fileIn.close()
+    if noBox:
+        # If there is no box we create one by taking the coordinate
+        # limits given by the positions of the atoms
+        latticeVectors[0, 0] = np.max(coords[:, 0]) - np.min(coords[:, 0]) + 5.0
+        latticeVectors[1, 1] = np.max(coords[:, 1]) - np.min(coords[:, 1]) + 5.0
+        latticeVectors[2, 2] = np.max(coords[:, 2]) - np.min(coords[:, 2]) + 5.0
+
+    return latticeVectors, symbols, types, coords
+
+def read_xyz_file_ase(fileName):
+    import ase
+    system = ase.io.read(fileName)
+    coords = system.get_positions()
+    symbols = []  # Symbols for each atom type
+    latticeVectors = np.zeros((3, 3))
+    noBox = True  # Ace xyz reader does not read lattice vectors (system.cell = 0)
+    symbolsForEachAtom = system.get_chemical_symbols()
+    types = np.zeros(len(symbolsForEachAtom), dtype=int)
+    typesIndex = -1
+    count = -1
+    for symb in symbolsForEachAtom:
+        count = count + 1
+        if not (symb in symbols):
+            symbols.append(symb)
+            typesIndex = typesIndex + 1
+            types[count] = typesIndex
+        else:
+            types[count] = symbols.index(symb)
+    return latticeVectors, symbols, types, coords
 
 ## Write coordinates into an xyz file
 #
@@ -212,7 +222,7 @@ def write_xyz_coordinates(fileName, coords, types, symbols):
 def read_xyz_trajectory(fileName, lib="None", verb=True):
     """trajectory file parser: Reads in an xyz trajectory file"""
     with open(fileName) as f:
-        ext = fileName[len(fileName) - 3 : len(fileName)]
+        ext = pathlib.Path(fileName).suffix
         lines = np.array(f.readlines())
         nats = int(lines[0])
         mask = np.ones(len(lines), dtype=bool)

@@ -3,13 +3,12 @@
 #Make sure to source the environmental variable 
 #sour vars
 
-sdc_input=$'Threshold= 1.0E-5 \n CoordsFile= \n Rcut= 5.0 '
 
 export OMP_NUM_THREADS=1
 
-run="python sdc_main_nl_test.py"
+run="python main.py"
 
-tag="Time for build_nlist" 
+tag="build_nlist" 
 
 fileout="times_nl.dat"
 rm $fileout 
@@ -21,11 +20,11 @@ do
   for coordsSize in 5133  10000 20000 30000 65000 
   do
     echo "coords, numranks:" "$coordsSize" "$numranks"
-    coordsFile="coords_"$coordsSize".pdb"
-    echo "$sdc_input" > tmp
+    coordsFile="$PWD/../../data/driver/coords_"$coordsSize".pdb"
+    sdc_input=$'Threshold= 1.0E-5 \n CoordsFile= '"$coordsFile"$' \n Rcut= 5.0 '
+    echo "$sdc_input" > input.in 
     echo "$sdc_input" 
-    sed 's/CoordsFile=.*/CoordsFile= '$coordsFile'/g' tmp > input.in
-    /usr/bin/mpirun -np $numranks /usr/bin/python3 sdc_main_nl_test.py | tee  out$coordsSize$numranks
+    mpirun -np $numranks python3 main.py | tee  out$coordsSize$numranks
     time=`grep -e $tag out$coordsSize$numranks | head -1 | awk '{print $4}'`
     echo $coordsSize $time >> $fileout
   done

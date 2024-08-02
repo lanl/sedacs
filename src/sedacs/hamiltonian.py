@@ -24,27 +24,21 @@ def get_hamiltonian(engine, coords, types, symbols, verbose=False):
     # Call the proper interface
     # If there is no interface, one should write its own Hamiltonian
     if engine.interface == "None":
-        print("ERROR!!! - Write your own Hamiltonian")
-        return None
-
+        raise ValueError("ERROR!!! - Write your own Hamiltonian.")
     # Tight interface using modules or an external code compiled as a library
-    if engine.interface == "Module":
+    elif engine.interface == "Module":
         # We will call proxyA directly as it will be loaded as a module.
         return get_hamiltonian_module(engine, coords, types, symbols, verb=verbose)
-
     # Using any available library. We will use MDI here.
-    if engine.interface == "MDI":
-        print("MDI interface not implemented yet")
-        return None
-
+    elif engine.interface == "MDI":
+        raise NotImplemented("MDI interface not implemented yet")
     # Using unix sockets to interface the codes
-    if engine.interface == "Socket":
-        print("Sockets not implemented yet")
-        return None
-
+    elif engine.interface == "Socket":
+        raise NotImplemented("Sockets not implemented yet")
     # Using files as a form of communication and transfering data.
-    if engine.interface == "File":
+    elif engine.interface == "File":
         return get_hamiltonian_files(engine, coords, types, symbols, verb=verbose)
 
-    print("ERROR!!!: Interface type not recognized. Use any of the following: Module,File,Socket,MDI")
-    return None
+    raise ValueError(f"ERROR!!!: Interface type not recognized: '{engine.interface}'. " +
+                     f"Use any of the following: Module,File,Socket,MDI")
+
