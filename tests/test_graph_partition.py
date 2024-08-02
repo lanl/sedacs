@@ -39,6 +39,7 @@ class TestGraphPartition(unittest.TestCase):
         except Exception:
             passed = False
         self.assertTrue(passed)
+        return passed
 
     def test_get_parts_indices(self):
         passed = True
