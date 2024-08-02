@@ -1,5 +1,7 @@
 # Running Unit Tests
 
+[TOC]
+
 This document provides instructions on setting up and running unit tests for our project using `pytest` and `pytest-cov`, as well as using the `pdm` tool.
 The *root directory* of the project is the highest level directory that includes the `pyproject.toml` file.
 
@@ -37,6 +39,47 @@ pytest
 ```
 
 This command will discover and run all tests located in the `tests` directory.
+
+To run specific tests using `pytest`, you have several options:
+
+### Running Specific Test Files
+
+To run tests from specific files, use:
+
+```sh
+pytest path/to/test_file1.py path/to/test_file2.py
+```
+
+### Running Specific Test Classes or Methods
+
+To run a specific test class or method, use:
+
+```sh
+pytest path/to/test_file.py::TestClass
+pytest path/to/test_file.py::TestClass::test_method
+```
+
+### Running Tests Matching a Keyword
+
+To run tests that match a specific keyword expression, use:
+
+```sh
+pytest -k "<keyword>"
+```
+
+For example, to run all tests that contain the word `read`:
+
+```sh
+pytest -k "read"
+```
+
+### Running Tests with Specific File Patterns
+
+To run tests from files that match a specific pattern, use:
+
+```sh
+pytest path/to/tests/test_*.py
+```
 
 ## Running Tests with pdm
 

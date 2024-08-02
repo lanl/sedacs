@@ -5,9 +5,10 @@ import time
 
 import numpy as np
 from mpi4py import MPI
+
 #from sedacs.graph import *
 # from sedacs.graph_partition import *
-from sedacs.io import read_coords_file
+from sedacs.file_io import read_coords_file
 from sedacs.parser import Input
 from sedacs.system import System, build_nlist
 

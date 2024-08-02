@@ -1,4 +1,4 @@
-from sedacs.io import read_pdb_file, write_xyz_coordinates
+from sedacs.file_io import read_pdb_file, write_xyz_coordinates
 from sedacs.periodic_table import PeriodicTable
 
 from proxies.python.first_level import get_density_matrix, get_hamiltonian_proxy

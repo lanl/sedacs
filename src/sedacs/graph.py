@@ -78,7 +78,7 @@ def print_graph(graph):
     print("Connections of every node i follows: ")
     for i in range(nnodes):
         nodesList = []
-        for k in range(1, graph[i, 0]+1):
+        for k in range(1, graph[i, 0] + 1):
             if graph[i, k] != -1:
                 nodesList.append(graph[i, k])
         print(i, "(", graph[i, 0], ")", "-", nodesList)
