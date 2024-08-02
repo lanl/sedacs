@@ -156,42 +156,71 @@ contains
   !! @return D Density matrix
   !!
   subroutine get_densityMatrix(H,Nocc,D,verb)
+#ifdef USEPROGRESS 
+    use bml
+    use prg_densitymatrix_mod
+#endif
+    
     implicit none 
     integer :: Nocc
     logical, intent(in) :: verb
     real(dp), allocatable, intent(in) :: H(:,:)
     real(dp), allocatable, intent(out) :: D(:,:)
-    real(dp), allocatable :: Q(:,:), E(:)
+    real(dp), allocatable :: Q(:,:), E(:),tmpmat(:,:),f(:,:)
     real(dp) :: mu
-    integer :: info, lwork,i,j,k,hdim,homoIndex,lumoIndex 
+    integer :: info, lwork,i,j,k,norbs,homoIndex,lumoIndex 
     real(dp), allocatable :: work(:)
+    real(dp) :: bndfil
     character(LEN=1), parameter :: jobz = 'V',  uplo = 'U'
 
+#ifdef USEPROGRESS 
+   type(bml_matrix_t) :: D_bml,H_bml
+#endif 
     if(verb) write(*,*)"Computing the Density matrix"
 
-    hdim = size(H,dim=1)
-    lwork = 3*hdim - 1
-    allocate(Q(hdim,hdim))
+    norbs = size(H,dim=1)
+    
+#ifdef USEPROGRESS
+   bndfil = real(nocc)/real(norbs)
+   call bml_zero_matrix(bml_matrix_dense,bml_element_real,&
+          &dp,norbs,norbs,D_bml)
+   call bml_zero_matrix(bml_matrix_dense,bml_element_real,&
+          &dp,norbs,norbs,H_bml)
+   call bml_import_from_dense(bml_matrix_dense,H,H_bml,0.0_dp,norbs)
+   call prg_build_density_t0(H_bml,D_bml,0.0_dp,bndfil,E) 
+   call bml_export_to_dense(D_bml,D)
+   call bml_deallocate(D_bml)
+   call bml_deallocate(H_bml)
+#else
+    lwork = 3*norbs - 1
+    allocate(Q(norbs,norbs))
     allocate(work(lwork))
-    allocate(E(hdim))
+    allocate(E(norbs))
     Q = H
-    call dsyev(jobz,uplo,hdim,Q,hdim,E,work,lwork,info)
+    call dsyev(jobz,uplo,norbs,Q,norbs,E,work,lwork,info)
     if(verb)write(*,*)"Eigenvalues",E
     homoIndex = Nocc
     lumoIndex = Nocc + 1
     mu = 0.5*(E(homoIndex) + E(lumoIndex))
-    allocate(D(hdim,hdim))
+    allocate(D(norbs,norbs))
+    allocate(f(norbs,norbs))
+    allocate(tmpmat(norbs,norbs))
     D = 0.0_dp
-    do i = 1,hdim
-      do j = 1,hdim
-          do k = 1,hdim
-            if (E(k) < mu) then
-              D(i,j) = D(i,j) + Q(i,k)*Q(j,k)
-            endif
-          enddo
-      enddo
+    f = 0.0_dp
+
+    do i = 1,norbs
+       if (E(i) < mu) then
+         f(i,i) = 1.0_dp
+       endif
     enddo
-    if(verb)write(*,*)"Chemical potential = ",mu
+
+    CALL DGEMM('N', 'N', norbs, norbs, norbs, 1.0_dp, &
+       tmpmat, norbs, Q, norbs, 0.0_dp, f, norbs) !Q*f
+    CALL DGEMM('N', 'T', norbs, norbs, norbs, 1.0_dp, &
+       tmpmat, norbs, Q, norbs, 0.0_dp, D, norbs) !(Q*f)*Qt
+
+#endif
+
     return
 
   end subroutine get_densityMatrix

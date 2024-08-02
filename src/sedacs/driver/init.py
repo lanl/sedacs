@@ -7,7 +7,7 @@ import numpy as np
 
 from sedacs.engine import Engine
 from sedacs.graph import get_initial_graph
-from sedacs.io import read_coords_file, write_xyz_coordinates
+from sedacs.input_output import read_coords_file, write_xyz_coordinates
 from sedacs.parser import Input
 from sedacs.system import System, build_nlist, extract_subsystem, get_hindex
 

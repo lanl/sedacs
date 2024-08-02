@@ -18,7 +18,7 @@ __all__ = ["get_hamiltonian"]
 # @param coords Positions for every atom. z-coordinate of atom 1 = coords[0,2]
 # @param types Index type for each atom in the system. Type for first atom = type[0]
 # @param symbols Symbols for every atom type
-# @verb Verbosity
+# @verbose Verbosity
 #
 def get_hamiltonian(engine, coords, types, symbols, verbose=False):
     # Call the proper interface

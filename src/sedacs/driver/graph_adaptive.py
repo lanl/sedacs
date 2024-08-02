@@ -5,7 +5,8 @@ import time
 from sedacs.graph import add_graphs, collect_graph_from_rho, print_graph
 from sedacs.graph_partition import get_coreHaloIndices, graph_partition
 from sedacs.hamiltonian import get_hamiltonian
-from sedacs.io import write_pdb_coordinates, write_xyz_coordinates
+from sedacs.density_matrix import get_density_matrix
+from sedacs.input_output import write_pdb_coordinates, write_xyz_coordinates
 from sedacs.mpi import collect_and_sum_matrices
 from sedacs.system import System, extract_subsystem
 
@@ -17,10 +18,6 @@ except ModuleNotFoundError:
     is_mpi_available = False
 
 __all__ = ["get_singlePoint", "get_adaptiveDM"]
-
-
-def get_density_matrix(*args, **kwargs):
-    raise NotImplementedError("implement this in an external module!")
 
 
 ## Single point calculation
@@ -58,7 +55,7 @@ def get_singlePoint(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hi
         norbs = subSy.nats
         occ = int(float(norbs) / 2.0)  # Get the total occupied orbitals
         tic = time.perf_counter()
-        rho = get_density_matrix(ham, occ)
+        rho = get_density_matrix(eng,occ,ham,verbose=False)
         # print(rho)
 
         ## MAKSIM
@@ -132,4 +129,3 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     if rank == 0:
         write_pdb_coordinates("subSyG_fin.pdb", subSy.coords, subSy.types, subSy.symbols)
         write_xyz_coordinates("subSyG_fin.xyz", subSy.coords, subSy.types, subSy.symbols)
-        print_graph(graphOnRank)
