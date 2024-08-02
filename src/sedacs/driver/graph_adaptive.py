@@ -2,11 +2,11 @@
 
 import time
 
+from sedacs.density_matrix import get_density_matrix
+from sedacs.file_io import write_pdb_coordinates, write_xyz_coordinates
 from sedacs.graph import add_graphs, collect_graph_from_rho, print_graph
 from sedacs.graph_partition import get_coreHaloIndices, graph_partition
 from sedacs.hamiltonian import get_hamiltonian
-from sedacs.density_matrix import get_density_matrix
-from sedacs.input_output import write_pdb_coordinates, write_xyz_coordinates
 from sedacs.mpi import collect_and_sum_matrices
 from sedacs.system import System, extract_subsystem
 
@@ -55,7 +55,7 @@ def get_singlePoint(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hi
         norbs = subSy.nats
         occ = int(float(norbs) / 2.0)  # Get the total occupied orbitals
         tic = time.perf_counter()
-        rho = get_density_matrix(eng,occ,ham,verbose=False)
+        rho = get_density_matrix(eng, occ, ham, verbose=False)
         # print(rho)
 
         ## MAKSIM

@@ -1,5 +1,7 @@
 # Installing Packages with pip
 
+[TOC]
+
 ## Introduction
 
 This guide explains how to install Python packages, which are bundles of software that can be installed using pip, a package management system. The term "package" here refers to what is technically known as a distribution.

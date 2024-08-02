@@ -2,7 +2,7 @@ import textwrap
 import unittest
 
 import numpy as np
-from sedacs.input_output import (
+from sedacs.file_io import (
     are_files_equivalent,
     read_pdb_file,
     read_xyz_file,

@@ -14,8 +14,7 @@ except Exception as e:
     fortlib = None
     raise e
 
-__all__ = ["get_hamiltonian_module"]
-__all__ = ["get_density_matrix_module"]
+__all__ = ["get_hamiltonian_module", "get_density_matrix_module"]
 
 
 def get_hamiltonian_proxy(*args, **kwargs):
@@ -58,25 +57,28 @@ def get_hamiltonian_module(eng, coords, atomTypes, symbols, verb):
     return hamiltonian
 
 
-def get_density_matrix_modules(eng,nocc,hamiltonian,verb=False):
-
-    if(eng.name == "ProxyA"):
-        density_matrix = get_densityMatrix(hamiltonian,nocc,verb=False)
-    elif(eng.name == "ProxyAFortran"):
-        #H needs to be flattened 
-        norbs = len(hamiltonian[:,0])
+def get_density_matrix_modules(eng, nocc, hamiltonian, verb=False):
+    if eng.name == "ProxyA":
+        density_matrix = get_densityMatrix(hamiltonian, nocc, verb=False)
+    elif eng.name == "ProxyAFortran":
+        # H needs to be flattened
+        norbs = len(hamiltonian[:, 0])
         ht = hamiltonian.T
-        #Specify arguments type as a pointers
-        get_density_matrix_fortran.argtypes=[ctypes.c_int,ctypes.c_int,ctypes.POINTER(ctypes.c_double),ctypes.POINTER(ctypes.c_double),ctypes.c_bool]
-        #Passing a pointer to Fortran 
+        # Specify arguments type as a pointers
+        get_density_matrix_fortran.argtypes = [
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.c_double),
+            ctypes.POINTER(ctypes.c_double),
+            ctypes.c_bool,
+        ]
+        # Passing a pointer to Fortran
         hamiltonian_ptr = hamiltonian.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
-        density_matrix = np.zeros((norbs,norbs))
+        density_matrix = np.zeros((norbs, norbs))
         density_matrix_ptr = density_matrix.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
 
         err = get_density_matrix_fortran(
-                ctypes.c_int(norbs),ctypes.c_int(nocc),hamiltonian_ptr,density_matrix_ptr,ctypes.c_bool(verb)
+            ctypes.c_int(norbs), ctypes.c_int(nocc), hamiltonian_ptr, density_matrix_ptr, ctypes.c_bool(verb)
         )
 
-
     return density_matrix
-
