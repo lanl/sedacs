@@ -1,10 +1,10 @@
 #!/usr/bin/env python3                                                                                                  
 """ Main gpu driver                                                                                  
 """  
-from sedacs.system import *                                                                                                    
+from sdc_system import *                                                                                                    
 from proxy_a import *                                                                                                       
-from sedacs.parser import *
+from sdc_parser import *
 
-sdc = Input("input.in",True)
+sdc = sdc_input("input.in",True)
 
 ham = sdc_proxya()

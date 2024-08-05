@@ -35,14 +35,15 @@ void array_split_single(const float *AF, half *AH1, half *AH2, const unsigned N)
 }
 
 
-void tcoreSPGemmSymm (cublasHandle_t  handle
-                                 ,const unsigned N
-                                 ,const float* A
-                                 ,half* Ah
-                                 ,half* Al
-                                 ,float* B1
-                                 ,float* B2
-                                 ,float* B)
+void tcoreSPGemmSymm(cublasHandle_t  handle,
+                     cudaStream_t *,
+                     const unsigned N,
+                     const float* A,
+                     half* Ah,
+                     half* Al,
+                     float* B1,
+                     float* B2,
+                     float* B)
 {
     // Setup kernel launch
     unsigned num_thds = 512;

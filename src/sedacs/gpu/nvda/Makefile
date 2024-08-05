@@ -38,7 +38,7 @@ CUDA_LIB_DIR= -L${NVHPC_ROOT}/cuda/lib64
 # # CUDA include directory:
 CUDA_INC_DIR= -I${NVHPC_ROOT}/cuda/include
 # # CUDA linking libraries:
-CUDA_LINK_LIB= -lcudart
+CUDA_LINK_LIB= -lcudart -lnvToolsExt
 # 
 # MPI library 
 # 
@@ -119,7 +119,7 @@ OBJS        = $(OBJSP2) $(OBJDIAG) $(OBJNLIST) $(OBJCHEBY) \
 
 # Link compiled object files to target so:
 so: $(OBJS)
-	$(CXX) -shared $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) $(OBJS) -o $(SO) $(MPI_LIB_DIR) $(MPI_LINK_LIB) $(CUDA_LIB_DIR) $(CUDA_LINK_LIB) $(CUDAMATH_LIB_DIR) $(CUDAMATH_LINK_LIB) $(NVCOMP_LIB_DIR) $(NVCOMP_LINK_LIB)
+	$(CXX) -shared $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) $(OBJS) -o $(SO) $(MPI_LIB_DIR) $(MPI_LINK_LIB) $(CUDA_LIB_DIR) $(CUDA_LINK_LIB) $(CUDAMATH_LIB_DIR) $(CUDAMATH_LINK_LIB) $(NVCOMP_LIB_DIR) $(NVCOMP_LINK_LIB) -lnvToolsExt
 
 $(OBJ_DIR)/diag/%.o: $(SRC_DIR)/diag/%.cu
 	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR) $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB)

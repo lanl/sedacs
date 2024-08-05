@@ -3,6 +3,12 @@ void gershgorin(const unsigned,
                 double*,
                 double*);
 
+void gershgorin_v2(const unsigned,
+                   const double*, 
+                   double*,
+                   double*);
+
+
 
 cudaError_t GPUSTrace(const unsigned,
                       const float*,
