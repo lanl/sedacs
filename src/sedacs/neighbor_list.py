@@ -3,8 +3,44 @@ from torch import Tensor
 import math 
 import itertools
 from typing import Union
+from dataclasses import dataclass
 
 DUMMY_IND = -1 # dummy neighbor index TODO: find a way do store this info
+
+__all__ = ["generate_neighbor_list", "NeighborState"]
+
+@dataclass
+class NeighborState:
+    '''
+    Packs the neighbor state.
+    '''
+    coords: Tensor
+    lattice_vecs: Union[None, Tensor]
+    nbr_inds: Union[None, Tensor] 
+    cutoff: float 
+    is_dense: bool = True
+    buffer: float = 0.0
+    rank: int = 0
+    num_ranks: int = 1
+
+    def __post_init__(self):
+        nbr_inds = generate_neighbor_list(self.coords, 
+                                        self.lattice_vecs, 
+                                        self.cutoff + self.buffer, 
+                                        self.is_dense,
+                                        self.rank, self.num_ranks)   
+        self.nbr_inds = nbr_inds
+
+    def update(self, new_coords, rank=0, num_ranks=1):
+        if torch.all(torch.abs(self.coords - new_coords) > self.buffer):
+            nbr_inds = generate_neighbor_list(self.coords, 
+                                              self.lattice_vecs, 
+                                              self.cutoff + self.buffer, 
+                                              self.is_dense,
+                                              self.rank, self.num_ranks)
+            self.nbr_inds = nbr_inds
+            self.coords = new_coords
+
 
 
 def fractional_cell_size(lattice_vecs: Tensor, cutoff: float):
@@ -254,7 +290,7 @@ def create_sparse_neighbor_list(coords: Tensor, lattice_lengths: Tensor, candid_
     
     index = torch.argwhere(mask)
     source, target = index[:,0], candid_ids[index[:,0], index[:,1]]
-    return source, target
+    return torch.stack((source, target))
 
 @torch.compile(dynamic=True)
 def create_dense_neighbor_list(coords: Tensor, lattice_lengths: Tensor, candid_ids: Tensor, cutoff: float):
@@ -325,3 +361,5 @@ def generate_neighbor_list(coords: Tensor, lattice_vectors: Union[Tensor, None],
         return create_dense_neighbor_list(coords, lattice_lengths, candid_ids, cutoff) 
     else:
         return create_sparse_neighbor_list(coords, lattice_lengths, candid_ids, cutoff)
+    
+

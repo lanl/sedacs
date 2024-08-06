@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 import torch
-from sedacs.neighbor_list import generate_neighbor_list
+from sedacs.neighbor_list import generate_neighbor_list, NeighborState
 
 def generate_system(N, density, dtype=np.float32):
     vol_to_n = 1.0/density
@@ -99,4 +99,18 @@ class TestNeighborList(unittest.TestCase):
                 nbr_i = nbr_i.cpu().numpy()
                 nbr_j = nbr_j.cpu().numpy()
                 
-                compare_sparse(nbr_i, nbr_j, target_nbr_i, target_nbr_j, err_msg=f"Periodic system, N:{N}, cutoff:{cutoff}, sparse")    
+                compare_sparse(nbr_i, nbr_j, target_nbr_i, target_nbr_j, err_msg=f"Periodic system, N:{N}, cutoff:{cutoff}, sparse")
+
+    def test_dataclass(self):
+        N = 1000
+        cutoff = 5.0
+        coords, box = generate_system(N, density=0.1, dtype=np.float64)
+        coords = torch.from_numpy(coords).T.contiguous() # torch expects 3xK
+        box = torch.from_numpy(box)
+        state = NeighborState(coords, box, None, cutoff)
+        new_nbr_2d = generate_neighbor_list(coords, box, cutoff)
+        compare_dense(new_nbr_2d, state.nbr_inds, err_msg=f"Test dataclass, N:{N}, cutoff:{cutoff}, dense")
+
+
+
+
