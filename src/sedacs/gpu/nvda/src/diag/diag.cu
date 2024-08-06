@@ -8,15 +8,18 @@
 #include <thrust/host_vector.h> 
 #include <error_check.cuh>
 #include <cusolverDn.h>
+#include "nvToolsExt.h"
 
 // diagonalize a matrix
 void computeEval(double *d_ham, int norb, 
                  double *d_eval, 
                  double *d_evec)
 {
+    nvtxRangePushA("create handle");
     // cusolver handles
     cusolverDnHandle_t cusolver_H;
     CUSOLVER_CHECK_ERR(cusolverDnCreate(&cusolver_H));
+    nvtxRangePop();
 
     // specify cusolver diag flags
     
@@ -28,11 +31,13 @@ void computeEval(double *d_ham, int norb,
     int lwork = 0;
 
     // determine amount of temp space needed
+    nvtxRangePushA("buffer calc");
     CUSOLVER_CHECK_ERR(cusolverDnDsyevd_bufferSize(cusolver_H,
                                                    jobz, uplo, norb, 
                                                    d_ham, norb, 
                                                    d_eval, &lwork)); 
 
+    nvtxRangePop();
     // allocate temp work vars
     double *d_work = NULL;
     int *devInfo = NULL;
@@ -40,20 +45,25 @@ void computeEval(double *d_ham, int norb,
     CUDA_CHECK_ERR(cudaMalloc((void **) &devInfo, sizeof(int)));
 
     // diagonalize
+    nvtxRangePushA("diagonalize");
     CUSOLVER_CHECK_ERR(cusolverDnDsyevd(cusolver_H, 
                                         jobz, uplo, norb, 
                                         d_ham, norb, 
                                         d_eval, 
                                         d_work, lwork, 
                                         devInfo));
+    nvtxRangePop();
 
     // copy to d_evec 
     CUDA_CHECK_ERR(cudaMemcpy(d_evec, d_ham, norb*norb*sizeof(double), cudaMemcpyDeviceToDevice));
 
     // free memory
+    nvtxRangePushA("cusolver mem destroy");
+
     CUSOLVER_CHECK_ERR(cusolverDnDestroy(cusolver_H));
     CUDA_CHECK_ERR(cudaFree(d_work)); 
     CUDA_CHECK_ERR(cudaFree(devInfo));
+    nvtxRangePop();
 };
 
 
@@ -144,40 +154,6 @@ void compute_dOcc_dmu(double *eval,
 
 };
 
-// gershgorin circle thoerem to compute bandwidth
-void gershgorin(double* mu_a, double *mu_b, double* ham, int n){
-   
-    double r=0.;
-    double e=0., min_e=0.,max_e=0.;
-
-    for (int i = 0;i<n;i++){
-
-        // Gershgorin eigenvalue circle center
-        e = ham[i*n+i]; 
-        r = 0.;
-
-        // compute sum of abs. val of components in row i
-        for (int j=0;j<n;j++){
-           r += abs(ham[i*n+i]);
-        }
-
-        // Gershgorin eigenvalue circle radius
-        r-=abs(e);
-
-        //update min and max eigenvalues as you loop over rows
-        if (e-r < mu_a[0]){
-            min_e = e-r;
-        }
-        else if ( e+r > max_e){
-            max_e = e+r;
-        }
-    }
-
-    mu_a[0] = min_e; 
-    mu_b[0] = max_e; 
-
-}
-
 /*
     Determine chemical potential to use for building 
     density matrix using diagonalization.
@@ -216,8 +192,9 @@ void get_fermilevel_bisection(double* h_eval,
         mu[0] = (mu_b+mu_a)/2;
    
         // compute occupation with guess for mu
+        nvtxRangePushA("Occuption");
         computeOcc<<<nblks, nthds>>>(eval, occ, norb, kbt, mu[0]);
-
+        nvtxRangePop();
         // sum the occ factors
         f = thrust::reduce(thrust_occ, thrust_occ + norb, 0.0, thrust::plus<double>());
     
@@ -238,6 +215,8 @@ void get_fermilevel_bisection(double* h_eval,
             mu_b=mu[0];
 
         }
+        //std::cout << "mu = " << mu[0] << std::endl;
+
         iter+=1;
     }
 }
@@ -290,8 +269,8 @@ void  compute_dm_from_eig(double *occ,
     CUDA_CHECK_ERR(cudaFree(occ_mat));
 }
 
-void diagonalize(double* ham, 
-                 double* dm, 
+void diagonalize(double* d_ham, 
+                 double* d_dm, 
                  double kbt,
                  double bndfil,
                  precision_t prec,
@@ -315,47 +294,67 @@ void diagonalize(double* ham,
 
     // declare vars
     double *eval, *evec, *occ, *mu;
-    double *d_ham, *d_eval, *d_evec;
-    double *d_dm, *d_occ;
+    double *d_eval, *d_evec;
+    double *d_occ;
+    
+
+    //nvtxRangePushA("Register host memory");
+    //cudaHostRegister ( ham, N * N * sizeof(double), cudaHostRegisterDefault);
+    //cudaHostRegister ( dm, norb * norb * sizeof(double), cudaHostRegisterDefault);
+    //nvtxRangePop();
 
     // allocate host memory
     mu   = (double*)malloc( sizeof(double) );
     eval = (double*)malloc( norb * sizeof(double) );
     evec = (double*)malloc( norb * norb * sizeof(double) );
+    //CUDA_CHECK_ERR(cudaMallocHost(&h_dm,     norb * norb * sizeof(double)));
 
     // allocate device memory
-    CUDA_CHECK_ERR(cudaMalloc(&d_ham,  norb * norb * sizeof(double)  ));
-    CUDA_CHECK_ERR(cudaMalloc(&d_dm,   norb * norb * sizeof(double)  ));
+    //CUDA_CHECK_ERR(cudaMalloc(&d_ham,  norb * norb * sizeof(double)  ));
+    //CUDA_CHECK_ERR(cudaMalloc(&d_dm,   norb * norb * sizeof(double)  ));
     CUDA_CHECK_ERR(cudaMalloc(&d_evec, norb * norb * sizeof(double)  ));
     CUDA_CHECK_ERR(cudaMalloc(&d_occ,  norb * sizeof(double)  ));
     CUDA_CHECK_ERR(cudaMalloc(&d_eval, norb * sizeof(double)  ));
 	
     // copy ham to device
-    CUDA_CHECK_ERR(cudaMemcpy(d_ham, ham, norb * norb * sizeof(double), cudaMemcpyHostToDevice));	
+    //CUDA_CHECK_ERR(cudaMemcpy(d_ham, ham, norb * norb * sizeof(double), cudaMemcpyHostToDevice));	
 
     // do cusolver diag
+    nvtxRangePushA("cusolver");
     computeEval(d_ham, norb, d_eval, d_evec); 
+    nvtxRangePop();
 
     // compute fermi level, mu
+    nvtxRangePushA("calculate mu");
     get_fermilevel_bisection(eval, d_eval, d_occ, norb, kbt, bndfil, mu, nblks2, nthds2);
+    nvtxRangePop();
 
-    std::cout << "mu = " << mu[0] << std::endl;
 
     // build density matrix
+    nvtxRangePushA("compute dm");
     compute_dm_from_eig(d_occ, d_evec, d_dm, norb);
+    nvtxRangePop();
 		
     // send dm back to host
-    CUDA_CHECK_ERR(cudaMemcpy(dm, d_dm, norb * norb * sizeof(double), cudaMemcpyDeviceToHost));
+    // CUDA_CHECK_ERR(cudaMemcpy(h_dm, d_dm, norb * norb * sizeof(double), cudaMemcpyDeviceToHost));
+
+
+    //nvtxRangePushA("HtoH dm copy");
+    // copy cpu buffer to python allocated dm (avoids python memory issues, pagability?)
+    //memcpy(dm,h_dm, norb * norb * sizeof(double));
+    //nvtxRangePop();   
+     
 
     // free memory
     free(eval); 
     free(evec); 
     free(occ); 
-    CUDA_CHECK_ERR(cudaFree(d_ham)); 
+    //CUDA_CHECK_ERR(cudaFree(d_ham)); 
     CUDA_CHECK_ERR(cudaFree(d_evec)); 
     CUDA_CHECK_ERR(cudaFree(d_eval)); 
     CUDA_CHECK_ERR(cudaFree(d_occ)); 
-    CUDA_CHECK_ERR(cudaFree(d_dm));
+    //CUDA_CHECK_ERR(cudaFreeHost(h_dm));
+    //CUDA_CHECK_ERR(cudaFree(d_dm));
 
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);

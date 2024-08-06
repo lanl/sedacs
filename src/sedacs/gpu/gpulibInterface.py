@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import numpy as np
 import time
 
@@ -5,7 +7,7 @@ import time
 from ctypes import *
 import ctypes
 import numpy.ctypeslib as ctl
-from juliacall import Main as jl
+#from juliacall import Main as jl
 
 ## gpuLib API call to inverse overlap factorization algorithm.
 # This interface function will accept two numpy arrays, the hamiltonian, and the density matrix
@@ -42,6 +44,63 @@ def invOverlapFactor(overlap,guess,factor,matSize,lib):
     return list(factor)                          
 
 
+def dev_alloc(size,lib):
+
+    ## copies scalar data to C data structures
+    size_c = ctypes.c_size_t(size)
+
+    ## set C function arg types
+    lib.dev_alloc.argtypes = [c_size_t]
+    lib.dev_alloc.restype = ctypes.POINTER(ctypes.c_void_p)
+    
+    ## time call
+    ptr=lib.dev_alloc(size_c)
+    
+    return ptr
+
+def memcpyHtoD(dest_ptr,source_ptr,size,lib):
+
+    ## copies scalar data to C data structures
+    size_c = ctypes.c_size_t(size)
+
+    ## set C function arg types
+    lib.memcpyHtoD.argtypes = [ctypes.POINTER(ctypes.c_void_p),\
+                               ctl.ndpointer(np.float64,flags='aligned, c_contiguous'),\
+                               c_size_t]
+    
+    lib.memcpyHtoD(dest_ptr,source_ptr,size_c)
+    
+def memcpyDtoH(dest_ptr,source_ptr,size,lib):
+
+    ## copies scalar data to C data structures
+    size_c = ctypes.c_size_t(size)
+
+    ## set C function arg types
+    lib.memcpyDtoH.argtypes = [ctl.ndpointer(np.float64,flags='aligned, c_contiguous'),\
+                               ctypes.POINTER(ctypes.c_void_p),\
+                               c_size_t]
+    
+    lib.memcpyDtoH(dest_ptr,source_ptr,size_c)
+    
+def cublasInit(lib):
+
+    print("hello")
+    ## set C function arg types
+    lib.cublasInit.restype = ctypes.POINTER(ctypes.c_void_p)
+    
+    ## time call
+    ptr=lib.cublasInit()
+    
+    return ptr
+
+
+def dev_free(devptr,lib):
+
+    lib.dev_free(devptr)
+
+
+
+
 ## gpuLib API call to construction of DM using diagonalization..
 # This interface function will accept two numpy arrays, the hamiltonian, and the density matrix
 # along with two integers, matSize and nocc. Function will build the density matrix from
@@ -56,30 +115,19 @@ def invOverlapFactor(overlap,guess,factor,matSize,lib):
 #
 def dmDiag(ham,dm,matSize,nocc,kbt,lib):
 
-    ## time call
-    tic = time.perf_counter()
-
     ## copies scalar data to C data structures
     kbt_c = ctypes.c_double(kbt)
     matSize_c = ctypes.c_int(matSize)
     nocc_c = ctypes.c_int(nocc)
-
-    ## end timer
-    toc = time.perf_counter()
-    #print(f"Time to convert types = {toc - tic:0.4f} seconds")
-
-    ## time call
-    tic = time.perf_counter()
-   
+    
     ## set C function arg types
-    lib.dm_diag.argtypes = [ctl.ndpointer(np.float64,flags='aligned, c_contiguous'), \
-                            ctl.ndpointer(np.float64,flags='aligned, c_contiguous'), \
+    #lib.dm_diag.argtypes = [ctl.ndpointer(np.float64,flags='aligned, c_contiguous'), \
+    #                        ctl.ndpointer(np.float64,flags='aligned, c_contiguous'), \
+    #                        c_double, c_int, c_int]
+    
+    lib.dm_diag.argtypes = [ctypes.POINTER(ctypes.c_void_p), \
+                            ctypes.POINTER(ctypes.c_void_p), \
                             c_double, c_int, c_int]
-    
-    # end timer
-    toc = time.perf_counter()
-    #print(f"Time for setting args = {toc - tic:0.4f} seconds")
-    
     ## time call
     tic = time.perf_counter()
     lib.dm_diag(ham,                \
@@ -88,9 +136,11 @@ def dmDiag(ham,dm,matSize,nocc,kbt,lib):
                 matSize_c,          \
                 nocc_c)
     toc = time.perf_counter()
+    timer = toc-tic
 
     #print(f"Time for lib call = {toc - tic:0.4f} seconds")
-    return list(dm)                          
+    return timer 
+    #return list(dm),timer 
 
 
 
@@ -146,16 +196,20 @@ def dmMLSP2(ham,dm,matSize,nocc,lib):
 # @param nocc Occupation number.
 # @return dm Density matrix that was constructed.
 #
-def dmDNNSP2(ham,dm,matSize,nocc,lib):
+def dmDNNSP2(ham,dm,matSize,nocc,handle,lib):
 
     ## copies scalar data to C data structures
     matSize_c = ctypes.c_int(matSize)
     nocc_c = ctypes.c_int(nocc)
 
     ## set C function arg types
-    lib.dm_dnnsp2.argtypes = [ctl.ndpointer(np.float64,flags='aligned, c_contiguous'), \
-                              ctl.ndpointer(np.float64,flags='aligned, c_contiguous'), \
-                              c_int, c_int]
+    lib.dm_dnnsp2.argtypes = [ctypes.POINTER(ctypes.c_void_p), \
+                              ctypes.POINTER(ctypes.c_void_p), \
+                              c_int, c_int,ctypes.POINTER(ctypes.c_void_p)]
+
+    #lib.dm_dnnsp2.argtypes = [ctl.ndpointer(np.float64,flags='aligned, c_contiguous'), \
+    #                          ctl.ndpointer(np.float64,flags='aligned, c_contiguous'), \
+    #                          c_int, c_int]
 
 
     ## time call
@@ -163,11 +217,14 @@ def dmDNNSP2(ham,dm,matSize,nocc,lib):
     lib.dm_dnnsp2(ham,                \
                   dm,                 \
                   matSize_c,          \
-                  nocc_c)
+                  nocc_c,\
+                  handle)
     toc = time.perf_counter()
 
-    print(f"Time for lib call = {toc - tic:0.4f} seconds")
-    return list(dm)                          
+    #print(f"Time for lib call = {toc - tic:0.10f} seconds")
+    timer = toc-tic
+    return timer
+    #return list(dm), timer                          
   
 
 

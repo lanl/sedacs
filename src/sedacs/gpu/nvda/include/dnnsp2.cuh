@@ -3,5 +3,7 @@ void dnnsp2(double*,
             int, 
             int,
             precision_t,
-            refine_t);
+            refine_t,
+            void*);
+
 

@@ -47,6 +47,35 @@ void gershgorin(const unsigned N,
 };
 
 
+void gershgorin_v2(const unsigned N,
+                   const double *X, 
+                   double *h1,
+                   double *hN)
+{
+    float minest, maxest;
+
+    minest = 0.0; 
+    maxest = 0.0;
+
+    #pragma acc parallel loop reduction(min:minest) reduction(max:maxest) deviceptr(X)
+    for (size_t i = 0; i < N; ++i)
+    {   
+        float sum = 0;
+        #pragma acc loop reduction(+:sum)
+        for (size_t j = 0; j < N; ++j)
+        {   
+            sum += abs(X[i * N + j]);  // assuming row major, running sum
+        }   
+        
+        minest = min(2 * X[i * N + i] - sum,minest); //sum always non-neg
+        maxest = sum; //sum always non-neg
+
+    }   
+    h1[0] = minest;
+    hN[0] = maxest;
+};
+
+
 /**
     Kernal for computing the trace of a matrix A of size N.
     Code originally from LATTE.
@@ -443,7 +472,7 @@ doRefinement(double* _dA,
     int N = _N;
 
     cudaMalloc(&d_T02,N*N*sizeof(double));
-    cudaMalloc(&d_T04,N*N*sizeof(double));
+    //cudaMalloc(&d_T04,N*N*sizeof(double));
     
     // T0^2 in double precision
     double alpha_dbl=1.0, beta_dbl=0.0;
@@ -457,7 +486,8 @@ doRefinement(double* _dA,
                 &beta_dbl,
                 d_T02, N); 
    
-    cudaMemcpy(d_T04, d_T02, N * N * sizeof(double), cudaMemcpyDeviceToDevice); 
+    cudaMemcpy(D0_, d_T02, N * N * sizeof(double), cudaMemcpyDeviceToDevice); 
+    //cudaMemcpy(d_T04, d_T02, N * N * sizeof(double), cudaMemcpyDeviceToDevice); 
     
     // 2*T0^2 - T0^4 in double precision
     alpha_dbl=-1.0,beta_dbl=2.0;
@@ -469,14 +499,15 @@ doRefinement(double* _dA,
                 d_T02, N,
                 d_T02, N,
                 &beta_dbl,
-                d_T04, N);  // this function computes D = 2.0*T2 - 1.0*T2*T2 in double precision
+                //d_T04, N);  // this function computes D = 2.0*T2 - 1.0*T2*T2 in double precision
+                D0_, N);  // this function computes D = 2.0*T2 - 1.0*T2*T2 in double precision
     
 
     // Move D to device and host
-    cudaMemcpy(D0_, d_T04, N * N * sizeof(double), cudaMemcpyDeviceToDevice); 
+    //cudaMemcpy(D0_, d_T04, N * N * sizeof(double), cudaMemcpyDeviceToDevice); 
 
     cudaFree(d_T02);
-    cudaFree(d_T04);
+    //cudaFree(d_T04);
     
     //Cuda Error Checking 
     //return cudaPeekAtLastError();

@@ -3,8 +3,6 @@
 This program was produced under U.S. Government contract 89233218CNA000001 for Los Alamos National Laboratory (LANL), which is operated by Triad National Security, LLC for the U.S. Department of Energy/National Nuclear Security Administration. All rights in the program are reserved by Triad National Security, LLC, and the U.S. Department of Energy/National Nuclear Security Administration. The Government is granted for itself and others acting on its behalf a nonexclusive, paid-up, irrevocable worldwide license in this material to reproduce, prepare. derivative works, distribute copies to the public, perform publicly and display publicly, and to permit others to do so.
 */
 
-
-
 extern "C"{
 
     void dm_diag(double *, double *, double, int, int);
@@ -17,10 +15,9 @@ extern "C"{
 
 }
 
-
 extern "C"{
  
-    void dm_dnnsp2(double *, double *, int, int);
+    void dm_dnnsp2(double *, double *, int, int, void *);
 
 }
 
@@ -29,4 +26,36 @@ extern "C"{
     void dm_pscheby(double *, double *, int, int, double);
 
 }
+
+extern "C"{
+    
+    void* dev_alloc(size_t);
+
+}
+
+extern "C"{
+    
+    void memcpyDtoH(void*, void*, size_t);
+
+}
+
+extern "C"{
+    
+    void memcpyHtoD(void*, void*, size_t);
+
+}
+
+
+extern "C"{
+    
+    void dev_free(void*);
+
+}
+
+extern "C"{
+    
+    void* cublasInit();
+
+}
+
 

@@ -13,7 +13,7 @@
 #include <tcore_hp_emulator.cuh>
 #include <linalg_tools.cuh>
 #include <error_check.cuh>
-
+#include "nvToolsExt.h"
 
 __global__ 
 void DtoF(double* X,
@@ -59,26 +59,50 @@ void dev_buildIdenity(float* X, int N)
 
 
 
-void dnnsp2(double* ham, 
-            double* dm, 
+void dnnsp2(double* d_ham, 
+            double* d_dm, 
             int N, 
             int Nocc,
             precision_t precision,
-            refine_t refinement)
+            refine_t refinement,
+            void* Handle)
 {
+
+cudaEvent_t start, stop;
+cudaEventCreate(&start);
+cudaEventCreate(&stop);
+cudaEventRecord(start);
+
     int Stopp = 0;
     int iter = 0;
     std::vector<float> Idemp_Error;
+
+
+    nvtxRangePushA("Register host memory");
+    //cudaHostRegister ( ham, N * N * sizeof(double), cudaHostRegisterDefault);
+    //cudaHostRegister ( dm, N * N * sizeof(double), cudaHostRegisterDefault);
+    nvtxRangePop();
+
+    // Cublas streams
+    int num_streams=2;
+    cudaStream_t stream[num_streams];
+    //for (int i=0;i<num_streams;i++){ 
+    //    cudaStreamCreate(&stream[i]);
+    //}
      
     // Cublas Handle
+    nvtxRangePushA("build cublas handle");
     cublasHandle_t handle;
     CUBLAS_CHECK_ERR(cublasCreate(&handle));
-    
-    // Set math mode
-    CUBLAS_CHECK_ERR(cublasSetMathMode(handle, CUBLAS_DEFAULT_MATH));
+    nvtxRangePop();
 
+    //handle = (cublasHandle_t) Handle;    
+    // Set stream
+    //cublasSetStream(handle,stream[0]);
+
+    nvtxRangePushA("declare memory");
     // Declare Memory
-    double *d_TrD0, *TrD0, *d_ham, *d_dm; 
+    double *d_TrD0, *TrD0; //*d_ham, *d_dm, *h_dm; 
 
     float  *d_S0, *d_S02, *d_TrS0, *d_TrS02, *TrS0, *TrS02, *d_S, 
            *d_Sig, *d_Id, *sbuf1, *sbuf2, *Sig; 
@@ -86,17 +110,20 @@ void dnnsp2(double* ham,
     half   *hbuf1, *hbuf2;
 
     int    *v_sgn;    
+    nvtxRangePop();
 
     // Allocate some host memory
+    nvtxRangePushA("initialize memory");
     v_sgn  =    (int*) malloc( 500 * sizeof(int) );
     TrS0   =  (float*) malloc(sizeof(float));
     TrS02  =  (float*) malloc(sizeof(float));
     Sig    =  (float*) malloc(sizeof(float));
     TrD0   = (double*) malloc(sizeof(double) );
+    //CUDA_CHECK_ERR(cudaMallocHost(&h_dm,     N * N * sizeof(double)));
    
     // Allocate device memory
-    CUDA_CHECK_ERR(cudaMalloc(&d_ham,    N * N * sizeof(double)));
-    CUDA_CHECK_ERR(cudaMalloc(&d_dm,     N * N * sizeof(double)));
+    //CUDA_CHECK_ERR(cudaMalloc(&d_ham,    N * N * sizeof(double)));
+    //CUDA_CHECK_ERR(cudaMalloc(&d_dm,     N * N * sizeof(double)));
     CUDA_CHECK_ERR(cudaMalloc(&d_S,      N * N * sizeof(float)));
     CUDA_CHECK_ERR(cudaMalloc(&d_S0,     N * N * sizeof(float)));
     CUDA_CHECK_ERR(cudaMalloc(&d_S02,    N * N * sizeof(float)));
@@ -111,13 +138,14 @@ void dnnsp2(double* ham,
     CUDA_CHECK_ERR(cudaMalloc(&sbuf2,  N * N * sizeof(float)));
     CUDA_CHECK_ERR(cudaMalloc(&hbuf1,  N * N * sizeof(half)));
     CUDA_CHECK_ERR(cudaMalloc(&hbuf2,  N * N * sizeof(half)));
-    
-    // Define grid size
+    nvtxRangePop();   
+ 
+    // Define blk,thd grid size
     int numthds = 512;
     int numblks = int(ceil(double(N*N)/double(numthds))); 
 
     // Initialize Hamiltonian and identity
-    CUDA_CHECK_ERR(cudaMemcpy(d_ham, ham, N * N * sizeof(double), cudaMemcpyHostToDevice));
+    //CUDA_CHECK_ERR(cudaMemcpy(d_ham, ham, N * N * sizeof(double), cudaMemcpyHostToDevice));
     
     // build Identity on dev
     dev_buildIdenity<<< numblks, numthds >>>(d_Id, N);
@@ -126,9 +154,10 @@ void dnnsp2(double* ham,
     DtoF<<< numblks, numthds >>>(d_ham, d_S0, N); 
     CUDA_CHECK_ERR(cudaMemcpy(sbuf1, d_S0, N * N * sizeof(float), cudaMemcpyDeviceToDevice));
     
+    nvtxRangePushA("Affine transform");
     // Estimate sprectral bounds
     double h1, hN;
-    gershgorin(N, ham, &h1, &hN);
+    gershgorin_v2(N, d_ham, &h1, &hN);
     
     // input layer to DNN-SP2
       
@@ -145,6 +174,7 @@ void dnnsp2(double* ham,
                                  d_S0, N,  
                                  d_S0, N)); 
     
+    nvtxRangePop();   
 
     // compute and copy initial traces
     GPUSTrace(N,d_S0,d_TrS0);
@@ -154,8 +184,12 @@ void dnnsp2(double* ham,
     float alphaS = 1.0, betaS = 0.0;
     //}
 
+
+
+    nvtxRangePushA("Main loop");
     while (Stopp == 0) {
         
+        nvtxRangePushA("TC matmul");
         if (precision==fp32){
 
             CUBLAS_CHECK_ERR(cublasSgemm(handle,
@@ -170,17 +204,29 @@ void dnnsp2(double* ham,
         }
         else if (precision==fp16_fp32){
             tcoreSPGemmSymm(handle,
+                            stream,
                             N,
                             d_S0,
                             hbuf1, hbuf2,
                             sbuf1, sbuf2,
                             d_S02);
         };
+        nvtxRangePop();   
 	
-	// trace of S0^2
-        GPUSTrace(N,d_S02,d_TrS02); //only works for N even
-        CUDA_CHECK_ERR(cudaMemcpy(TrS02, d_TrS02, sizeof(float), cudaMemcpyDeviceToHost)); 
+        nvtxRangePushA("Compute trace");
+	// trace of S0^2-- sucks
+        //GPUSTrace(N,d_S02,d_TrS02); //only works for N even
+        float trace=0.0;
+        #pragma acc parallel loop deviceptr(d_S02) reduction(+:trace)
+        for (int i=0;i<N;i++){
+           trace += d_S02[i*N+i];
+        }
+        TrS02[0] = double(trace);
+        nvtxRangePop();   
         
+        //CUDA_CHECK_ERR(cudaMemcpy(TrS02, d_TrS02, sizeof(float), cudaMemcpyDeviceToHost)); 
+        
+//        nvtxRangePushA("Convergence criteria");
 	// S0 idempotency error    
         Idemp_Error.push_back(TrS0[0]-TrS02[0]);
           
@@ -190,17 +236,20 @@ void dnnsp2(double* ham,
         // convergence control on S0
 	if (TrS0[0]-TrS02[0]<=0)
         {
-            printf("XO converged at iteration = %d \n", iter);
+            //printf("XO converged at iteration = %d \n", iter);
             break;
         }
         else if ( iter>2 && v_sgn[iter-1]!=v_sgn[iter-2] \
                    && Idemp_Error[iter]>= 4.5*Idemp_Error[iter-2]*Idemp_Error[iter-2] )
         {
-            printf("XO converged at iteration = %d \n", iter);
+            //printf("XO converged at iteration = %d \n", iter);
             break;
         };
         
+ //       nvtxRangePop();   
+
         // Compute Sigma (which is determind by S0)
+        nvtxRangePushA("Compute sigma and weights");
         computeSigma(Nocc,d_TrS0,d_TrS02,d_Sig);
         CUDA_CHECK_ERR(cudaMemcpy(Sig, d_Sig, sizeof(float), cudaMemcpyDeviceToHost)); 
         
@@ -217,6 +266,8 @@ void dnnsp2(double* ham,
                                      d_S0, N,  
                                      d_S0, N));
 
+        nvtxRangePop();   
+
         // Update traces
         TrS0[0] = Sig[0]*TrS02[0] + (1-Sig[0])*TrS0[0];
         
@@ -231,12 +282,15 @@ void dnnsp2(double* ham,
 
 
     }
+    nvtxRangePop();   
+
     // Free buffers
     CUDA_CHECK_ERR(cudaFree(sbuf1));
     CUDA_CHECK_ERR(cudaFree(sbuf2));
     CUDA_CHECK_ERR(cudaFree(hbuf1));
     CUDA_CHECK_ERR(cudaFree(hbuf2));
     
+    nvtxRangePushA("Refinement");
     // allocate memory for density matrices 
     double *d_T0;
     CUDA_CHECK_ERR(cudaMalloc(&d_T0,N*N*sizeof(double)));
@@ -257,32 +311,52 @@ void dnnsp2(double* ham,
         FtoD<<<numblks, numthds>>>(d_S0, d_dm, N);
     
     };
+    nvtxRangePop();   
 
-    // copy dm back to host
-    CUDA_CHECK_ERR(cudaMemcpy(dm, d_dm, N * N * sizeof(double), cudaMemcpyDeviceToHost)); 
+    nvtxRangePushA("dm copy from DtoH");
+    // copy dm back to hot buffer
+    //CUDA_CHECK_ERR(cudaMemcpy(h_dm, d_dm, N * N * sizeof(double), cudaMemcpyDeviceToHost)); 
+    nvtxRangePop();   
+   
+    nvtxRangePushA("HtoH dm copy");
+    // copy cpu buffer to python allocated dm (avoids python memory issues, pagability?)
+    //memcpy(dm,h_dm, N * N * sizeof(double));
+    nvtxRangePop();   
      
+    nvtxRangePushA("cudaFree");
     // Free device memory thats no longer needed
     CUDA_CHECK_ERR(cudaFree(d_S0));
     CUDA_CHECK_ERR(cudaFree(d_S02));
     CUDA_CHECK_ERR(cudaFree(d_Sig));
     CUDA_CHECK_ERR(cudaFree(d_TrS0));
     CUDA_CHECK_ERR(cudaFree(d_TrS02));
-    CUDA_CHECK_ERR(cudaFree(d_ham));
+    //CUDA_CHECK_ERR(cudaFree(d_ham));
     CUDA_CHECK_ERR(cudaFree(d_T0));
-    CUDA_CHECK_ERR(cudaFree(d_dm));
-    CUDA_CHECK_ERR(cudaFree(d_Id));
+    //CUDA_CHECK_ERR(cudaFree(d_dm));
     CUDA_CHECK_ERR(cudaFree(d_TrD0));
+    CUDA_CHECK_ERR(cudaFree(d_Id));
+    //CUDA_CHECK_ERR(cudaFreeHost(h_dm));
+    nvtxRangePop();   
 
+    nvtxRangePushA("free");
     // deallocate host memory
     free(v_sgn);
     free(TrD0);
     free(TrS0);
     free(TrS02);
     free(Sig);
+    nvtxRangePop();   
     
+    nvtxRangePushA("Handle destroy");
     // Destroy handle
     CUBLAS_CHECK_ERR(cublasDestroy(handle));
+    nvtxRangePop();   
 
+cudaEventRecord(stop);
+cudaEventSynchronize(stop);
+float milliseconds = 0;
+cudaEventElapsedTime(&milliseconds, start, stop);
+std::cout << "time = " << milliseconds/1000.0 << std::endl;
 }
 
 
