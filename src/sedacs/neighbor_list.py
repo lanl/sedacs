@@ -24,6 +24,7 @@ class NeighborState:
     num_ranks: int = 1
 
     def __post_init__(self):
+        # create the neighbor list using cutoff with buffer
         nbr_inds = generate_neighbor_list(self.coords, 
                                         self.lattice_vecs, 
                                         self.cutoff + self.buffer, 
@@ -32,7 +33,8 @@ class NeighborState:
         self.nbr_inds = nbr_inds
 
     def update(self, new_coords, rank=0, num_ranks=1):
-        if torch.all(torch.abs(self.coords - new_coords) > self.buffer):
+        # if any atom moved more than "buffer", update the nbr list
+        if torch.any(torch.abs(self.coords - new_coords) > self.buffer):
             nbr_inds = generate_neighbor_list(self.coords, 
                                               self.lattice_vecs, 
                                               self.cutoff + self.buffer, 
