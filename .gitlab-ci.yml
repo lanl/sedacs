@@ -27,7 +27,8 @@ stages: # List of stages for jobs, and their order of execution
   - deploy
 
 before_script:
-  - micromamba self-update
+  - micromamba config append channels conda-forge
+  - micromamba config set channel_priority strict
   - micromamba --version # For debugging
   - micromamba create -n myenv python=3.10 -y
   # - micromamba install -c conda-forge cmake c-compiler compilers cxx-compiler openmpi openmpi-mpicc -y # See https://github.com/conda-forge/openmpi-feedstock/issues/61#issuecomment-753001160
