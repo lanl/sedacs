@@ -3,7 +3,7 @@
 # This specific template is located at:
 # https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Python.gitlab-ci.yml
 
-image: mambaorg/micromamba:latest
+image: gcc
 
 # Change pip's cache directory to be inside the project directory since we can
 # only cache local items.
@@ -27,6 +27,7 @@ stages: # List of stages for jobs, and their order of execution
   - deploy
 
 before_script:
+  - curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
   - micromamba config append channels conda-forge
   - micromamba config set channel_priority strict
   - micromamba --version # For debugging
