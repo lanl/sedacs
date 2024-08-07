@@ -32,7 +32,7 @@ before_script:
   - bin/micromamba config set channel_priority strict
   - bin/micromamba --version # For debugging
   - bin/micromamba create -n myenv python=3.10 -y
-  - bin/micromamba install -c conda-forge cmake c-compiler compilers cxx-compiler openmpi openmpi-mpicc git -y # See https://github.com/conda-forge/openmpi-feedstock/issues/61#issuecomment-753001160
+  # - bin/micromamba install -c conda-forge cmake c-compiler compilers cxx-compiler openmpi openmpi-mpicc git -y # See https://github.com/conda-forge/openmpi-feedstock/issues/61#issuecomment-753001160
   - eval "$(bin/micromamba shell hook --shell bash)"
   - bin/micromamba activate myenv
   - python --version ; pip --version # For debugging
