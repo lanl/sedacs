@@ -8,8 +8,8 @@ image: mambaorg/micromamba:latest
 # Change pip's cache directory to be inside the project directory since we can
 # only cache local items.
 variables:
-  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
-  PDM_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pdm"
+  # PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  # PDM_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pdm"
   OMPI_MCA_mca_base_component_show_load_errors: 0
   OMPI_CC: gcc # Set the Open MPI C compiler to gcc
   OMPI_CXX: g++ # Set the Open MPI C++ compiler to g++
