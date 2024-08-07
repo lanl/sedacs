@@ -28,6 +28,7 @@ stages: # List of stages for jobs, and their order of execution
 
 before_script:
   - "${SHELL} <(curl -L micro.mamba.pm/install.sh)"
+  - source ~/.bashrc
   - micromamba config append channels conda-forge
   - micromamba config set channel_priority strict
   - micromamba --version # For debugging
