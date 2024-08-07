@@ -27,15 +27,11 @@ stages: # List of stages for jobs, and their order of execution
   - deploy
 
 before_script:
-  - curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
-  - bin/micromamba config append channels conda-forge
-  - bin/micromamba config set channel_priority strict
-  - bin/micromamba --version # For debugging
-  - bin/micromamba create -n myenv python=3.10 -y
-  # - bin/micromamba install -c conda-forge cmake c-compiler compilers cxx-compiler openmpi openmpi-mpicc git -y # See https://github.com/conda-forge/openmpi-feedstock/issues/61#issuecomment-753001160
-  - eval "$(bin/micromamba shell hook --shell bash)"
-  - bin/micromamba shell reinit
-  - bin/micromamba activate myenv
+  - "${SHELL} <(curl -L micro.mamba.pm/install.sh)"
+  - micromamba config append channels conda-forge
+  - micromamba config set channel_priority strict
+  - micromamba --version # For debugging
+  # - micromamba install -c conda-forge cmake c-compiler compilers cxx-compiler openmpi openmpi-mpicc git -y # See https://github.com/conda-forge/openmpi-feedstock/issues/61#issuecomment-753001160
   - python --version ; pip --version # For debugging
   - pip install pdm
   - pdm --version # For debugging
@@ -43,13 +39,11 @@ before_script:
 setup:
   stage: setup
   script:
-    - bin/micromamba activate myenv
     - pdm install
 
 test:
   stage: test
   script:
-    - bin/micromamba activate myenv
     - pip install ruff tox # you can also use tox
     - pip install --editable ".[test]"
     - tox --listenvs-all # List the available environments for debugging
@@ -58,7 +52,6 @@ test:
 run:
   stage: build
   script:
-    - bin/micromamba activate myenv
     - pip install .
     # run the command here
   artifacts:
@@ -68,7 +61,6 @@ run:
 pages:
   stage: deploy
   script:
-    - bin/micromamba activate myenv
     - pip install sphinx sphinx-rtd-theme
     - cd docs
     - make html
@@ -82,7 +74,6 @@ pages:
 deploy:
   stage: deploy
   script:
-    - bin/micromamba activate myenv
     - echo "Deploying application..."
     - echo "Application successfully deployed."
   environment: production
