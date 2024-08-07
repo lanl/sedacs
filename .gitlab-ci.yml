@@ -32,8 +32,8 @@ before_script:
   - micromamba --version # For debugging
   - micromamba create -n myenv python=3.10 -y
   # - micromamba install -c conda-forge cmake c-compiler compilers cxx-compiler openmpi openmpi-mpicc -y # See https://github.com/conda-forge/openmpi-feedstock/issues/61#issuecomment-753001160
-  - micromamba init -s bash -p ~/micromamba
-  - source ~/micromamba/etc/profile.d/micromamba.sh
+  - micromamba shell init -s bash -p ~/micromamba
+  - source ~/.bashrc
   - micromamba activate myenv
   - python --version ; pip --version # For debugging
   - pip install pdm
