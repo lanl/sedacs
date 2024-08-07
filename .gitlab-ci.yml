@@ -41,13 +41,13 @@ before_script:
 setup:
   stage: setup
   script:
-    - source activate myenv
+    - micromamba activate myenv
     - pdm install
 
 test:
   stage: test
   script:
-    - source activate myenv
+    - micromamba activate myenv
     - pip install ruff tox # you can also use tox
     - pip install --editable ".[test]"
     - tox --listenvs-all # List the available environments for debugging
@@ -56,7 +56,7 @@ test:
 run:
   stage: build
   script:
-    - source activate myenv
+    - micromamba activate myenv
     - pip install .
     # run the command here
   artifacts:
@@ -66,7 +66,7 @@ run:
 pages:
   stage: deploy
   script:
-    - source activate myenv
+    - micromamba activate myenv
     - pip install sphinx sphinx-rtd-theme
     - cd docs
     - make html
@@ -80,7 +80,7 @@ pages:
 deploy:
   stage: deploy
   script:
-    - source activate myenv
+    - micromamba activate myenv
     - echo "Deploying application..."
     - echo "Application successfully deployed."
   environment: production
