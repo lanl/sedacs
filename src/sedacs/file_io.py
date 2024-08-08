@@ -30,7 +30,7 @@ def read_coords_file(fileName, lib="None", verb=True):
     else:
         raise ValueError(f"Extension '{ext}' not recognized")
 
-    latticeVectors, symbols, types, coords = read_fn(fileName, lib=lib, verbose=False)
+    latticeVectors, symbols, types, coords = read_fn(fileName, lib=lib, verb=False)
 
     return latticeVectors, symbols, types, coords
 
@@ -61,7 +61,7 @@ def read_coords_file(fileName, lib="None", verb=True):
 # NumberOfAtoms = len(coordinates[:,0])
 # @endcode
 #
-def read_xyz_file(fileName, lib="None", verbose=True):
+def read_xyz_file(fileName, lib="None", verb=True):
     """xyz file parser: Reads in an xyz file with lattice informations."""
 
     if lib is None or lib == "None":
@@ -70,7 +70,7 @@ def read_xyz_file(fileName, lib="None", verbose=True):
     if lib == "ase":
         latticeVectors, symbols, types, coords = read_xyz_file_ase(fileName)
 
-    if verbose:
+    if verb:
         print("latticeVectors", latticeVectors)
         print("symbols", symbols)
         print("coords", coords)

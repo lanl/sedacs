@@ -32,7 +32,7 @@ class TestReaders(unittest.TestCase):
         with open(file, "w") as f:
             f.write(xyz_file_content)
         try:
-            _, symbols, types, coords = read_xyz_file(file, lib=None, verbose=False)
+            _, symbols, types, coords = read_xyz_file(file, lib=None, verb=False)
             if symbols != ["H", "He", "C"]:
                 passed = False
             if not np.allclose(coords, coordsRef):

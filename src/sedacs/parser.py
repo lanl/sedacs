@@ -60,7 +60,8 @@ class Input:
         self.verb = self.get_a_bool("Verbosity=", False, keyVals, validKeys, verb=False)
         ## StopAt : stop at a given point
         self.stopAt = self.get_a_string("StopAt=", "", keyVals, validKeys, verb)
-
+        ## SCF tolerance - For Self-consistent charge optimization
+        self.scfTol = self.get_a_real("SCFTol=",0.0,keyVals, validKeys,verb)
         ## Will check to make sure there are only valid key name in the input
         err = self.validate_keys(keyVals, validKeys)
         if err:

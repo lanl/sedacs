@@ -53,6 +53,7 @@ __all__ = [
     "get_volBox",
     "coords_dvec_nlist",
     "build_nlist",
+    "build_nlist_small",
 ]
 
 
@@ -82,6 +83,8 @@ class System:
         self.symbols = PeriodicTable().symbols[self.types]
         ## Number of atomic orbital for each type
         self.orbs = np.ones(self.nats, dtype=int)
+        ## Coulombic potentials
+        self.coulvs = np.zeros(self.nats, dtype=int)
 
     def print_summary(self):
         s = """nats = {nats}
@@ -492,6 +495,36 @@ def coords_dvec_nlist(coords_in, nn, nl, nlTr, latticeVectors, rank=0, numranks=
         return dvec, dr
     else:
         return dvec
+
+
+## Neighbor list for small systems
+# @brief It will bild a neighbor list using an "all to all" approach
+# @param coords System coordinates. coords[7,1]: y-coordinate of atom 7.
+# @param latticeVectors. Lattice vectors of the system box. latticeVectors[1,2]: z-coordinate of vector 1.
+# @param nl neighbor list type: a simple 2D array indicating the neighbors of each atom.
+# @param rank MPI rank
+#
+# @todo Add test!
+def build_nlist_small(coords, latticeVectors, rcut, rank=0, numranks=1, verb=False):
+    if verb:
+        print("Building neighbor list for small systems ...")
+    
+    nats = len(coords[:,0])
+    nl = np.zeros((nats,nats+1),dtype=int)
+    nlTrX = np.zeros((nats),dtype=int)
+    nlTrY = np.zeros((nats),dtype=int)
+    nlTrZ = np.zeros((nats),dtype=int)
+
+    for i in range(nats):
+        print(np.arange(0,i,1),np.arange(i+1,nats,1))
+
+        nl[i,1:i+1] = np.arange(0,i,1,dtype = int)
+        nl[i,i+1:nats] = np.arange(i+1,nats,1,dtype = int)
+        nl[i,0] = nats - 1
+
+        print("nl",i,nl[i,1:nats+1])    
+
+    return nl, nlTrX, nlTrY, nlTrZ
 
 
 ## Neighbor list
