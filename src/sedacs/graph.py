@@ -104,8 +104,6 @@ def get_nx_graph(graph, w):
             if (j != -1) and (j != i):
                 nxGraph.add_edge(i, j, weight=w)
 
-    print("graph", graph)
-    print("nxGraph", nxGraph)
     return nxGraph
 
 

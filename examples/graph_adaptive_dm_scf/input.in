@@ -1,0 +1,19 @@
+#Input file for SEDACS
+
+Verbosity= True
+Threshold= 1.0E-5
+#CoordsFile= coords_1299.pdb
+CoordsFile= coords_16w_shuf.pdb
+#CoordsFile= algo.xyz
+#CoordsFile= coords_16w.pdb
+GraphThreshold= 0.5 
+MaxDeg= 500 #Max graph degree
+Rcut= 4.0 #Radius cutoff
+#PartitionType= Metis
+PartitionType= MinCut
+NumParts= 10
+SCFTol= 1.0E-5
+Orbitals= {"H":1,"O":1} #This has to be know for each engine
+NumAdaptiveIter= 50 #Number of graph adaptive iterations
+Engine= {"Name":"ProxyAFortran","InterfaceType":"Module","Path":"/home/cnegresedacs/proxy_a/fortran_proxy/build/","Executable":"/home/cnegre/proxy_a/fortran_proxy/build"} #The name of the external code
+

@@ -374,24 +374,28 @@ def metis_partition(graph, nparts, verb=False):
         raise ImportError("Consider installing Metis library")
     if verb:
         print("\nMetis partition:")
-    nxGraph = get_nx_graph(graph, 1.0)
-    # Metis partition metis call
-    # Metis returns nxParts which is a list of every's part (or "color")
-    # to where they belong. Node "i" belongs to "metisParts[i]" part.
-    edgecuts, metisParts = metis.part_graph(nxGraph, nparts)
 
-    # The next lines will transform from metis to our partition format
-    parts = []
-    for k in range(nparts):
-        parts.append([])
-    nnodes = len(graph[:, 0])
-    for k in range(nnodes):
-        parts[metisParts[k]].append(k)
-    if verb:
-        for i in range(nparts):
-            print("part", i, "=", parts[i])
+    if(nparts == 1):
+        parts = [[]]
+        parts[0][:] = np.arange(0,len(graph[:,0]),1)
+    else:
+        nxGraph = get_nx_graph(graph, 1.0)
+        # Metis partition metis call
+        # Metis returns nxParts which is a list of every's part (or "color")
+        # to where they belong. Node "i" belongs to "metisParts[i]" part.
+        edgecuts, metisParts = metis.part_graph(nxGraph, nparts)
 
-    # plot_graph(nxGraph)
+        # The next lines will transform from metis to our partition format
+        parts = []
+        for k in range(nparts):
+            parts.append([])
+        nnodes = len(graph[:, 0])
+        for k in range(nnodes):
+            parts[metisParts[k]].append(k)
+        if verb:
+            for i in range(nparts):
+                print("part", i, "=", parts[i])
+
     return parts
 
 
@@ -402,7 +406,7 @@ def metis_partition(graph, nparts, verb=False):
 # @param njumps It will search the halos among the "njumps" nearest neighbors
 #
 def get_coreHaloIndices(core, graph, njumps):
-    coreHalo = core
+    coreHalo = core.copy()
     nc = len(coreHalo)
     nch = nc
     nnodes = len(graph[:, 0])

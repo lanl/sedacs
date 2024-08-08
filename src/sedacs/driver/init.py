@@ -9,7 +9,7 @@ from sedacs.engine import Engine
 from sedacs.file_io import read_coords_file, write_xyz_coordinates
 from sedacs.graph import get_initial_graph
 from sedacs.parser import Input
-from sedacs.system import System, build_nlist, extract_subsystem, get_hindex
+from sedacs.system import System, build_nlist, extract_subsystem, get_hindex, build_nlist_small
 
 MPI = None
 try:
@@ -109,39 +109,45 @@ def init(args):
     sy.norbs, hindex = get_hindex(sdc.orbs, sy.symbols, sy.types)
 
     tic = time.perf_counter()
-    if args.use_torch:
-        nl = build_nlist_torch(sy.coords, sy.latticeVectors, sdc.rcut, rank=rank, numranks=numranks, verb=False)
+    if(sy.nats > 100): 
+        if args.use_torch:
+            nl = build_nlist_torch(sy.coords, sy.latticeVectors, sdc.rcut, rank=rank, numranks=numranks, verb=False)
+        else:
+            nl, nlTrX, nlTrY, nlTrZ = build_nlist(
+                sy.coords, sy.latticeVectors, sdc.rcut, api="old", rank=rank, numranks=numranks, verb=False
+            )
+            # nl,nlTrX,nlTrY,nlTrZ = build_nlist_integer(sy.coords,sy.latticeVectors,sdc.rcut,rank=rank,numranks=numranks,verb=False)
+        if is_mpi_available:
+            comm.Barrier()
+
+        toc = time.perf_counter()
+        print("Time for build_nlist", toc - tic, "(s)")
+        if rank == 0:
+            with open("neighborinfo.txt", "w") as of:
+                for kk in range(sy.nats):
+                    print(
+                        "Neighs (x-coords) of {} = ".format(kk),
+                        nl[kk, 1 : nl[kk, 0]],
+                        "(",
+                        sy.coords[nl[kk, 1 : nl[kk, 0]], 0],
+                        ")",
+                        file=of,
+                    )
     else:
-        nl, nlTrX, nlTrY, nlTrZ = build_nlist(
-            sy.coords, sy.latticeVectors, sdc.rcut, api="old", rank=rank, numranks=numranks, verb=False
-        )
-        # nl,nlTrX,nlTrY,nlTrZ = build_nlist_integer(sy.coords,sy.latticeVectors,sdc.rcut,rank=rank,numranks=numranks,verb=False)
-    if is_mpi_available:
-        comm.Barrier()
+        nl, nlTrX, nlTrY, nlTrZ = build_nlist_small(
+                sy.coords, sy.latticeVectors, sdc.rcut, rank=rank, numranks=numranks, verb=False
+            )
 
-    toc = time.perf_counter()
-    print("Time for build_nlist", toc - tic, "(s)")
-    if rank == 0:
-        with open("neighborinfo.txt", "w") as of:
-            for kk in range(sy.nats):
-                print(
-                    "Neighs (x-coords) of {} = ".format(kk),
-                    nl[kk, 1 : nl[kk, 0]],
-                    "(",
-                    sy.coords[nl[kk, 1 : nl[kk, 0]], 0],
-                    ")",
-                    file=of,
-                )
 
-    # Get the neighbors of atom 1234
-    AtToPrint = 0
-    subSy = System(nl[AtToPrint, 0])
-    subSy.symbols = sy.symbols
-    subSy.coords, subSy.types = extract_subsystem(
-        sy.coords, sy.types, sy.symbols, nl[AtToPrint, 1 : nl[AtToPrint, 0] + 1]
-    )  # $$$ needs +1
-    if rank == 0:
-        write_xyz_coordinates("subSyNL.xyz", subSy.coords, subSy.types, subSy.symbols)
+    ## Uncomment for printing atom's 1234 neighbor list
+    #AtToPrint = 1234
+    #subSy = System(nl[AtToPrint, 0])
+    #subSy.symbols = sy.symbols
+    #subSy.coords, subSy.types = extract_subsystem(
+    #    sy.coords, sy.types, sy.symbols, nl[AtToPrint, 1 : nl[AtToPrint, 0] + 1]
+    #)
+    #if rank == 0:
+    #    write_xyz_coordinates("subSyNL.xyz", subSy.coords, subSy.types, subSy.symbols)
 
     # Get initial graph (from a neighbor list)
     graphNL = get_initial_graph(sy.coords, nl, sdc.rcut, sdc.maxDeg, True)
