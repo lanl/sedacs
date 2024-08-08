@@ -2,10 +2,7 @@
 # https://docs.gitlab.com/ee/development/cicd/templates.html
 # This specific template is located at:
 # https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Python.gitlab-ci.yml
-
-# Official language image. Look for the different tagged releases at:
-# https://hub.docker.com/r/library/python/tags/
-image: continuumio/miniconda3:latest
+image: gcc
 
 # Change pip's cache directory to be inside the project directory since we can
 # only cache local items.
@@ -29,11 +26,13 @@ stages: # List of stages for jobs, and their order of execution
   - deploy
 
 before_script:
-  - conda update --yes conda
-  - conda --version # For debugging
-  - conda create -n myenv python=3.10 -y
-  - conda install -c conda-forge cmake c-compiler compilers cxx-compiler openmpi openmpi-mpicc -y # See https://github.com/conda-forge/openmpi-feedstock/issues/61#issuecomment-753001160
-  - source activate myenv
+  - "${SHELL} <(curl -L micro.mamba.pm/install.sh)"
+  - source ~/.bashrc
+  - micromamba config append channels conda-forge
+  - micromamba config set channel_priority strict
+  - micromamba --version # For debugging
+  - micromamba create -n myenv python=3.10 -y # Create a new environment with Python
+  - micromamba activate myenv
   - python --version ; pip --version # For debugging
   - pip install pdm
   - pdm --version # For debugging
@@ -41,13 +40,11 @@ before_script:
 setup:
   stage: setup
   script:
-    - source activate myenv
     - pdm install
 
 test:
   stage: test
   script:
-    - source activate myenv
     - pip install ruff tox # you can also use tox
     - pip install --editable ".[test]"
     - tox --listenvs-all # List the available environments for debugging
@@ -56,7 +53,6 @@ test:
 run:
   stage: build
   script:
-    - source activate myenv
     - pip install .
     # run the command here
   artifacts:
@@ -66,7 +62,6 @@ run:
 pages:
   stage: deploy
   script:
-    - source activate myenv
     - pip install sphinx sphinx-rtd-theme
     - cd docs
     - make html
@@ -80,7 +75,6 @@ pages:
 deploy:
   stage: deploy
   script:
-    - source activate myenv
     - echo "Deploying application..."
     - echo "Application successfully deployed."
   environment: production
