@@ -3,10 +3,46 @@ from torch import Tensor
 import math 
 import itertools
 from typing import Union
+from dataclasses import dataclass
 
 DUMMY_IND = -1 # dummy neighbor index TODO: find a way do store this info
 
-__all__ = ["generate_neighbor_list"]
+__all__ = ["generate_neighbor_list", "NeighborState"]
+
+@dataclass
+class NeighborState:
+    '''
+    Packs the neighbor state.
+    '''
+    coords: Tensor
+    lattice_vecs: Union[None, Tensor]
+    nbr_inds: Union[None, Tensor] 
+    cutoff: float 
+    is_dense: bool = True
+    buffer: float = 0.0
+    rank: int = 0
+    num_ranks: int = 1
+
+    def __post_init__(self):
+        # create the neighbor list using cutoff with buffer
+        nbr_inds = generate_neighbor_list(self.coords, 
+                                        self.lattice_vecs, 
+                                        self.cutoff + self.buffer, 
+                                        self.is_dense,
+                                        self.rank, self.num_ranks)   
+        self.nbr_inds = nbr_inds
+
+    def update(self, new_coords, rank=0, num_ranks=1):
+        # if any atom moved more than "buffer", update the nbr list
+        if torch.any(torch.abs(self.coords - new_coords) > self.buffer):
+            nbr_inds = generate_neighbor_list(self.coords, 
+                                              self.lattice_vecs, 
+                                              self.cutoff + self.buffer, 
+                                              self.is_dense,
+                                              self.rank, self.num_ranks)
+            self.nbr_inds = nbr_inds
+            self.coords = new_coords
+
 
 
 def fractional_cell_size(lattice_vecs: Tensor, cutoff: float):
@@ -42,22 +78,29 @@ def coords_frac_to_cart(frac_coords: Tensor, lattice_vecs: Tensor):
     cart_coords = torch.matmul(frac_coords, A_transpose)
     return cart_coords
 
-def calculate_distance(coords: Tensor, candid_ids: Tensor, lattice_lengths: Tensor):
+def calculate_displacement(coords: Tensor, nbr_ids: Tensor, lattice_lengths: Tensor):
     '''
-    Calculate distance to each candidate
+    Calculate the displacement vectors for each neighbor (provided as NxK tensor)
     '''
     N = coords.shape[0]
-    lattice_lengths = lattice_lengths[None,:]
-    neigh_position = coords[candid_ids]
-    disp = coords[:, None, :] - neigh_position
+    lattice_lengths = lattice_lengths[:, None, None]
+    neigh_position = coords[:, nbr_ids]
+    disp = coords[:, :, None] - neigh_position
     # displacement trick (based on minumum image convention)
     disp = ((disp + 0.5 * lattice_lengths) % lattice_lengths) - 0.5 * lattice_lengths
-    dists = torch.linalg.norm(disp, dim=2)
+    return disp
+
+def calculate_distance(coords: Tensor, nbr_ids: Tensor, lattice_lengths: Tensor):
+    '''
+    Calculate distance to each neighbor (provided as NxK tensor)
+    '''
+    disp = calculate_displacement(coords, nbr_ids, lattice_lengths)
+    dists = torch.linalg.norm(disp, dim=0)
     return dists
 
-def calculate_mask(candid_ids: Tensor, coords: Tensor, lattice_lengths: Tensor, cutoff: float):
-    dists = calculate_distance(coords, candid_ids, lattice_lengths)
-    mask = (dists < cutoff) & (candid_ids != -1)
+def calculate_mask(coords: Tensor, nbr_ids: Tensor, lattice_lengths: Tensor, cutoff: float):
+    dists = calculate_distance(coords, nbr_ids, lattice_lengths)
+    mask = (dists < cutoff) & (nbr_ids != -1)
     return mask
 
 def self_mask(idx):
@@ -103,6 +146,8 @@ def calculate_flattened_cell_offset(cells_per_side: Tensor):
 def count_flattened_cell_sizes(cell_inds: Tensor, lattice_lengths: Tensor, cell_size: float):
     '''
     Count # atoms per cell in a flattened fashion
+    cell_inds: 3xN Tensor, maps atom to specific cell
+    lattice_lengths: [3,] Tensor
     '''
     
     [cell_size_per_dim, 
@@ -112,7 +157,7 @@ def count_flattened_cell_sizes(cell_inds: Tensor, lattice_lengths: Tensor, cell_
     # to be able to use index add in one go, use the flattened cells (3d -> 1d)
     offset_vals = calculate_flattened_cell_offset(cells_per_side)
     # calculate the flat. cell ind. for each atom
-    particle_flat_cell_inds = torch.sum(cell_inds * offset_vals, dtype=torch.int32, dim=1)
+    particle_flat_cell_inds = torch.sum(cell_inds * offset_vals[:, None], dtype=torch.int32, dim=0)
     flat_cell_sizes = torch.zeros(cell_count, dtype=torch.int32, device=cell_inds.device)
     # reduce the counts
     flat_cell_sizes = flat_cell_sizes.index_add_(0, particle_flat_cell_inds, 
@@ -122,13 +167,16 @@ def count_flattened_cell_sizes(cell_inds: Tensor, lattice_lengths: Tensor, cell_
 def populate_cells(N: int, cell_inds: Tensor, cells_per_side: Tensor, cell_count: int, max_cell_capacity: int):
     '''
     Assign atoms to their cells, each cell stores the indices of the atoms it holds
+    cell_inds: 3xN Tensor, maps atom to specific cell
+    cells_per_side: [3,] Tensor, contains # cells per dim
+    cell_count: # cells
     '''
     device=cell_inds.device
     atom_ids = torch.arange(N, device=device, dtype=torch.int32)
     
     offset_vals = calculate_flattened_cell_offset(cells_per_side)
     # atom to flat cell id
-    particle_flat_cell_inds = torch.sum(cell_inds * offset_vals, dtype=torch.int32, dim=1)
+    particle_flat_cell_inds = torch.sum(cell_inds * offset_vals[:,None], dtype=torch.int32, dim=0)
     # sort to group the atoms which belong to the same cell together
     sorted_flat_cell_ids, sorted_flat_cell_id_map = torch.sort(particle_flat_cell_inds)
     # empty ones are DUMMY_IND, flat version of the cells
@@ -177,6 +225,7 @@ def shift_array(arr: Tensor, dindex: tuple):
 def generate_candidates(cells: Tensor, N: int):
     '''
     Generate the candidate neighbors for each atom
+    cells: [nx,ny,nz,max cell capacity] where nx,ny,nz is number of cells in each dimension
     '''
     # go through 27 neighbors for each cell and concat. the neighboring cells together
     all_shifts = list(itertools.product(range(-1,2,1), repeat=3))
@@ -206,9 +255,11 @@ def generate_candidates(cells: Tensor, N: int):
     return candid_ids
 
 @torch.compile(dynamic=True)
-def generate_candidates_v2(cell_inds: Tensor, cells: Tensor, N: int):
+def generate_candidates_v2(cell_inds: Tensor, cells: Tensor):
     '''
     Generate the candidate neighbors for each atom
+    cell_inds: 3xN Tensor, maps atom to specific cell
+    cells: [nx,ny,nz,max cell capacity] where nx,ny,nz is number of cells in each dimension
     '''
     # go through 27 neighbors for each cell and concat. the neighboring cells together
     all_shifts = list(itertools.product(range(-1,2,1), repeat=3))
@@ -220,7 +271,7 @@ def generate_candidates_v2(cell_inds: Tensor, cells: Tensor, N: int):
     # cx, cy, cz, num of candids
     # where num of candids = 27 * max cell capacity
     cell_nbr_candidates = torch.concatenate(cell_nbr_candidates, axis=-1)
-    candid_ids = cell_nbr_candidates[cell_inds[:,0],cell_inds[:,1],cell_inds[:,2], :]
+    candid_ids = cell_nbr_candidates[cell_inds[0],cell_inds[1],cell_inds[2], :]
     # mask out the self interactions
     candid_ids = self_mask(candid_ids)
     
@@ -231,21 +282,28 @@ def generate_candidates_v2(cell_inds: Tensor, cells: Tensor, N: int):
 def create_sparse_neighbor_list(coords: Tensor, lattice_lengths: Tensor, candid_ids: Tensor, cutoff: float):
     '''
     Create COO based sparse neighbor list
+    coords: 3xN Tensor
+    lattice_lengths: [3,] Tensor
+    candid_ids: NxK Tensor, K is # candidates
     '''
-    mask = calculate_mask(candid_ids, coords, lattice_lengths, cutoff)
+    mask = calculate_mask(coords, candid_ids, lattice_lengths, cutoff)
     cumsum = torch.cumsum(mask, dim=1)
     max_occupancy = torch.max(cumsum[:, -1])
     
     index = torch.argwhere(mask)
     source, target = index[:,0], candid_ids[index[:,0], index[:,1]]
-    return source, target
+    return torch.stack((source, target))
 
 @torch.compile(dynamic=True)
 def create_dense_neighbor_list(coords: Tensor, lattice_lengths: Tensor, candid_ids: Tensor, cutoff: float):
     '''
     Create ELLPACK based dense neighbor list
+    coords: 3xN Tensor
+    lattice_lengths: [3,] Tensor
+    candid_ids: NxK Tensor, K is # candidates
+
     '''
-    mask = calculate_mask(candid_ids, coords, lattice_lengths, cutoff)
+    mask = calculate_mask(coords, candid_ids, lattice_lengths, cutoff)
     cumsum = torch.cumsum(mask, dim=1)
     max_occupancy = torch.max(cumsum[:, -1])
     DUMMY_IND = -1
@@ -268,8 +326,10 @@ def generate_neighbor_list(coords: Tensor, lattice_vectors: Union[Tensor, None],
     For MPI, every process will hold the neighbors for its own atoms
 
     TODO: nonperiodic box part needs to be improved for small systems (if it is needed?)
+    coords: 3xN tensor
+    lattice_vectors: 3x3 Tensor or None
     '''
-    nats = len(coords)
+    nats = len(coords[0])
 
     nats_per_rank = nats // num_ranks
     my_start = rank * nats_per_rank
@@ -278,16 +338,16 @@ def generate_neighbor_list(coords: Tensor, lattice_vectors: Union[Tensor, None],
         my_end = nats
 
     # shift the coords towards [0,0,0]
-    coords = coords - coords.min(dim=0, keepdim=True)[0]
+    coords = coords - coords.min(dim=1, keepdim=True)[0]
     if lattice_vectors != None:
         lattice_lengths = torch.linalg.norm(lattice_vectors, dim=1)
         is_periodic = True
     else:
-        lattice_lengths = coords.max(dim=0)[0] + 1.0 # add some buffer room
+        lattice_lengths = coords.max(dim=1)[0] + 1.0 # add some buffer room
         is_periodic = False
 
     cell_size_per_dim, cells_per_side, cell_count = calculate_cell_dimensions(lattice_lengths, cutoff)
-    cell_inds = (coords / cell_size_per_dim[None, :]).to(torch.int32)
+    cell_inds = (coords / cell_size_per_dim[:, None]).to(torch.int32)
     
     cell_sizes = count_flattened_cell_sizes(cell_inds, lattice_lengths, cutoff)
     max_cell_capacity = torch.max(cell_sizes)
@@ -295,7 +355,7 @@ def generate_neighbor_list(coords: Tensor, lattice_vectors: Union[Tensor, None],
     max_cell_capacity = math.ceil(max_cell_capacity / multiple_of) * multiple_of
     
     cells = populate_cells(nats, cell_inds, cells_per_side, cell_count, max_cell_capacity)
-    candid_ids = generate_candidates_v2(cell_inds[my_start:my_end], cells, nats)
+    candid_ids = generate_candidates_v2(cell_inds[:, my_start:my_end], cells)
     # trick to make the the nonperitodic work
     if is_periodic == False:
         lattice_lengths = lattice_lengths + (cutoff + 1.0)
@@ -303,3 +363,5 @@ def generate_neighbor_list(coords: Tensor, lattice_vectors: Union[Tensor, None],
         return create_dense_neighbor_list(coords, lattice_lengths, candid_ids, cutoff) 
     else:
         return create_sparse_neighbor_list(coords, lattice_lengths, candid_ids, cutoff)
+    
+
