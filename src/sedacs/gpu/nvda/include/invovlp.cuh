@@ -1,17 +1,18 @@
-typedef enum {
+typedef enum
+{
     yes,
     no
-} refine_t; 
+} refine_t;
 
-typedef enum {
+typedef enum
+{
     fp64,
     fp32,
     fp16_fp32
-} precision_t; 
+} precision_t;
 
-void invovlp(double*, 
-             double*, 
-             int, 
+void invovlp(double *,
+             double *,
+             int,
              precision_t,
              refine_t)
-
