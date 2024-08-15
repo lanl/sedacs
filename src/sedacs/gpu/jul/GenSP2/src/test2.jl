@@ -15,24 +15,24 @@ maximum(abs.(θ_fermi))
 x′ = collect(0:1e-4:1)
 
 begin
-    p = plot(xlim=[μ - 50 / β, μ + 50 / β])
-    plot!(p, x′, fermi_fn.(x′, β, μ), label="Reference")
-    plot!(p, x′, model_fermi(x′, θ_fermi), label="Fitted Model")
-    plot!(p, x′, model_fermi(x′, θ_sp2), label="SP2 Model")
+    p = plot(; xlim=[μ - 50 / β, μ + 50 / β])
+    plot!(p, x′, fermi_fn.(x′, β, μ); label="Reference")
+    plot!(p, x′, model_fermi(x′, θ_fermi); label="Fitted Model")
+    plot!(p, x′, model_fermi(x′, θ_sp2); label="SP2 Model")
 end
 
 begin
-    p = plot(xlim=[μ - 50 / β, μ + 50 / β])
-    plot!(p, x′, model_fermi(x′, θ_fermi) - fermi_fn.(x′, β, μ), label="Model error")
+    p = plot(; xlim=[μ - 50 / β, μ + 50 / β])
+    plot!(p, x′, model_fermi(x′, θ_fermi) - fermi_fn.(x′, β, μ); label="Model error")
 end
 
 begin
-    p = plot(xlim=[μ - 10 / β, μ + 10 / β])
-    plot!(p, x′, entropy_fn.(x′, β, μ), label="Reference")
-    plot!(p, x′, model_entropy(x′, θ_entropy), label="Model")
+    p = plot(; xlim=[μ - 10 / β, μ + 10 / β])
+    plot!(p, x′, entropy_fn.(x′, β, μ); label="Reference")
+    plot!(p, x′, model_entropy(x′, θ_entropy); label="Model")
 end
 
 begin
-    p = plot(xlim=[μ - 50 / β, μ + 50 / β])
-    plot!(p, x′, model_entropy(x′, θ_entropy) - entropy_fn.(x′, β, μ), label="Model error")
+    p = plot(; xlim=[μ - 50 / β, μ + 50 / β])
+    plot!(p, x′, model_entropy(x′, θ_entropy) - entropy_fn.(x′, β, μ); label="Model error")
 end
