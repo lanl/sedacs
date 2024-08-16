@@ -54,10 +54,10 @@ run:
 pages:
   stage: deploy
   script:
-    - pip install sphinx sphinx-rtd-theme
+    - pip install sphinx sphinx-press-theme myst-parser
     - cd docs
     - make sphinx
-    - mv _build-*/html/ ../public/
+    - mv _build/sphinx/html/ ../public/
   artifacts:
     paths:
       - public
