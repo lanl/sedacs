@@ -56,8 +56,8 @@ pages:
   script:
     - pip install sphinx sphinx-rtd-theme
     - cd docs
-    - make html
-    - mv build/html/ ../public/
+    - make
+    - cp *.pdf ../public/
   artifacts:
     paths:
       - public
