@@ -1,22 +1,16 @@
-# Makefile for the LCC documentation
-
-DIR=$(shell pwd)
-
-all:
-	(make doxy)	
+all: doxygen sphinx
 
 clean:
-	rm -f *.backup
+	rm -rf _build-*
 
-doxy:
-	(doxygen ./source-doxygen/Doxyfile)	
-	(cd ./build-doxygen/latex ; make ; cp refman.pdf ../../sedacs-doxygen.pdf)	
+doxygen:
+	doxygen ./source-doxygen/Doxyfile
+	cd ./_build-doxygen/latex ; make ; cp refman.pdf ../../sedacs-doxygen.pdf
 
 sphinx:
-	(cp ../README.md ./source-sphinx/)
-	(cp ../LICENSE.txt ./source-sphinx/)
-	(cp ../test/README.md ./source-sphinx/README-test.md)
-	(cp ./README.rst ./source-sphinx/README-docs.rst)
-	(cd ./source-sphinx/; make latex)
-	(cd ./build-sphinx/latex/; make; cp sedacs.pdf ../../sedacs-sphinx.pdf)
-
+	cp ../README.md ./source-sphinx/
+	cp ../LICENSE.txt ./source-sphinx/
+	cp ./README.rst ./source-sphinx/README-docs.rst
+	cd ./source-sphinx/; make html
+	# cd ./source-sphinx/; make latexpdf
+	# cp ./_build-sphinx/latex/sedacs.pdf ../../sedacs-sphinx.pdf
