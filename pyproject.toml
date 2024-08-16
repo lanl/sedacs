@@ -68,7 +68,8 @@ test = [
 ]
 doc = [
     "sphinx>=7",
-    "sphinx-rtd-theme>=2",
+    "myst-parser>=4.0.0",
+    "sphinx-press-theme>=0.9.1",
 ]
 
 
