@@ -1,6 +1,8 @@
 # PDM Installation Guide
 
-[TOC]
+```{contents} Table of Contents
+:depth: 3
+```
 
 PDM (Python Development Master) is a modern Python package and dependency manager that supports the latest PEP standards, aimed at enhancing your development workflow.
 

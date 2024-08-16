@@ -1,6 +1,8 @@
 # Python Installation Guide
 
-[TOC]
+```{contents} Table of Contents
+:depth: 3
+```
 
 Python may already be installed on many operating systems. To check, execute the `python` command in the terminal to access the Python interpreter, or use the `py` command on Windows, which acts as a Python launcher. If Python is installed, the terminal will display its version, as shown below:
 
