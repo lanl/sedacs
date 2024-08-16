@@ -1,6 +1,8 @@
 # Installation Guide for Optional Dependencies
 
-[TOC]
+```{contents} Table of Contents
+:depth: 3
+```
 
 The following optional dependencies can be included as needed:
 

@@ -1,6 +1,8 @@
 # Installation Guide for sedacs
 
-[TOC]
+```{contents} Table of Contents
+:depth: 3
+```
 
 This document provides comprehensive instructions on how to install the `sedacs` project. We offer several methods for installation, including using pip, Conda, and PDM (Python Development Master).
 
