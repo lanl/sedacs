@@ -281,6 +281,7 @@ def read_pdb_file(fileName, lib="None", verb=False):
         latticeVectors = np.zeros((3, 3))
         symbols = []  # Symbols for each atom type
         noBox = False
+        boxFlag = False
         typesList = []
         coordsxList = []
         coordsyList = []
@@ -290,6 +291,7 @@ def read_pdb_file(fileName, lib="None", verb=False):
             linesSplit = lines.split()
             if len(linesSplit) != 0:
                 if linesSplit[0] == "CRYST1":
+                    boxFlag = True
                     paramA = float(linesSplit[1])
                     paramB = float(linesSplit[2])
                     paramC = float(linesSplit[3])
@@ -299,8 +301,6 @@ def read_pdb_file(fileName, lib="None", verb=False):
                     latticeVectors = parameters_to_vectors(
                         paramA, paramB, paramC, paramAlpha, paramBeta, paramGamma, latticeVectors
                     )
-                else:
-                    noBox = True
                 if (linesSplit[0] == "ATOM") or (linesSplit[0] == "HETATM"):
                     count = count + 1
                     if len(linesSplit) == 11:
@@ -317,6 +317,8 @@ def read_pdb_file(fileName, lib="None", verb=False):
                     coordsyList.append(float(linesSplit[6]))
                     coordszList.append(float(linesSplit[7]))
         fileIn.close()
+        if not boxFlag:
+            noBox = True
 
     coords = np.zeros((count, 3))
     for i in range(count):
