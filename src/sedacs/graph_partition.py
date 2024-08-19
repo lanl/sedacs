@@ -1,44 +1,26 @@
-"""partition
-Some functions for partition a graph
-
-"""
-
-import sys
-
-try:
-    import metis
-
-    metisLib = True
-except ImportError:
-    metisLib = False
-
-try:
-    import networkx as nx
-
-    nxLib = True
-except ImportError:
-    nxLib = False
-
+from sedacs.geometry import get_mic_distances, get_contact_map
+from sedacs.file_io import read_xyz_file
+import matplotlib.pyplot as plt
+import ase.io, torch, time
 import numpy as np
+from warnings import warn
 
-from sedacs.graph import *
+try:
+    from numba import jit
+except ImportError:
+    # Dummy decorator if no numba.
+    def jit(*args, **kwargs):
+        return lambda f: f
+    warn("Numba not installed, graph partitioning will be slow for systems above ~5k atoms")
 
-__all__ = [
-    "graph_partition",
-    "coords_partition",
-    "get_cut",
-    "get_parts_indices",
-    "get_parts_from_indices",
-    "get_balancing",
-    "get_balance_from_indices",
-    "do_flips_precomp",
-    "do_flips",
-    "mincut_partition",
-    "regular_partition",
-    "metis_partition",
-    "get_coreHaloIndices",
-]
+##
+# @brief
+# @param
+# @return
+# FIXME need to make the jit depend on numbaFlag. Couldn't figure out how to 
+# get that to work with the numba decorators.
 
+DEBUG_LEVEL = 1  # > 0 gives assert statements, > 1 gives print statements.
 
 ## Partition
 # @brief This will partition a graph based on a defined method
@@ -48,7 +30,6 @@ __all__ = [
 # @param verb Verbosity level
 # @return parts Partition containing a "list of parts" where every
 # part is a list of nodes
-#
 def graph_partition(graph, partitionType, nparts, verb=False):
     if partitionType == "Regular":
         parts = regular_partition(graph, nparts, verb)
@@ -59,268 +40,822 @@ def graph_partition(graph, partitionType, nparts, verb=False):
     return parts
 
 
-## Partitioning by using atomic positions.
-# @brief This will use the atomic positions/coordinates in order to
-# generate fragments of the system returned as a list of list of indices.
-# @param coords Atomic postitions.
-# @param partitionType Method or type of partition to be uses
-# @param nx Number of points in the x direction
-# @param ny Number of points in the y direction
-# @param nz Number of points in the z direction
-# @param verb Verbosity option
-# @return parts Partition containing a "list of parts" where every
-# part is a list of nodes
-#
-def coords_partition(coords, partitionType, nx, ny, nz, verb=False):
-    if partitionType == "Space":
-        parts = space_partition(coords, partitionType, nx, ny, nz, verb)
 
-    return parts
-
-
-## Get total cuts
-# @brief Get the total edge cuts from a given partition.
-# @param whichPart A vector where whichPart[i] indicates the partition
-# that i belongs to.
-# @param graph Graph to be partition. graph[i,0] = degree of node i.
-# graph[i,j>0] = the node conected to node i.
-# @return cut The total cut.
-#
-def get_cut(whichPart, graph):
+## get_cut
+# @brief Gets the cut from the node partitions and graph.
+# @param nodeIPartition (np.ndarray (n_nodes)) Partition node I belongs to.
+# @param graph (np.ndarray (n_nodes,n_nodes)) Dense adjacency matrix.
+# @return cut (int): The cut for the partitioning scheme.
+# @jit(nopython=True)
+def get_cut(nodeIPartition, graph):
     cut = 0
-    for i in range(len(whichPart)):
-        partIndexI = whichPart[i]
+    n_nodes = graph.shape[0]
+    for i in range(n_nodes):
+        IK = nodeIPartition[i]
+
         # Look at the neighbors to see if they are in different part
-        for j in range(1, graph[i, 0] + 1):
+        for j in range(1, graph[i, 0] + 1): # don't get this part
+
+           
+            # TODO: How is this anything but 1, or 0 if 
+            # input graph is to be an adjacency matrix?
             index = graph[i, j]
-            partIndexJ = whichPart[index]
-            if (partIndexI - partIndexJ) != 0:
+
+
+            JK = nodeIPartition[index]
+            if IK != JK:
                 cut = cut + 1
     return cut
 
-
-## Get partition indices
-# @brief Get a vector indicating which is the part index of a particular
-# node.
-# @param parts Partition containing a "list of parts" where every
-# part is a list of nodes
-# nnodes Number of nodes in the graph.
-#
-def get_parts_indices(parts, nnodes):
-    whichPart = np.zeros((nnodes), dtype=int)
-    partIndex = -1
-    for part in parts:
-        partIndex = partIndex + 1
-        for node in part:
-            whichPart[node] = partIndex
-    return whichPart
+## get_balancing
+# @brief Compute balance from a set of partition sizes.
+# @param partitionKNumNodes (np.ndarray (number of partitions)): How many
+#        node are in the Kth partiiton.
+# @return balance (float): Balance as defined by largest/smallest part sizes.
+def get_balance_from_partition_sizes(partitionKNumNodes):
+    balance = np.max(partitionKNumNodes)/np.min(partitionKNumNodes)
+    return balance
 
 
-## Get the partition list from the index vector
-# @param whichPart part index vector for every node
-# @param nparts Number of parts
-# @return part Partition list. Every element of the list
-# is a list of node on every part
-#
-def get_parts_from_indices(whichPart, nparts):
-    parts = [[] for i in range(nparts)]
-    for i in range(len(whichPart)):
-        partIndex = whichPart[i]
-        parts[partIndex].append(i)
+## get_balance_from_partitions
+# @brief Compute balance from a set of partition sizes.
+# @param parts (list<int>): Unpadded least of each partition's nodes.
+# @return balance (float): Balance as defined by largest/smallest part sizes.
+def get_balance_from_partitions(parts):
+    lens = [len(part) for part in parts]
+    maxPartSize = max(lens)
+    minPartSize = min(lens)
+    return maxPartSize/minPartSize
 
-    return parts
-
-
-## Get graph partition balance.
-# @brief This will return the partitioning balance defined as the quotient
-# between the max and min partition cardinals.
-# If partition is \f$ \Pi \f$, then:
-# \f[
-#    \mathrm{bal} = \frac{max_i|\pi_i|}{min_i|\pi_i|}
-# \f]
-# where \f$ \pi_i \f$ is a part of the graph (a set of node indices)
-# @return bal Balance of the partition.
-#
-def get_balancing(parts):
-    bal = 0
-    largest = 1
-    smallest = 10**9
-    for part in parts:
-        largest = max(largest, len(part))
-        smallest = min(smallest, len(part))
-    bal = largest / smallest
-    return bal
-
-
-## Get partition balanging.
-# @brief Same as get_balancing except this uses the partitioning
-# vector.
-# @param whichPart partition indexing vector.
-# @param nparts Number of total parts.
-#
-def get_balance_from_indices(whichPart, nparts):
-    partsSizes = np.zeros((nparts), dtype=int)
-    for i in range(len(whichPart)):
-        partsSizes[whichPart[i]] = partsSizes[whichPart[i]] + 1
+## get_balance
+# @brief Compute balance from the array containing node i's current partition.
+# @param nodeIPartitions (np.ndarray (n_nodes)): Each node's partition. E.g.
+#        nodeParititons[i] returns the partition of node i.
+# @return balance (float): Balance as defined by largest/smallest part sizes.
+def get_balance(nodeIPartition, k):
+    partsSizes = np.zeros((k), dtype=int)
+    for i in range(len(nodeIPartition)):
+        partsSizes[nodeIPartition[i]] = partsSizes[nodeIPartition[i]] + 1
     bal = np.max(partsSizes) / np.min(partsSizes)
     return bal
 
 
-## Do node partition flips with precomputed cuts.
-# @brief This function is a special case of do_flips where
-# the cuts around a node are precomputed for all possible
-# part index that same node could have. This will differ from the do_flips
-# since everytime there is a flip, there is no actualization of the cuts. The
-# price to pay is the need of more iterations until convergence.
-# @param whichPart partition indexing vector.
-# @param graph Graph to be partition. graph[i,0] = degree of node i.
-# graph[i,j>0] = the node conected to node i.
-# @param nnodes Number of nodes.
-# @param nparts Number of parts.
-# @return whichPartNew New partition indexing verctor.
-#
-def do_flips_precomp(whichPart, graph, nnodes, nparts, bal=None):
-    # Precompute all the possible cut vals O(nnodes*deg)
-    cutsI = np.zeros((nnodes, nparts), dtype=int)
-    for i in range(nnodes):
-        deg = graph[i, 0]
-        # Get the max cut a node could have
-        cutsI[i, :] = deg
-        # Lets look at every neighbor
-        for ii in range(1, deg + 1):
-            index = graph[i, ii]
-            partIndexII = whichPart[index]
-            # Everytime there is a neighbor in a certain part
-            # it will decrese the cut of I if I would be on that
-            # same part.
-            cutsI[i, partIndexII] = cutsI[i, partIndexII] - 1
+## initial_partition_from_coordinates
+# @brief Computes the initial partitioning of a set of nodes using positional 
+# info.
+# @param systemFilename (str): System file name to parse for structural info.
+# @param k (int): Number of partitions in the system.
+# @param domainDecomp (List<int>): Number of domains to decomp along x, y, z.
+#                                   nx*ny*nz must be divisor of k.
+# @param
+# @return
+def _initial_partition_from_coordinates(
+    systemFilename,
+    k,
+    domainDecomp,
+    cutoff=1.8,
+    device="cpu",
+):
 
-    # whichPartNew = whichPart
-    # if(bal is not None):
-    #    if(bal < 1.1):
-    #        for i in range(nnodes):
-    #            whichPartNew[i] = np.argmax(cutsI[i,:])
+    assert (
+        len(domainDecomp) == 3
+        and domainDecomp[0] * domainDecomp[1] * domainDecomp[2] == k
+    ), "Domain decomp must be [ngx, ngy, ngz] where all three are ints and ngx*ngy*ngz is a divisor of k"
 
-    # Now do the flips O(nnodes*nnodes/2)
-    whichPartNew = whichPart
-    for i in range(nnodes):
-        partIndexI = whichPart[i]
-        for j in range(i + 1, nnodes):
-            partIndexJ = whichPart[j]
-            if partIndexI != partIndexJ:
-                # Look at their neighbors and count the cuts
-                origCut = 0
-                newCut = 0
-                # Now we know the cut when I is in partIndexI and J
-                origCut = cutsI[i, partIndexI]
-                newCut = cutsI[i, partIndexJ]
-                # Same for J
-                origCut = origCut + cutsI[j, partIndexJ]
-                newCut = newCut + cutsI[j, partIndexI]
-                if newCut < origCut:
-                    whichPartNew[i] = partIndexJ
-                    whichPartNew[j] = partIndexI
-                    partIndexI = partIndexJ
-                    cutsI[i, partIndexI] = 0
-                    for ii in range(1, graph[i, 0] + 1):
-                        index = graph[i, ii]
-                        partIndexII = whichPart[index]
-                        if (partIndexI - partIndexII) != 0:
-                            cutsI[i, partIndexI] = cutsI[i, partIndexI] + 1
+    ngx, ngy, ngz = domainDecomp[0], domainDecomp[1], domainDecomp[2]
 
-    return whichPartNew
+    # Extract info needed for MIC distance.
+    # @return latticeVectors Lattice vectors. z-coordinate of the first
+    #         vector = latticeVectors[0,2]
+    # @return symbols Symbol for each atom type. Symbol for first atom
+    #         type = symbols[0]
+    # @return types Index type for each atom in the system. Type for first atom
+    #         = type[0]
+    # @return coords Position for every atoms. z-coordinate of
+    #         atom 1 = coords[0,2]
+
+    lat, syms, typs, coords = read_xyz_file(systemFilename, verb=False)
+    R = torch.tensor(coords, device=device, dtype=torch.float32)
+    cell = torch.tensor(lat, device=device, dtype=torch.float32)
+    n_atoms = R.shape[0]
+
+    # Call functions in sedacs.geometry.py
+    R_mic = get_mic_distances(R, cell)
+    Gp = get_contact_map(R_mic, cutoff=cutoff)
+
+    if device == "cpu":
+        Gp = Gp.numpy()
+        RPartition = R.numpy()
+        cell = cell.numpy()
+    else:
+        Gp = Gp.cpu().numpy()
+        RPartition = R.cpu().numpy()
+        cell = cell.cpu().numpy()
+
+    # Check that coordinates are wrapped. Orthorhombic box assumed.
+    if DEBUG_LEVEL > 0:
+        assert (R[:, 0] < cell[0, 0]).all(), "Wrap coordinates first."
+        assert (R[:, 1] < cell[1, 1]).all(), "Wrap coordinates first."
+        assert (R[:, 2] < cell[2, 2]).all(), "Wrap coordinates first."
+        assert (R[:, 0] >= 0).all(), "Wrap coordinates first."
+        assert (R[:, 1] >= 0).all(), "Wrap coordinates first."
+        assert (R[:, 2] >= 0).all(), "Wrap coordinates first."
+
+    # Partition length along the domain decomps.
+    partition_length_x = cell[0, 0] / ngx
+    partition_length_y = cell[1, 1] / ngy
+    partition_length_z = cell[2, 2] / ngz
+
+    # Determines the initial partition of the atoms by their location w.r.t.
+    # the domain decomposition.
+    RPartition[:, 0] = np.floor(R[:, 0] / partition_length_x)
+    RPartition[:, 1] = np.floor(R[:, 1] / partition_length_y)
+    RPartition[:, 2] = np.floor(R[:, 2] / partition_length_z)
+
+    # Flatten s.t. partition : R^3 -> R^1
+    # Need indexing of image distances if that will be needed in the future.
+    nodeIPartition = (
+        RPartition[:, 0] * 1 +
+        RPartition[:, 1] * ngx +
+        RPartition[:, 2] * ngx * ngy
+    ).astype(int)
+
+    nNodes = n_atoms
+
+    # BEGIN GRAPH PARTITIONING ROUTINE.
+
+    nodeIDegree = np.sum(Gp, axis=1).astype(int)
+    max_node_degree = int(np.max(nodeIDegree))
+    nodeIConnections = np.full((nNodes, max_node_degree), nNodes)
+    for i in range(nNodes):
+        nodeIConnections[i, : nodeIDegree[i]] = np.where(Gp[i] == 1)[0]
+        if DEBUG_LEVEL > 2:
+            print(nodeIDegree[i])
+            print(np.where(Gp[i] == 1)[0])
+            print(nodeIConnections[i])
+
+    if DEBUG_LEVEL > 1:
+        assert np.sum(nodeIDegree) / 2 == float(
+            G.number_of_edges()
+        ), "Edges computed from row sum don't match NetworkX"
+
+    nodeICuts = np.zeros(nNodes, dtype=int)
+    partitionKNumNodes = np.zeros(k, dtype=int)
+
+    # Populate the cuts mentioned below.
+    for i in range(nNodes):
+        iK = nodeIPartition[i]
+        partitionKNumNodes[iK] += 1
+        for j in range(max_node_degree):
+            # Recall the 'empty' values are filled with nNodes
+            # to indice an empty connection.
+            if nodeIConnections[i, j] < nNodes:
+                if nodeIPartition[j] != iK:
+                    nodeICuts[i] += 1
+
+    # One important thing here is that nothing is sparse and everything is
+    # padded. This may be problem for materializing large dense graphs, and
+    # in the future a conversion can be made from e.g. Gp -> csr, and
+    # mitigating some of the below arrays.
+
+    # == Overview of the key variables tracking metrics/data in this routine ==
+    # Gp                       -> Dense adjacency matrix.
+    # k                        -> Number of partitions.
+    # nodeIDegree            -> Degree of node_i in the full graph, Gp.
+    # nodeIConnections       -> The nodes that node i is connected to. *Padded*
+    # nodeIPartition         -> The partition node i resides in.
+    # nodes_in_partition_k     -> Number of nodes in partition k
+    # partitionKNumNodes    -> Number of nodes in partition k
+    # nodeICuts              -> Number of cuts on node i
+
+    return (
+        Gp,
+        k,
+        nodeIDegree,
+        nodeIPartition,
+        nodeIConnections,
+        nodeICuts,
+        partitionKNumNodes,
+    )
 
 
-## Do node partition flips.
-# @brief This function does the same as the do_flips_precomp. It will converge
-# in less iterations but with a lower scaling.
-# @param whichPart partition indexing vector.
-# @param graph Graph to be partitioned. graph[i,0] = degree of node i.
-# graph[i,j>0] = the node conected to node i.
-# @return whichPartNew New partition indexing verctor.
-#
-def do_flips(whichPart, graph):
-    whichPartNew = whichPart
-    totNewCut = 0
-    # Now flip the pairs
-    for i in range(len(graph)):
-        partIndexI = whichPart[i]
+## do_mitigate_large_partitions
+# @brief Aims to mitigate large partitions by moving nodes to smaller ones.
+# @param nodeIPartition (np.ndarray (nNodes)) containing node i's partition.
+# @param nodeIConnections (np.ndarray (nNodes, n_max_degree)). Connections of
+#        node I. This is padded with the value "nNodes"
+# @param cutsIK (np.ndarray (n_nodes,k)) Cuts on I if it were in partition K.
+# @param partitionKNumNodes (np.ndarray (k)). Number of core nodes in K.
+# @param coreHaloSize (np.ndarray (k)). Core+Halo size of partition K.
+# @param top_frac_search (float): We try to pull nodes from this % of the
+#        largest partitions. Visual example below in docstrings.
+# @param bot_frac_search (float): We try to push nodes to this % of the
+#        smallest partitions. Visual example below in docstrings.
+# @return halos (np.ndarray shape(k, nNodes/5) Holds the halos.
+def do_mitigate_large_partitions(
+    k,
+    nodeIDegree,
+    nodeIConnections,
+    nodeIPartition,
+    cutsIK,
+    partitionKNumNodes,
+    coreHaloSize,
+    top_frac_search=0.30,
+    bot_frac_search=0.40,
+):
+    """
+    E.g. partition sizes (core nodes):
+    k    = 0 1 2 3  4  5  6  7  8  9
+    size = 7 8 9 10 12 11 15 18 20 21
 
-        for j in range(i + 1, len(graph)):
-            partIndexJ = whichPart[j]
-            if partIndexI != partIndexJ:
-                # Look at their neighbors and count the cuts
-                origCut = 0
-                newCut = 0
-                for ii in range(1, graph[i, 0] + 1):
-                    index = graph[i, ii]
-                    partIndexII = whichPart[index]
-                    if (partIndexI - partIndexII) != 0:
-                        origCut = origCut + 1
-                    # Alternative cut when fliped partIndexI and partIndexJ
-                    if (partIndexJ - partIndexII) != 0:
-                        newCut = newCut + 1
+    top_fraction_search = .2 would pick out partitions 8, 9
+    bot_fraction search = .5 would pick out partitions 0, 1, 2, 3, 4
 
-                # Look at their neighbors and count the cuts
-                for jj in range(1, graph[j, 0] + 1):
-                    index = graph[j, jj]
-                    # Original cut for J
-                    partIndexJJ = whichPart[index]
-                    if (partIndexJ - partIndexJJ) != 0:
-                        origCut = origCut + 1
-                    # Alternative cut if J would be I
-                    if (partIndexI - partIndexJJ) != 0:
-                        newCut = newCut + 1
+    Meaning we'd look for swap from 8->[0,1,2,3,4] and 9->[0,1,2,3,4]
+    This portion scales roughly (assuming somewhat uniform paritition sizes) as top_frac*bot_frac*k^2.
+    """
 
-                if newCut < origCut:
-                    whichPartNew[i] = partIndexJ
-                    whichPartNew[j] = partIndexI
-                    partIndexI = partIndexJ
+    indx = np.argsort(coreHaloSize)[::-1]
+    # indx = np.argsort(partitionKNumNodes)[::-1]
+    nk = int(top_frac_search * k)
+    nNodes = nodeIPartition.shape[0]
 
-                totNewCut = totNewCut + newCut
+    # Here we're sorting the indices of core+halo size in descending order.
+    # E.g. the worst partition is indx[0], the best is indx[-1]
+    # These correspond directly to the *actual* partition index, K.
+    largestKs = indx[:nk]
+    smallestKs = indx[int((1 - bot_frac_search) * k):]
 
-    return whichPartNew
+    largePartitionNodes = partitionKNumNodes[largestKs]
+
+    # We have to be careful not to pull too many nodes from decently balanced
+    # partitions. Therefore we use this as a check, s.t. if large partition #
+    # of nodes -> under this number we breaak that loop and stop pulling nodes
+    # from it.
+    largeCutoff = np.min(largePartitionNodes)
+
+    # The logic here is that trading nodes from large partitions to small ones
+    # where we reduce or even keep the cut equal is a net benefit (for
+    # core/core+halo sizes).
+    for cK in largestKs:
+        # cK->current partition K
+        cK_nodes = np.where(nodeIPartition == cK)[0]
+        for cK_node_i in cK_nodes:
+            if partitionKNumNodes[cK] < largeCutoff:
+                break
+
+            # Boolean array of partitions from bot_frac_search%ile  which
+            # either reduce or keep equal the cut on node_i.
+            res = 1
+            bestPartition = None
+            for pK in smallestKs:
+                prop_res = cutsIK[cK_node_i, pK] - cutsIK[cK_node_i, cK]
+                if prop_res < res:
+                    res = prop_res
+                    bestPartition = pK
+
+            # If there are any such partitions, go to one with smallest cut.
+            if bestPartition is not None:
+
+                # Change the node's partition
+                nodeIPartition[cK_node_i] = bestPartition
+
+                partitionKNumNodes[cK] -= 1
+                partitionKNumNodes[bestPartition] += 1
+
+                # Actualize changes to the cut of cK_node_i's neighbors.
+                for j in range(nodeIDegree[cK_node_i]):
+                    iNeighborJ = nodeIConnections[cK_node_i, j]
+                    cutsIK[iNeighborJ, cK] += 1
+                    cutsIK[iNeighborJ, bestPartition] -= 1
+
+                # Reset the smallestKs, so that we don't pile nodes into a small partition
+                # and ruin the procedure.
+                indx = np.argsort(partitionKNumNodes)[::-1]
+                smallestKs = indx[int((1 - bot_frac_search) * k):]
+
+    cut = 0
+    assert (
+        np.min(cutsIK) >= 0
+    ), f"Cut can never be negative, but is currently as low as {np.min(cutsIK)}"
+
+    for i in range(nNodes):
+        iK = nodeIPartition[i]
+        cut += cutsIK[i, iK]
+
+    cut /= 2
+
+    return cut, nodeIPartition, cutsIK, partitionKNumNodes
 
 
-## MinCut local partition optimization.
-# @brief This will optimize a given partition based on a mincut algorithm.
+@jit(nopython=True)
+def do_partition_flips(
+    Gp,
+    k,
+    nodeIDegree,
+    nodeIConnections,
+    nodeIPartition,
+    partitionKNumNodes,
+):
+    nNodes = Gp.shape[0]
+
+    # Precompute cuts on node i if it were in partition K.
+    cutsIK = np.zeros((nNodes, k), dtype=np.int32)
+
+    for i in range(nNodes):
+        # Degree of i is also max number of cuts, so initialize there and
+        # subtract one for each neighbor in partition K.
+        nodeIDeg = nodeIDegree[i]
+        cutsIK[i, :] = nodeIDeg
+
+        # Loop over each neigbhbor of node i.
+        for j in range(nodeIDeg):
+            neighJ = nodeIConnections[i, j]
+
+            if DEBUG_LEVEL > 1:
+                assert neighJ < nNodes, "Should never be this high"
+
+            # Node i has neighbor j in partition K.
+            # So if i->K then cutsIK gets decremented 1.
+            neighJPartition = nodeIPartition[neighJ]
+
+            cutsIK[i, neighJPartition] -= 1
+
+    assert np.min(cutsIK) >= 0, "Cut should never be negative."
+    assert np.min(nodeIDegree) >= 0, "Degree should never be negative."
+
+    swaps = 0
+    for i in range(nNodes):
+        if cutsIK[i, nodeIPartition[i]] > 0:  # Leave a node with no cuts alone.
+            for j in range(i + 1, nNodes):
+
+                iK = nodeIPartition[i]
+                jK = nodeIPartition[j]
+                # For when nodes are not in same partition.
+                if iK != jK:
+                    # jK = nodeIPartition[j]
+                    origCutsI = cutsIK[i, iK]
+                    origCutsJ = cutsIK[j, jK]
+
+                    newCutsI = cutsIK[i, jK]
+
+                    # Ensure unisolated nodes upon switching
+                    if newCutsI < nodeIDegree[i]:
+                        newCutsJ = cutsIK[j, iK]
+                        if newCutsJ < nodeIDegree[j]:
+                            if (newCutsI + newCutsJ) < (origCutsJ + origCutsI):
+                                swaps += 1
+
+                                # Update the new partitions from the swap.
+                                nodeIPartition[i] = jK
+                                nodeIPartition[j] = iK
+
+                                # Actualize changes to the cuts.
+                                # i->j => i's neighbors in iK go UP 1, i's neighbors in jK go DOWN 1
+                                for m in range(nodeIDegree[i]):
+                                    iNeighborM = nodeIConnections[i, m]
+
+                                    cutsIK[iNeighborM, iK] += 1
+                                    cutsIK[iNeighborM, jK] -= 1
+
+                                # Likewise, but flipped for j->i
+                                for m in range(nodeIDegree[j]):
+                                    jNeighborM = nodeIConnections[j, m]
+                                    cutsIK[jNeighborM, iK] -= 1
+                                    cutsIK[jNeighborM, jK] += 1
+
+                                assert np.min(
+                                    cutsIK >= 0
+                                ), f"i:{i} j:{j}, iK:{iK}, jK:{jK}, i_neigh_k:{iNeighborM}, n_i_connections:{nodeIConnections[i,k]}, cuts_k_jK:{cutsIK[iNeighborM]}"
+
+                # For when nodes are in same partition, we try to move ONLY I -> the smallest partition.
+                elif iK == jK:
+                    # Find the smallest partition, sK, and check for a swap there.
+                    iK = nodeIPartition[i]
+                    sK = np.argmin(partitionKNumNodes)
+
+                    newCutsI = cutsIK[i, sK]
+                    currCutsI = cutsIK[i, iK]
+
+                    # If the node is already in the smallest partition, just go do the next node and do nothing.
+                    if sK != iK:
+                        # Ensure unisolated nodes upon switching
+                        if newCutsI < nodeIDegree[i]:
+                            if newCutsI <= currCutsI:
+                                swaps += 1
+
+                                partitionKNumNodes[sK] += 1
+                                partitionKNumNodes[iK] -= 1
+
+                                # Update the new partitions from the swap.
+                                nodeIPartition[i] = sK
+
+                                # Actualize changes to the cuts.
+                                # i->j => i's neighbors in iK go UP 1, i's neighbors in sK go DOWN 1
+                                for k in range(nodeIDegree[i]):
+                                    iNeighborM = nodeIConnections[i, k]
+                                    cutsIK[iNeighborM, iK] += 1
+                                    cutsIK[iNeighborM, sK] -= 1
+
+    cut = 0
+    assert (
+        np.min(cutsIK) >= 0
+    ), f"Cut can never be negative, but is currently as low as {np.min(cutsIK)}"
+
+
+    for i in range(nNodes):
+        iK = nodeIPartition[i]
+        cut += cutsIK[i, iK]
+        if cutsIK[i, iK] < 0:
+            raise ValueError("...")
+
+    cut /= 2
+    cut = int(cut)
+
+    return cut, cutsIK, nodeIPartition, partitionKNumNodes, swaps
+
+
+## get_core_halo
+# @brief computes halos for th set of input core partitions.
+# @param nodeIPartition (np.ndarray (nNodes)) containing node i's partition.
+# @param nodeIConnections (np.ndarray (nNodes, n_max_degree)). Contains all of
+#        connections of node i. This is padded with the value "nNodes".
+# @param nodeIDegree np.ndarray(np.ndarray (nNodes)) contaning node i's degree.
+# @param k (int) number of partitions for the graph.
+# @param order (int) number of jumps along the graph walk to compute halos.
+# @param maxHaloFraction (float): Max fraction of total nodes the halos can be.
+#        This is set at a very safe 0.5, but can probably be much lower at 
+#        ~.05 - .15 for very sparse graphs.
+# @return halos (np.ndarray shape(k, nNodes/5) Holds the halo nodes for each
+#         partition. May want another option to deal with extremely
+#         dense graphs.
+# @return halo_ct (np.ndarray (k)) Number of nodes in each partition's halo.
+@jit(nopython=True)
+def get_core_halo(nodeIPartition, nodeIConnections, nodeIDegree, k,
+                      order=2, maxHaloFraction=.5):
+
+    nNodes = nodeIPartition.shape[0]
+
+    # Again these are filled with nNodes,
+    # extract true halos with: halos < nNodes as a mask.
+    halos = np.full((k, int(nNodes*maxHaloFraction)), nNodes, dtype=np.int32)
+    halo_ct = np.zeros(k, dtype=np.int32)
+
+    if order == 1:
+        # First round of populating only the core's nearest neighbors.
+        for i in range(nNodes):
+            iK = nodeIPartition[i]
+            deg_i = nodeIDegree[i]
+            for j in range(deg_i):
+                node_j = nodeIConnections[i, j]
+                jK = nodeIPartition[j]
+                if jK != iK and node_j not in halos[iK]:
+                    halos[iK, int(halo_ct[iK])] = node_j
+                    halo_ct[iK] += 1
+
+    elif order > 1:
+        # First round of populating only the core's nearest neighbors.
+        for i in range(nNodes):
+            iK = nodeIPartition[i]
+            deg_i = nodeIDegree[i]
+            for j in range(deg_i):
+                node_j = nodeIConnections[i, j]
+                jK = nodeIPartition[j]
+                if jK != iK and node_j not in halos[iK]:
+                    halos[iK, halo_ct[iK]] = node_j
+                    halo_ct[iK] += 1
+
+        # Populate halo's neighbors (order - 1) times to get
+        # the 'order'th nearest neighbors.
+        for ord in range(order - 1):
+            # Loop over each halo
+            for haloK in range(k):
+
+                curr_halo = halos[haloK]
+                nodes_in_curr_halo = halo_ct[haloK]
+
+                # Remove the padded nodes and loop over all.
+                for halo_node in curr_halo[:nodes_in_curr_halo]:
+                    for halo_node_neighbor in range(nodeIDegree[halo_node]):
+                        neigh = nodeIConnections[halo_node, halo_node_neighbor]
+
+                        # Checks that node isn't in core or already in halo.
+                        if haloK != nodeIPartition[neigh] and neigh not in halos[haloK]:
+                            halos[haloK, halo_ct[haloK]] = neigh
+                            halo_ct[haloK] += 1
+    return halos, halo_ct
+
+    # Compute the core+halo sizes.
+
+
+## coords_partition
+# @brief Computes refined graph partitioning from either coordinates or 
+#        the globally thresholded graph from DM (to be added)
+# @param systemFilename (str): System file name to parse for structural info.
+# @param k (int): Number of partitions in the system.
+# @param domainDecomp (List<int>): Number of domains to decomp along x, y, z.
+#                                   nx*ny*nz must be divisor of k.
+# @param numSwapRuns (int): Number of runs to compute node partition flips.
+# @param numMitRuns (int): Number of runs to mitigate large core+halo sizes.
+# @param device (str): Device for torch tensores used in spatial partitioning.
+# @param cutoff (float): Cutoff for edges between nodes. Units same as coords.
+# @param order (int): Number of steps along graph walk to take for halos.
+# @param visualize (bool): Whether to visualize the Initial/Final node
+#                          distributions and Core/Core+Halo sizes.
+# @return partitionKCore (np.ndarray shape(k, largestCorePartition)
+# @return partitionKHalo (np.ndarray shape(k, largestHaloPartition)
+# @return partitionKNumCore (int): Number of nodes in the core of partition k,
+#         e.g. partition_k_core[k,:partition_k_num_core[k]] returns core nodes.
+# @return partitionKNumHalo (int): Number of nodes in the halo of partition k,
+#         e.g. partition_k_halo[k,:partition_k_num_halo[k]] returns halo nodes.
+def coords_partition(
+    systemFilename,
+    k,
+    domainDecomp,
+    numSwapRuns=10,
+    numMitRuns=10,
+    device="cpu",
+    cutoff=1.8,
+    order=2,
+    visualize=False,
+    verbosity=1,
+):
+    # Carries out the initial placement of nodes into reasonable partitions.
+    (
+        Gp,
+        k,
+        nodeIDegree,
+        nodeIPartition,
+        nodeIConnections,
+        nodeICuts,
+        partitionKNumNodes,
+    ) = _initial_partition_from_coordinates(
+        systemFilename,
+        k,
+        domainDecomp,
+        device="cpu",
+        cutoff=cutoff,
+    )
+    p_k_nNodes0 = partitionKNumNodes.copy()
+    # t = time.time()
+    swapsTot = 0
+    for i in range(numSwapRuns):
+        if verbosity > 0 and i == 0:
+            print("Beginning Flip Routine")
+            cut = int(np.sum(nodeICuts)/2)
+            balance = get_balance_from_partition_sizes(partitionKNumNodes)
+            relcut = cut / np.sum(nodeIDegree)
+            print(
+                f"Graph Statistics:\nIteration {i}\tcut:\t{cut}\trelcut:\t{relcut:.2f}\tbalance:\t{balance:.2f}"
+            )
+
+        if DEBUG_LEVEL > 0:
+            assert (
+                np.sum(partitionKNumNodes) == nodeIDegree.shape[0]
+            ), f"Number of nodes not adding up. SumPartitionSizes:{np.sum(partitionKNumNodes)} vs Nodes:{nodeIDegree.shape[0]}"
+
+        cut, cutsIK, nodeIPartition, partitionKNumNodes, swaps = do_partition_flips(
+            Gp,
+            k,
+            nodeIDegree,
+            nodeIConnections,
+            nodeIPartition,
+            partitionKNumNodes,
+        )
+        assert (
+            np.sum(partitionKNumNodes) == nodeIDegree.shape[0]
+        ), f"Number of nodes not adding up. SumPartitionSizes:{np.sum(partitionKNumNodes)} vs Nodes:{nodeIDegree.shape[0]}"
+
+        swapsTot += swaps
+
+        halosK, haloKNumNodes = get_core_halo(
+            nodeIPartition, nodeIConnections, nodeIDegree, k
+        )
+        coreHaloSize = haloKNumNodes+partitionKNumNodes
+        coreHaloBalance = get_balance_from_partition_sizes(coreHaloSize)
+
+        if verbosity > 0:
+            relcut = cut / np.sum(nodeIDegree)
+            balance = get_balance_from_partition_sizes(partitionKNumNodes)
+
+            print(
+                f"Iteration {i+1}\tcut:\t{cut}\trelcut:\t{relcut:.2f}\tbalance:\t{balance:.2f}\tswaps:{swaps}\tCH-Balance:{coreHaloBalance:.2f}\t\tLargest CH:{np.max(coreHaloSize)}"
+            )
+
+    for i in range(numMitRuns):
+        cut, nodeIPartition, cutsIK, partitionKNumNodes = do_mitigate_large_partitions(
+            k,
+            nodeIDegree,
+            nodeIConnections,
+            nodeIPartition,
+            cutsIK,
+            partitionKNumNodes,
+            coreHaloSize,
+        )
+        haloK, partitionKNumHalo = get_core_halo(
+            nodeIPartition, nodeIConnections, nodeIDegree, k
+        )
+        coreHaloSize = partitionKNumHalo + partitionKNumNodes
+
+        if verbosity > 0 and i == 0:
+            print("Beginning Routine to Mitigate large C+H Partitions")
+            relcut = cut / np.sum(nodeIDegree)
+            balance = get_balance_from_partition_sizes(partitionKNumNodes)
+            print(
+                f"Iteration {i+1}\tcut:\t{cut}\trelcut:\t{relcut:.2f}\tbalance:\t{balance:.2f}\tswaps:{swaps}\tCH-Balance:{coreHaloBalance:.2f}\t\tLargest CH:{np.max(coreHaloSize)}"
+            )
+        elif verbosity > 0:
+            relcut = cut / np.sum(nodeIDegree)
+            balance = get_balance_from_partition_sizes(partitionKNumNodes)
+            print(
+                f"Iteration {i+1}\tcut:\t{cut}\trelcut:\t{relcut:.2f}\tbalance:\t{balance:.2f}\tswaps:{swaps}\tCH-Balance:{coreHaloBalance:.2f}\t\tLargest CH:{np.max(coreHaloSize)}"
+            )
+
+    if visualize:
+        rngmin = min([np.min(p_k_nNodes0), np.min(partitionKNumNodes)])
+        rngmax = max([np.max(p_k_nNodes0), np.max(partitionKNumNodes)])
+        plt.figure(figsize=(14, 8))
+        plt.yticks([])
+        plt.subplot(2, 2, 1)
+        plt.title("Initial Node Distribution")
+        plt.xlabel("Nodes in Partition")
+        plt.ylabel("Freqency")
+        # plt.plot(list(range(k)), p_k_nNodes0)
+        plt.hist(
+            p_k_nNodes0,
+            range=(rngmin, rngmax),
+            rwidth=0.85,
+            color="blue",
+            edgecolor="k",
+        )
+
+        plt.subplot(2, 2, 2)
+        plt.title("Final Node Distribution")
+        plt.xlabel("Nodes in Partition")
+        plt.ylabel("Freqency")
+        plt.hist(
+            partitionKNumNodes,
+            range=(rngmin, rngmax),
+            rwidth=0.85,
+            color="blue",
+            edgecolor="k",
+        )
+        plt.legend()
+
+        plt.subplot(2, 1, 2)
+        plt.title("Partition Sizes (Core and Core+Halo)")
+        plt.ylabel("Number of nodes")
+        plt.xlabel("Partition Number")
+        plt.bar(list(range(k)), coreHaloSize, label="C+H", color="red", edgecolor="k")
+        plt.bar(
+            list(range(k)),
+            partitionKNumNodes,
+            label="Core",
+            color="blue",
+            edgecolor="k",
+        )
+        ch_max = np.max(coreHaloSize)
+        plt.yticks(np.arange(0, ch_max, int(ch_max) / 8))
+        plt.xlim(0, k)
+        plt.legend()
+        plt.show()
+
+    # Gather everything to return partitions/sizes.
+    haloK, partitionKNumHalo = get_core_halo(
+        nodeIPartition, nodeIConnections, nodeIDegree, k
+    )
+    coreHaloSize = haloKNumNodes + partitionKNumNodes
+
+    largestCorePartition = np.max(partitionKNumNodes)
+    largestHaloPartition = np.max(partitionKNumHalo)
+    partitionKCore = np.zeros((k, largestCorePartition))
+    partitionKNumCore = partitionKNumNodes
+
+    # Trim this down
+    partitionKHalo = haloK[:, :largestHaloPartition]
+
+    coreKCounts = np.zeros(k, dtype=np.int32)
+    print("Highest partition number", np.max(nodeIPartition))
+    for i in range(nodeIPartition.shape[0]):
+        # Get node i partition.
+        iK = nodeIPartition[i]
+        # Put node i in partition K's list.
+        partitionKCore[iK,coreKCounts[iK]] = i
+        # Increment count in K.
+        coreKCounts[iK] += 1
+
+    return partitionKCore, partitionKHalo, partitionKNumCore, partitionKNumHalo
+
+
+
+## ========================================================== ##
+## The following three functions are direct copies from the 
+## graph_partition.py file and completely unchanged for 
+## consistency's sake.
+
+## Metis partition
+# @brief This will partition the graph according to the Metis method.
+# Details about the metis method can be find in
+# <a href="http://glaros.dtc.umn.edu/gkhome/views/metis">Metis site</a>
 # @param graph Graph to be partition
-# @param nparts Number of total parts
+# @nparts Number of total parts
 # @param verb Verbosity level
 # @return parts Partition containing a "list of parts" where every
 # part is a list of nodes
 #
-def mincut_partition(graph, nparts, verb):
-    # Do a first partition
+def metis_partition(graph, nparts, verb=False):
+    """Partitions using metis"""
+    if metisLib == False:
+        raise ImportError("Consider installing Metis library")
+    if verb:
+        print("\nMetis partition:")
+    nxGraph = get_nx_graph(graph, 1.0)
+    # Metis partition metis call
+    # Metis returns nxParts which is a list of every's part (or "color")
+    # to where they belong. Node "i" belongs to "metisParts[i]" part.
+    edgecuts, metisParts = metis.part_graph(nxGraph, nparts)
+
+    # The next lines will transform from metis to our partition format
+    parts = []
+    for k in range(nparts):
+        parts.append([])
     nnodes = len(graph[:, 0])
+    for k in range(nnodes):
+        parts[metisParts[k]].append(k)
+    if verb:
+        for i in range(nparts):
+            print("part", i, "=", parts[i])
+
+    # plot_graph(nxGraph)
+    return parts
+
+
+## MinCut local partition optimization.
+# @brief This will optimize a given partition based on a mincut algorithm.
+# @param graph Graph to be partition **as adjacency matrix.
+#              FIXME: Make work with format in "get_a_small_graph"
+# @param nparts Number of total parts
+# @param verb Verbosity level
+# @param numSwapRuns (int): Number of runs to flip node partitions
+# @return parts Partition containing a "list of parts" where every
+# part is a list of nodes
+def mincut_partition(graph, nparts, verb, numSwapRuns = 20):
+
+    nodeIDegree = np.sum(graph, axis = 0)
+    # Do a first partition
+    nNodes = len(graph[:, 0])
     parts = regular_partition(graph, nparts, verb)
 
     # Get part indices
-    whichPart = get_parts_indices(parts, nnodes)
-    print(whichPart)
+    nodeIPartition = get_parts_indices(parts, nNodes)
 
     # Evaluate the cut
-    cut = get_cut(whichPart, graph)
-    print("First cut", cut)
+    cut = get_cut(nodeIPartition, graph)
 
     # Evaluate the balancing
-    bal = get_balancing(parts)
-    print("First balance", bal)
+    bal = get_balance_from_partitions(parts)
 
     cutOld = 10**10
-    for i in range(20):
-        # whichPartNew     = do_flips(whichPart,graph)
-        whichPartNew = do_flips_precomp(whichPart, graph, nnodes, nparts, bal=bal)
-        whichPart = whichPartNew
-        cut = get_cut(whichPartNew, graph)
-        bal = get_balance_from_indices(whichPartNew, nparts)
-        print(cut, bal)
+    # Precompute some needed info
+    max_node_degree = int(np.max(nodeIDegree))
+
+    nodeIConnections = np.full((nNodes, max_node_degree), nNodes)
+    for i in range(nNodes):
+        nodeIConnections[i, : nodeIDegree[i]] = np.where(graph[i] == 1)[0]
+
+    partitionKNumNodes = np.zeros(nparts, dtype=int)
+    for i in range(nNodes):
+        iK = nodeIPartition[i]
+        partitionKNumNodes[iK] += 1
+
+    # whichPartNew = do_flips_precomp(whichPart, graph, nNodes, nparts, bal=bal)
+    nodeIConnections = np.full((nNodes, max_node_degree), nNodes)
+    for i in range(nNodes):
+        nodeIConnections[i, : nodeIDegree[i]] = np.where(graph[i] == 1)[0]
+
+    for i in range(numSwapRuns):
+        (cut0,
+         cutsIK,
+         nodeIPartition,
+         partitionKNumNodes,
+         swaps) = do_partition_flips(graph,
+                                     nparts,
+                                     nodeIDegree,
+                                     nodeIConnections,
+                                     nodeIPartition,
+                                     partitionKNumNodes)
+
+        cut = get_cut(nodeIPartition, graph)
+        bal = get_balance(nodeIPartition, nparts)
+        if verb:
+            print(f"Cut: {cut0}, Balance: {bal}")
         if cut == cutOld:
             break
         else:
             cutOld = cut
 
-    parts = get_parts_from_indices(whichPart, nparts)
+    parts = get_parts_from_indices(nodeIPartition, nparts)
+
     return parts
 
 
@@ -357,78 +892,33 @@ def regular_partition(graph, nparts, verb=False):
 
     return parts
 
-
-## Metis partition
-# @brief This will partition the graph according to the Metis method.
-# Details about the metis method can be find in
-# <a href="http://glaros.dtc.umn.edu/gkhome/views/metis">Metis site</a>
-# @param graph Graph to be partition
-# @nparts Number of total parts
-# @param verb Verbosity level
-# @return parts Partition containing a "list of parts" where every
-# part is a list of nodes
+## Get the partition list from the index vector
+# @param whichPart part index vector for every node
+# @param nparts Number of parts
+# @return part Partition list. Every element of the list
+# is a list of node on every part
 #
-def metis_partition(graph, nparts, verb=False):
-    """Partitions using metis"""
-    if metisLib == False:
-        raise ImportError("Consider installing Metis library")
-    if verb:
-        print("\nMetis partition:")
-
-    if(nparts == 1):
-        parts = [[]]
-        parts[0][:] = np.arange(0,len(graph[:,0]),1)
-    else:
-        nxGraph = get_nx_graph(graph, 1.0)
-        # Metis partition metis call
-        # Metis returns nxParts which is a list of every's part (or "color")
-        # to where they belong. Node "i" belongs to "metisParts[i]" part.
-        edgecuts, metisParts = metis.part_graph(nxGraph, nparts)
-
-        # The next lines will transform from metis to our partition format
-        parts = []
-        for k in range(nparts):
-            parts.append([])
-        nnodes = len(graph[:, 0])
-        for k in range(nnodes):
-            parts[metisParts[k]].append(k)
-        if verb:
-            for i in range(nparts):
-                print("part", i, "=", parts[i])
+def get_parts_from_indices(whichPart, nparts):
+    parts = [[] for i in range(nparts)]
+    for i in range(len(whichPart)):
+        partIndex = whichPart[i]
+        parts[partIndex].append(i)
 
     return parts
 
-
-## Get the core and halo indices
-# @brief Gets the halos given a list of cores and a graph
-# @param core list of cores
-# @param graph Graph to extract the halos from
-# @param njumps It will search the halos among the "njumps" nearest neighbors
+## Get partition indices
+# @brief Get a vector indicating which is the part index of a particular
+# node.
+# @param parts Partition containing a "list of parts" where every
+# part is a list of nodes
+# nnodes Number of nodes in the graph.
 #
-def get_coreHaloIndices(core, graph, njumps):
-    coreHalo = core.copy()
-    nc = len(coreHalo)
-    nch = nc
-    nnodes = len(graph[:, 0])
-    nx = np.zeros((nnodes), dtype=bool)
-    nx[:] = False  # Logical mask
+def get_parts_indices(parts, nnodes):
+    whichPart = np.zeros((nnodes), dtype=int)
+    partIndex = -1
+    for part in parts:
+        partIndex = partIndex + 1
+        for node in part:
+            whichPart[node] = partIndex
+    return whichPart
 
-    for k in range(nc):
-        i = coreHalo[k]
-        if i != -1:
-            nx[i] = True
-    # Add halos from graph
-    for jump in range(njumps):
-        nc1 = nch
-        for k in range(nc1):
-            i = coreHalo[k]
-            degI = len(graph[i, :])
-            for kk in range(1, degI):
-                # $$$ also this cycles needs to be interrupted when reaching -1 ???
-                j = graph[i, kk]
-                if (j != -1) & (nx[j] == False):
-                    # print(i,j)
-                    nch = nch + 1
-                    coreHalo.append(j)
-                    nx[j] = True
-    return coreHalo, nc, nch
