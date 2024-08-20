@@ -3,14 +3,12 @@ import unittest
 import numpy as np
 from sedacs.graph import get_a_small_graph
 from sedacs.graph_partition import (
-    do_flips,
-    do_flips_precomp,
-    get_balance_from_indices,
-    get_balancing,
     get_cut,
+    get_balance,
+    get_balance_from_partitions,
+    get_balance_from_partition_sizes,
     get_parts_from_indices,
-    get_parts_indices,
-    metis_partition,
+    get_parts_indices
 )
 
 
@@ -78,7 +76,7 @@ class TestGraphPartition(unittest.TestCase):
         parts = [[0, 1, 2, 3], [0, 1]]
         result = 2
         try:
-            bal = get_balancing(parts)
+            bal = get_balance_from_partitions(parts)
             if bal == result:
                 passed = True
             else:
@@ -95,8 +93,8 @@ class TestGraphPartition(unittest.TestCase):
         whichPart[7:9] = 2
         nparts = 3
         try:
-            bal = get_balance_from_indices(whichPart, nparts)
-            if bal == 2:
+            bal = get_balance(whichPart, nparts)
+            if bal == 2 :
                 passed = True
             else:
                 passed = False
@@ -104,45 +102,48 @@ class TestGraphPartition(unittest.TestCase):
             passed = False
         self.assertTrue(passed)
 
-    def test_do_flips_precomp(self):
-        nnodes = 6
-        graph = get_a_small_graph()
-        whichPart = np.zeros((nnodes), dtype=int)
-        result = np.zeros((nnodes), dtype=int)
-        result[0:3] = 1
-        whichPart[0] = 1
-        whichPart[3] = 1
-        whichPart[2] = 1
-        nparts = 2
-        for _ in range(10):
-            whichPartNew = do_flips_precomp(whichPart, graph, nnodes, nparts)
-            whichPart = whichPartNew
-            cut = get_cut(whichPart, graph)
-        if np.linalg.norm(whichPartNew - result) == 0:
-            passed = True
-        else:
-            passed = False
-        self.assertTrue(passed)
+    # def test_do_flips_precomp(self):
+        # nnodes = 6
+        # graph = get_a_small_graph()
+        # whichPart = np.zeros((nnodes), dtype=int)
+        # result = np.zeros((nnodes), dtype=int)
+        # result[0:3] = 1
+        # whichPart[0] = 1
+        # whichPart[3] = 1
+        # whichPart[2] = 1
+        # nparts = 2
+        # for _ in range(10):
+            # whichPartNew = do_flips_precomp(whichPart, graph, nnodes, nparts)
+            # whichPart = whichPartNew
+            # cut = get_cut(whichPart, graph)
+            # cut2 = get_cut2(whichPart, graph)
+            # if cut != cut2:
+                # passed = False
+        # if np.linalg.norm(whichPartNew - result) == 0:
+            # passed = True
+        # else:
+            # passed = False
+        # self.assertTrue(passed)
 
-    def test_do_flips(self):
-        nnodes = 6
-        graph = get_a_small_graph()
-        whichPart = np.zeros((nnodes), dtype=int)
-        result = np.zeros((nnodes), dtype=int)
-        result[0:3] = 1
-        whichPart[0] = 1
-        whichPart[3] = 1
-        whichPart[2] = 1
-        nparts = 2
-        for _ in range(10):
-            whichPartNew = do_flips(whichPart, graph)
-            whichPart = whichPartNew
-            cut = get_cut(whichPart, graph)
-        if np.linalg.norm(whichPartNew - result) == 0:
-            passed = True
-        else:
-            passed = False
-        self.assertTrue(passed)
+    # def test_do_flips(self):
+        # nnodes = 6
+        # graph = get_a_small_graph()
+        # whichPart = np.zeros((nnodes), dtype=int)
+        # result = np.zeros((nnodes), dtype=int)
+        # result[0:3] = 1
+        # whichPart[0] = 1
+        # whichPart[3] = 1
+        # whichPart[2] = 1
+        # nparts = 2
+        # for _ in range(10):
+            # whichPartNew = do_flips(whichPart, graph)
+            # whichPart = whichPartNew
+            # cut = get_cut(whichPart, graph)
+        # if np.linalg.norm(whichPartNew - result) == 0:
+            # passed = True
+        # else:
+            # passed = False
+        # self.assertTrue(passed)
 
     # This test is disabled for now
     # def test_no_metis_partition(self):

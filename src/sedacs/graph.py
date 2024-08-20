@@ -104,6 +104,8 @@ def get_nx_graph(graph, w):
             if (j != -1) and (j != i):
                 nxGraph.add_edge(i, j, weight=w)
 
+    print("graph", graph)
+    print("nxGraph", nxGraph)
     return nxGraph
 
 
@@ -305,3 +307,55 @@ def get_a_small_graph():
     graph[3, 1] = 4  # Node 3 to 4
     graph[5, 1] = 4  # Node 5 to 4
     return graph
+
+# Get a small graph as an adjacency matrix(>-<)
+# @brief This will construct a small graph for testing purposes.
+# This graph can be is trivially partitioned in two parts
+# @return A 6 nodes graph that can be represented by the following
+# picture:
+#    0        3
+#      \     /
+#       1 - 4
+#      /     \
+#    2        5
+def get_a_small_adjacency_matrix():
+    nnodes = 6
+    graph = np.zeros((nnodes, nnodes), dtype=int)
+
+    # Node 0 to 1, 5
+    graph[0, 1] = 1
+    graph[0, 5] = 1
+
+    # Node 1 to 2, 4 
+    graph[1, 2] = 1
+    graph[1, 4] = 1
+
+    # Node 4 to 3, 5
+    graph[4, 3] = 1
+
+    graph += graph.T
+
+    return graph
+
+# Get a small graph as an adjacency matrix(>-<)
+# @brief This will construct a random adjacency matrix wiht n_nodes.
+# @param n_nodes (int): Number of nodes.
+# @param density (float): Number between 0,1 represneting likelihood of 
+#                   edge connections in the random graph.
+# @param degreeOnDiagonal (bool): Whether or not to put the degree
+#                                 of nodes on the diagonal. 0 if False.
+# @return np.ndarray(n_nodes, n_nodes) of adjacency matrix.
+def get_random_adjacency_matrix(n_nodes, density = .1, degreeOnDiagonal = False):
+    gRaw = np.random.random((n_nodes, n_nodes))
+    gBool = ((gRaw + gRaw.T)/2) < density
+    gInt = gBool.astype(int)
+    np.fill_diagonal(gInt, 0)
+
+    assert np.all(gInt == gInt.T)
+
+    if degreeOnDiagonal:
+        diag = np.sum(gInt, axis = 0)
+        np.fill_diagonal(gInt, diag)
+
+    return gInt
+

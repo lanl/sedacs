@@ -137,22 +137,27 @@ class TestReaders(unittest.TestCase):
         coordsRef[5, :] = [5.800, 13.641, 12.091]
         typesRef = np.zeros((6), dtype=int)
         typesRef[:] = [0, 1, 1, 0, 1, 1]
+        latVecsRef = np.array([31.23, 31.23, 31.23])
         symbRef = ["O", "H"]
         file = "test_pdb.pdb"
         with open(file, "w") as f:
             f.write(pdb_file_content)
         try:
-            _, symbols, types, coords = read_pdb_file(file, lib=None, verb=False)
+            latVecs, symbols, types, coords = read_pdb_file(file, lib=None, verb=False)
+            latVecsTest = np.array([latVecs[0,0], latVecs[1,1], latVecs[2,2]])
             if symbols != symbRef:
                 passed = False
             if not np.allclose(coords, coordsRef):
                 passed = False
             if not np.allclose(types, typesRef):
                 passed = False
+            if not np.allclose(latVecsTest, latVecsRef):
+                passed = False
+
         except Exception:
             passed = False
 
-        self.assertTrue(passed)
+        self.assertTrue(passed, msg=latVecs)
 
     def test_write_pdb_coordinates(self):
         passed = True
