@@ -8,8 +8,8 @@ from sedacs.hamiltonian import get_hamiltonian
 from sedacs.density_matrix import get_density_matrix
 from sedacs.file_io import write_pdb_coordinates, write_xyz_coordinates
 from sedacs.mpi import collect_and_sum_matrices
-from sedacs.system import System, extract_subsystem
-from sedacs.coulombic import get_coulvs
+from sedacs.system import System, extract_subsystem, get_hindex
+from sedacs.coulombic import get_coulvs, build_coul_ham
 from sedacs.charges import get_charges, collect_charges
 from sedacs.message import status_at, error_at, warning_at
 from sedacs.mixer import diis_mix
@@ -52,14 +52,21 @@ def get_singlePoint_charges(sdc, eng, rank, numranks, comm, parts, partsCoreHalo
         tic = time.perf_counter()
 
         ham0 = get_hamiltonian(eng, subSy.coords, subSy.types, subSy.symbols, verbose=False)
-        ham = ham0 + np.diag(sy.coulvs[partsCoreHalo[partIndex]])
+        
+        #Get some electronic structure elements for the sybsystem 
+        #This could eventually be computed in the engine if no basis set is 
+        #provided in the SEDACS inut file.
+        subSy.norbs, subSy.orbs, subSy.hindex, subSy.numel = get_hindex(sdc.orbs, subSy.symbols, subSy.types,verb=True)
+
+        ham = build_coul_ham(ham0,sy.coulvs[partsCoreHalo[partIndex]],False,subSy.hindex,overlap=None,verb=True)
+
         toc = time.perf_counter()
         print("Time for get_hamiltonian", toc - tic, "(s)")
         norbs = subSy.nats
         occ = int(float(norbs) / 2.0)  # Get the total occupied orbitals
         tic = time.perf_counter()
         rho = get_density_matrix(eng,occ,ham,verbose=False)
-        chargesInPart = get_charges(rho,parts[partIndex],verb=True)
+        chargesInPart = get_charges(rho,parts[partIndex],subSy.hindex,overlap=None,verb=True)
         print("TotalCharge in part",partIndex,sum(chargesInPart))
         print("Charges in part",chargesInPart)
         
@@ -72,7 +79,6 @@ def get_singlePoint_charges(sdc, eng, rank, numranks, comm, parts, partsCoreHalo
 
         chargesOnRank = collect_charges(chargesOnRank,chargesInPart,parts[partIndex],sy.nats,verb=True)
 
-                
 
     if is_mpi_available:
         fullGraphRho = collect_and_sum_matrices(graphOnRank, rank, numranks, comm)
