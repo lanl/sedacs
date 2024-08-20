@@ -38,7 +38,7 @@ __all__ = [
     "RandomNumberGenerator",
     "get_random_coordinates",
     "get_hamiltonian_proxy",
-    "get_density_matrix",
+    "get_density_matrix_proxy",
     "get_density_matrix_gpu",
 ]
 
@@ -117,13 +117,47 @@ def get_random_coordinates(nats):
 #
 # @param coords Position for every atoms. z-coordinate of atom 1 = coords[0,2]
 # @param types Index type for each atom in the system. Type for first atom = type[0] (not used yet)
-# @return H 2D numpy array of Hamiltonian elements
+# @return ham 2D numpy array of Hamiltonian elements
 # @param verb Verbosity. If True is passed, information is printed
 #
-def get_hamiltonian_proxy(coords, atomTypes=np.zeros((1), dtype=int), verb=False):
+def get_hamiltonian_proxy(coords, atomTypes, symbols, verb=False):
     """Construct simple toy s-Hamiltonian"""
-    N = len(coords[:, 1])
-    Nocc = int(N / 4)
+
+
+    #This is mimicking what a code will have internally
+    symbols_internal = np.array([ "Bl" ,
+          "H" ,          "He" ,
+          "Li" ,         "Be" ,   "B" ,          "C" ,          "N" ,          "O" ,      "F" ,                  \
+          ], dtype=str)
+    numel_internal = np.zeros(len(symbols_internal),dtype=int)
+    numel_internal[:] = 0,   \
+          1 ,       2 ,  \
+          1 ,       2 ,   3 ,        4 ,       5 ,    6 ,   7 ,
+  
+    bas_per_atom = np.zeros(len(symbols_internal),dtype=int)
+    bas_per_atom[:] = 0,   \
+          1 ,       1 ,\
+          4 ,       4,   4,        4 ,       4,       4,    4,
+  
+  
+    nats  = len(coords[:,0])
+    numel = 0
+
+    # Map symbols to indices in symbols_internal
+    symbol_to_index = {symbol: idx for idx, symbol in enumerate(symbols_internal)}
+  
+    # Translate `symbols` to `symbols_internal` indices
+    mapped_indices = np.array([symbol_to_index[symbol] for symbol in symbols])
+  
+    # Convert atomTypes to `symbols_internal` indices
+    atom_internal_indices = mapped_indices[atomTypes]
+  
+    # Sum the corresponding values in bas_per_atom and numel_internal
+    norbs = np.sum(bas_per_atom[atom_internal_indices])
+    numel = np.sum(numel_internal[atom_internal_indices])
+
+
+    nocc = int(numel/2.0)
     eps = 1e-9
     decay_min = 0.1
     m = 78
@@ -134,23 +168,29 @@ def get_hamiltonian_proxy(coords, atomTypes=np.zeros((1), dtype=int), verb=False
     b = 1.927947
     d = 3.386142
     y = 2.135545
-    H = np.zeros((N, N))
+    ham = np.zeros((norbs, norbs))
     if verb:
         print("Constructing a simple Hamiltonian for the full system")
-    cnt = 0
-    for i in range(0, N):
-        x = (a * x + c) % m  # Hamiltonian parameters
-        y = (b * y + d) % n
-        for j in range(i, N):
-            dist = np.linalg.norm(coords[i, :] - coords[j, :])
-            tmp = (x / m) * np.exp(-(y / n + decay_min) * (dist**2))
-            H[i, j] = tmp
-            H[j, i] = tmp
-    return H
+    colsh = 0
+    rowsh = 0
+    for i in range(0, nats):
+        for ii in range(bas_per_atom[atom_internal_indices[i]]):
+            x = (a * x + c) % m  # Hamiltonian parameters
+            y = (b * y + d) % n
+            colsh = 0
+            for j in range(i, nats):
+                for jj in range(bas_per_atom[atom_internal_indices[j]]):
+                    dist = np.linalg.norm(coords[i, :] - coords[j, :])
+                    tmp = (x / m) * np.exp(-(y / n + decay_min) * (dist**2))
+                    print("cr",i,ii,j,jj,colsh,rowsh,norbs,nats)
+                    ham[rowsh, colsh] = tmp
+                    ham[colsh, rowsh] = tmp
+                    colsh = colsh + 1
+            rowsh = rowsh + 1
+    return ham
 
 
-sedacs.interface_modules.get_hamiltonian_proxy = get_hamiltonian_proxy
-
+sedacs.driver.get_hamiltonian = get_hamiltonian_proxy
 
 ## Computes the Density matrix from a given Hamiltonian.
 # @author Anders Niklasson
@@ -158,33 +198,83 @@ sedacs.interface_modules.get_hamiltonian_proxy = get_hamiltonian_proxy
 # \f[ \rho  =  \sum^{nocc} v_k v_k^T \f]
 # where \f$ v_k \f$ are the eigenvectors of the matrix \f$ H \f$
 #
-# @param H Hamiltonian matrix
-# @param Nocc Number of occupied orbitals
+# @param ham Hamiltonian matrix
+# @param nocc Number of occupied orbitals
 # @param verb Verbosity. If True is passed, information is printed.
 #
-# @return D Density matrix
+# @return rho Density matrix
 #
-def get_density_matrix(H, Nocc, verb=False):
+def get_density_matrix_proxy(ham, nocc, verb=False):
     """Calcualted the full density matrix from H"""
     if verb:
         print("Computing the Density matrix")
-    E, Q = sp.eigh(H)
-    N = len(H[:, 0])
-    homoIndex = Nocc - 1
-    lumoIndex = Nocc
+    E, Q = sp.eigh(ham)
+    norbs = len(ham[:, 0])
+    homoIndex = nocc - 1
+    lumoIndex = nocc
     mu = 0.5 * (E[homoIndex] + E[lumoIndex])
-    D = np.zeros((N, N))
+    rho = np.zeros((norbs, norbs))
     if verb:
         print("Eigenvalues of H:", E)
-    for i in range(N):
+    for i in range(norbs):
         if E[i] < mu:
-            D = D + np.outer(Q[:, i], Q[:, i])
+            rho = rho + np.outer(Q[:, i], Q[:, i])
     if verb:
         print("Chemical potential = ", mu)
-    return D
+    return rho
 
 
-sedacs.driver.get_density_matrix = get_density_matrix
+sedacs.driver.get_density_matrix = get_density_matrix_proxy
+
+
+
+def get_density_matrix_T(H, Nocc, Tel, mu0, coreSize, core_ham_dim, S=None, verb=False):
+  
+  kB = 8.61739e-5 # eV/K, kB = 6.33366256e-6 Ry/K, kB = 3.166811429e-6 Ha/K, #kB = 3.166811429e-6 #Ha/K
+  if(verb): print("Computing the renormalized Density matrix")
+
+  if S is not None:
+    E_val,Q = scipy.linalg.eigh(H) ### need S? not ones with S $$$
+  else:
+    E_val,Q = np.linalg.eigh(H)
+  N = len(H[:,0])
+
+  #print('Q\n', Q[:,0])
+
+  homoIndex = Nocc - 1
+  lumoIndex = Nocc
+  print('HOMO, LUMO:', E_val[homoIndex], E_val[lumoIndex])
+  mu_test = 0.5*(E_val[homoIndex] + E_val[lumoIndex]) #don't need it 
+  print(N, Nocc,)
+  print('!!!! mu test:\n', mu_test)
+
+  # use mu0 as a guess
+
+  OccErr = 1.0
+  beta = 1./(kB*Tel)
+  f = np.array([])
+  for i in range(N):
+     f_i = 1/(np.exp(beta*(E_val[i] - mu0)) + 1) # save fi to f
+     f = np.append(f,f_i)
+     #Occ = Occ + f_i*E_occ[i,k]
+
+
+  D = sum(np.outer(Q[:, i],Q[:, i]*f[i]) for i in range(Nocc))*2
+  #np.savetxt('co2_32_dm.txt',D)
+
+
+  # rho = Q@f_vector@Q.T
+  # or
+  # rho_ij = SUM_k Q_ik * f_kk * Q_jk
+
+
+  print('core_ham_dim', core_ham_dim)
+  dVals = np.array([])
+  for i in range(N):
+    dVals = np.append(dVals, np.inner(Q[:core_ham_dim,i],Q[:core_ham_dim, i]))
+
+  return D, E_val, dVals
+
 
 
 ## Computes the Density matrix from a given Hamiltonian.
@@ -218,6 +308,9 @@ def get_density_matrix_gpu(H, N, Nocc, lib, verb=False):
     dm = gpu.dmMLSP2(H, D, N, Nocc, lib)
     return D
 
+
+## Get TB forces from H and D
+# \brief Get TB forces from H and D
 
 ## Main program for proxy a
 # \brief It will read the number of atoms, contruct

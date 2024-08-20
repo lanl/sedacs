@@ -61,7 +61,7 @@ __all__ = [
 # @brief To be used only when really needed!
 #
 class System:
-    """A prototype for the system type."""
+    """The system type."""
 
     def __init__(self, nats=1):
         ## Number of atoms
@@ -69,7 +69,7 @@ class System:
         ## Number of core atoms
         self.ncores = self.nats
         ## Number of atom types
-        self.ntypes = nats
+        self.ntypes = 0
         ## Type for each atom, e.g., the first atom is of type "types[0]"
         self.types = np.zeros(self.nats, dtype=int)
         ## Coordinates for each atom, e.g., z-coordinate of the frist atom is coords[0,2]
@@ -81,10 +81,14 @@ class System:
         self.latticeVectors = np.zeros((3, 3), dtype=float)
         ## Symbols for each atom type, e.g, the element symbol of the first atom is symbols[types[0]]
         self.symbols = PeriodicTable().symbols[self.types]
-        ## Number of atomic orbital for each type
-        self.orbs = np.ones(self.nats, dtype=int)
         ## Coulombic potentials
         self.coulvs = np.zeros(self.nats, dtype=int)
+        ## Number of orbitals
+        self.norbs = 0
+        ## Number of atomic orbital for each type
+        self.orbs = np.zeros(self.ntypes)
+        ## Orbital indices. The orbital indices for atom i goes from `hindex[i]` to `hindex[i+1]-1`
+        self.hindex = None 
 
     def print_summary(self):
         s = """nats = {nats}
@@ -995,18 +999,59 @@ def build_nlist(coords_cart, latticeVectors, rcut, rank=0, numranks=1, verb=Fals
 # @param types Index type for each atom in the system. Type for first atom = type[0]
 # @return norbs Total number of orbitals
 # @return hindex Orbital index for each atom in the system
-# @todo Add test!
+# @retunn numel Total number of electrons
 #
-def get_hindex(orbs, symbols, types, verb=False):
+def get_hindex(orbs_for_every_symbol, symbols, types, verb=False):
     nats = len(types[:])
+    ntypes = len(symbols)
     hindex = np.zeros((nats + 1), dtype=int)
+    norbs = 0
+    ptable = PeriodicTable()
+    numel = 0
+    verb = True
+
+    norbs_for_every_type = np.zeros((ntypes),dtype=int)
+    numel_for_every_type = np.zeros((ntypes),dtype=int)
+
+    cnt = 0
+    for symbol in symbols:
+        atomic_number = ptable.get_atomic_number(symbol)
+        try:
+            norbs_for_atom = orbs_for_every_symbol[symbol]
+        except:
+            #If there is no specified basis set we default econftb in ptable
+            econftb = ptable.econftb[atomic_number]
+            if(econftb == "s"):
+                norbs_for_atom = 1 #1(s)
+            elif(econftb == "sp"):
+                norbs_for_atom = 4 #1(s) + 3(p)
+            elif(econftb == "spd"):
+                norbs_for_atom = 10 #2(s) + 3(p) + 5(d)
+            elif(econftb == "spdf"):
+                norbs_for_atom = 17 #2(s) + 3(p) + 5(d) + 7(f)
+
+            msg = "No number of orbitals provided for species " + symbol \
+                    +", Using maxbonds in periodic table instead"
+            warning_at("get_hindex",msg)
+        try:
+            numel_for_atom = valency[symbols]
+        except:
+            numel_for_atom = ptable.numel[atomic_number]
+            msg = "No number of valence electrons provided for species " + symbol \
+                    +", Using numel in periodic table instead"
+            warning_at("get_hindex",msg)
+        norbs_for_every_type[cnt] = norbs_for_atom
+        numel_for_every_type[cnt] = numel_for_atom
+        if verb:
+            print("type,symb,orb,valence",cnt, symbol,norbs_for_atom,numel_for_atom)
+        cnt += 1
+
     norbs = 0
     for i in range(nats):
         hindex[i] = norbs
-        norbs = norbs + orbs[symbols[types[i]]]
-        if verb:
-            print("index,type,symb,orb", i, types[i], symbols[types[i]], orbs[symbols[types[i]]])
-
+        norbs_for_atom = norbs_for_every_type[types[i]]        
+        norbs = norbs + norbs_for_atom
+    
     hindex[nats] = norbs
-
-    return norbs, hindex
+   
+    return norbs,norbs_for_every_type,hindex,numel

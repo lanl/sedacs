@@ -170,6 +170,7 @@ def collect_graph_from_rho(graph, rho, thresh, nnodes, maxDeg, indices, hindex=N
     nats = len(indices)
     weights = np.zeros((nnodes))
     ki = 0
+
     for i in range(nats):
         ii = indices[i]
         # Recovering the connections we already have
@@ -194,9 +195,9 @@ def collect_graph_from_rho(graph, rho, thresh, nnodes, maxDeg, indices, hindex=N
         for jj in range(nnodes):  # $$$ ??? this cycle could be interrupted ???
             if (ii != jj) and (weights[jj] >= thresh):
                 k = k + 1
-                graph[ii, k] = jj
                 if k >= maxDeg + 1:
                     raise ValueError(f"Max Degree parameter is too small: {maxDeg}")
+                graph[ii, k] = jj
 
         graph[ii, 0] = k
 

@@ -21,3 +21,5 @@ print("!!!", graphNL[0], graphNL.shape)
 
 # Perform a graph-adaptive calculation of the density matrix
 get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL)
+
+

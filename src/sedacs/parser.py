@@ -42,6 +42,8 @@ class Input:
         self.field = self.get_a_npFloatVect("Field=", np.zeros((3)), keyVals, validKeys, verb)
         ## Number of orbitals
         self.orbs = self.get_a_dict("Orbitals=", {"Bl": 1}, keyVals, validKeys, verb)
+        ## Valency per atom type
+        self.valency = self.get_a_dict("Valency=",{"Bl":1},keyVals,validKeys,verb)
         ## Number of adaptive graph iterations
         self.numAdaptIter = self.get_an_int("NumAdaptiveIter=", 1, keyVals, validKeys, verb)
         ## Engine interface type

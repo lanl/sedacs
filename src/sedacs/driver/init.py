@@ -105,8 +105,9 @@ def init(args):
     sy.nats = len(sy.coords[:, 0])
     sy.vels = np.zeros((sy.nats, 3))
 
-    # Get hindex, the orbital index for each atom in the system
-    sy.norbs, hindex = get_hindex(sdc.orbs, sy.symbols, sy.types)
+    # Get hindex (the orbital index for each atom in the system)
+    sy.norbs, sy.orbs, hindex, sy.numel = get_hindex(sdc.orbs, sy.symbols, sy.types)
+    
 
     tic = time.perf_counter()
     if(sy.nats > 100): 
