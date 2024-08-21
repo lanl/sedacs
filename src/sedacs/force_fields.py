@@ -6,23 +6,23 @@ So far: Harmonic ffields.
 
 import numpy as np
 
-from sedacs.message import sdc_error_at, sdc_status_at
+from sedacs.message import error_at, status_at
 
 __all__ = ["get_classical_forces", "harmonic_potential"]
 
 
 def get_classical_forces(coords, types, symbols, latticeVectors, nl, nlTrX, nlTrY, nlTrZ, fFieldName, verb=False):
     if verb:
-        sdc_status_at("get_sdc_classical_force")
+        status_at("get_sdc_classical_force")
     if fFieldName == "HarmonicAll":
         return harmonic_potential(coords, nl, nlTrX, nlTrY, nlTrZ, verb=False)
 
-    sdc_error_at("get_sdc_classical_force", message="No valid force filed name")
+    error_at("get_sdc_classical_force", message="No valid force filed name")
 
 
 def harmonic_potential(coords, nl, nlTrX, nlTrY, nlTrZ, verb=False):
     if verb:
-        sdc_status_at("harmonic_potential")
+        status_at("harmonic_potential")
 
     # Get the forces on each atom
     nats = len(coords[:, 0])
@@ -32,9 +32,9 @@ def harmonic_potential(coords, nl, nlTrX, nlTrY, nlTrZ, verb=False):
     for i in range(nats):
         for j in range(1, nl[i, 0] + 1):
             jj = nl[i, j]
-            jjX = coords[jj, 0] + nlTrX[i, j]
-            jjY = coords[jj, 1] + nlTrY[i, j]
-            jjZ = coords[jj, 2] + nlTrZ[i, j]
+            jjX = coords[jj, 0] + nlTrX[j]
+            jjY = coords[jj, 1] + nlTrY[j]
+            jjZ = coords[jj, 2] + nlTrZ[j]
 
             dVect[0] = coords[i, 0] - jjX
             dVect[1] = coords[i, 1] - jjY

@@ -4,8 +4,8 @@ clean:
 	rm -rf _build
 
 doxygen:
-	doxygen source-doxygen/Doxyfile
-	cd ../../_build/doxygen/latex && make && cp refman.pdf ../../sedacs-doxygen.pdf
+	doxygen source/doxygen/Doxyfile
+	cd _build/doxygen/latex && make && cp refman.pdf ../../sedacs-doxygen.pdf
 
 sphinx:
 	cp ../README.md source/sphinx/

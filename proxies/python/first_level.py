@@ -4,6 +4,8 @@ A prototype engine that:
     - Constructs a set of random coordinates
     - Constructs a simple Hamiltonian
     - Computes the Density matrix from the Hamiltonian
+    - Computes atomic Mulliken charges 
+    - Computes TB + coulombic forces
 """
 
 import os
@@ -40,6 +42,8 @@ __all__ = [
     "get_hamiltonian_proxy",
     "get_density_matrix_proxy",
     "get_density_matrix_gpu",
+    "get_charges_proxy",
+    "get_forces_proxy",
 ]
 
 
@@ -110,21 +114,22 @@ def get_random_coordinates(nats):
     return coords
 
 
-## Computes a Hamiltonian based on a single "s-like" orbitals per atom.
+## Computes a Hamiltonian based on exponential decay of orbital couplings.
 # @author Anders Niklasson
 # @brief Computes a hamiltonian \f$ H_{ij} = (x/m)\exp(-(y/n + decay_{min}) |R_{ij}|^2))\f$, based on distances
 # \f$ R_{ij} \f$. \f$ x,m,y,n,decay_{min} \f$ are fixed parameters.
 #
 # @param coords Position for every atoms. z-coordinate of atom 1 = coords[0,2]
-# @param types Index type for each atom in the system. Type for first atom = type[0] (not used yet)
-# @return ham 2D numpy array of Hamiltonian elements
+# @param atomTypes Index type for each atom in the system. Type for first atom = type[0] (not used yet)
+# @param symbols Symbols for every atom type.
 # @param verb Verbosity. If True is passed, information is printed
+# @return ham 2D numpy array of Hamiltonian elements
 #
-def get_hamiltonian_proxy(coords, atomTypes, symbols, verb=False):
+def get_hamiltonian_proxy(coords, atomTypes, symbols, verb=False, get_overlap=False):
     """Construct simple toy s-Hamiltonian"""
 
 
-    #This is mimicking what a code will have internally
+    #Internal periodic table for the code
     symbols_internal = np.array([ "Bl" ,
           "H" ,          "He" ,
           "Li" ,         "Be" ,   "B" ,          "C" ,          "N" ,          "O" ,      "F" ,                  \
@@ -169,6 +174,8 @@ def get_hamiltonian_proxy(coords, atomTypes, symbols, verb=False):
     d = 3.386142
     y = 2.135545
     ham = np.zeros((norbs, norbs))
+    if(get_overlap):
+        over = np.zeros((norbs, norbs))
     if verb:
         print("Constructing a simple Hamiltonian for the full system")
     colsh = 0
@@ -181,14 +188,20 @@ def get_hamiltonian_proxy(coords, atomTypes, symbols, verb=False):
             for j in range(i, nats):
                 for jj in range(bas_per_atom[atom_internal_indices[j]]):
                     dist = np.linalg.norm(coords[i, :] - coords[j, :])
-                    tmp = (x / m) * np.exp(-(y / n + decay_min) * (dist**2))
-                    print("cr",i,ii,j,jj,colsh,rowsh,norbs,nats)
+                    tmp = np.exp(-(y / n + decay_min) * (dist**2))
+                    if(get_overlap):
+                        over[rowsh,colsh] = tmp
+                        over[colsh,rowsh] = tmp
+                    
+                    tmp = (x/m)*tmp 
                     ham[rowsh, colsh] = tmp
                     ham[colsh, rowsh] = tmp
                     colsh = colsh + 1
             rowsh = rowsh + 1
-    return ham
-
+    if(get_overlap):
+        return ham, over
+    else:
+        return ham
 
 sedacs.driver.get_hamiltonian = get_hamiltonian_proxy
 
@@ -227,7 +240,8 @@ def get_density_matrix_proxy(ham, nocc, verb=False):
 sedacs.driver.get_density_matrix = get_density_matrix_proxy
 
 
-
+## Computes the finite temperature density matrix
+# \param 
 def get_density_matrix_T(H, Nocc, Tel, mu0, coreSize, core_ham_dim, S=None, verb=False):
   
   kB = 8.61739e-5 # eV/K, kB = 6.33366256e-6 Ry/K, kB = 3.166811429e-6 Ha/K, #kB = 3.166811429e-6 #Ha/K
@@ -276,7 +290,6 @@ def get_density_matrix_T(H, Nocc, Tel, mu0, coreSize, core_ham_dim, S=None, verb
   return D, E_val, dVals
 
 
-
 ## Computes the Density matrix from a given Hamiltonian.
 # @author Josh Finkelstein
 # @brief This will create a "zero-temperature" Density matrix \f$ \rho \f$
@@ -308,9 +321,87 @@ def get_density_matrix_gpu(H, N, Nocc, lib, verb=False):
     dm = gpu.dmMLSP2(H, D, N, Nocc, lib)
     return D
 
+def get_charges_proxy(density_matrix,ncores,hindex,overlap=None,verb=False):
+    if(verb):
+        status_at("get_charges","Getting charges from density matrix")
 
-## Get TB forces from H and D
-# \brief Get TB forces from H and D
+    fullDiag = np.diag(density_matrix)
+    charges = np.zeros((ncores))
+
+    if(overlap is None):
+        for i in range(ncores):
+            for ii in range(hindex[i],hindex[i+1]):
+                charges[i] = charges[i] + (1.0 - fullDiag[ii])
+    else:
+        pass
+
+    if(verb):
+        msg = "Total Charge for part= " + str(sum(charges))
+        status_at("get_charges",msg)
+
+    return charges
+
+
+## Get TB forces
+# \brief Get TB and Coulombic forces from the Hamiltonian, Density matrix
+# and charges.
+# \param ham Hamiltonian Matrix 
+# \param rho Density Matrix 
+# \param field External field 
+# \param coords Coordinates 
+# \param atomTypes Atomic types 
+# \param Symbols Atomic symbols for every type.
+##
+def get_tb_forces(ham, rho, charges, field, coords, atomTypes,symbols):
+
+    nats = len(coords[:,0])
+    forces = np.zeros((nats,3))
+    forces_coul = np.zeros((nats,3))
+    forces_field = np.zeros((nats,3))
+    forces_band = np.zeros((nats,3))
+    dl = 0.0001
+    coordsp = np.zeros((nats,3))
+    coordsm = np.zeros((nats,3))
+    ham = get_hamiltonian_proxy(coords,atomTypes,symbols,verb=False)
+    vaux = np.ones((nats))
+    vaux[:] = 0.5
+    rho0 = np.diag(vaux)
+
+    for i in range(len(ham[:,0])):
+
+        #Band Forces from tr(rho dH/dr)
+        for k in range(3):
+            coordsp[:,:] = coords[:,:]
+            coordsp[i,k] = coords[i,k] + dl
+            hamp = get_hamiltonian_proxy(coordsp,atomTypes,symbols,verb=False)
+            #Hmu = get_pert(field,coordsp,nats)
+            #Hp[:,:] = Hp[:,:] + Hmu[:,:]
+
+            coordsm[:,:] = coords[:,:]
+            coordsm[i,k] = coords[i,k] - dl
+            hamm = get_hamiltonian_proxy(coordsm,atomTypes,symbols,verb=False)
+            #Hmu = get_pert(field,coordsm,nats)
+            #Hm[:,:] = Hm[:,:] + Hmu[:,:]
+
+            dHdx = (hamp - hamm)/(2*dl)
+            aux = 2*np.matmul(rho-rho0,dHdx)
+            forces_band[i,k] = np.trace(aux)
+            print("dHdx",dHdx)
+
+        #Coulombic Forces
+        for j in range(len(ham[:,0])):
+            if(i != j):
+                distance =  np.linalg.norm(coords[i,:] - coords[j,:])
+                direction = (coords[i,:] - coords[j,:])/distance
+                #F_coul[i,:] = F_coul[i,:] - (14.3996437701414*1.0*direction*q[i]*q[j])/(distance**2)
+                forces_coul[i,:] = forces_coul[i,:] - (1.0*direction*charges[i]*charges[j])/(distance**2)
+
+        #Field forces 
+        #forces_field[i,:] = forces_field[i,:] + field*charges[i]
+
+    forces[:,:] = - ( forces_band[:,:] + forces_coul[:,:] + forces_field[:,:])
+    return forces
+
 
 ## Main program for proxy a
 # \brief It will read the number of atoms, contruct
@@ -327,15 +418,23 @@ if __name__ == "__main__":
 
     verb = True
     coords = get_random_coordinates(nats)
+    atomTypes = np.zeros((nats),dtype=int)
+    symbols = []*nats 
+    symbols[:] = "H"
 
-    H = get_hamiltonian_proxy(coords)
+    ham = get_hamiltonian_proxy(coords,atomTypes,symbols)
 
-    gpuLibIn = True  ## need to pass from input file or command line
+    gpuLibIn = False  ## need to pass from input file or command line
     occ = int(float(nats) / 2.0)  # Get the total occupied orbitals
 
     if gpuLibIn == False:
         print("Using CPU for DM construction. Consider installing accelerator library...")
-        D = get_density_matrix(H, occ)
-
-    # print("Hamiltonian matrix=",H)
-    # print("Density matrix=",D)
+        rho = get_density_matrix_proxy(ham, occ)
+    npart = len(coords[:,0])
+    hindex = np.arange(npart+1,dtype=int)
+    field = np.zeros(3)
+    charges = get_charges_proxy(rho,npart,hindex,overlap=None,verb=False)
+    forces = get_tb_forces(ham, rho, charges, field, coords, atomTypes,symbols)
+    print("Hamiltonian matrix=",ham)
+    print("Density matrix=",rho)
+    print("Forces=",forces)
