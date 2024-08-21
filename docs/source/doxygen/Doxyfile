@@ -4,9 +4,17 @@
 # Project related configuration options
 #---------------------------------------------------------------------------
 DOXYFILE_ENCODING      = UTF-8
-PROJECT_NAME           = "SEDACS"
-PROJECT_NUMBER         =
-PROJECT_BRIEF          =
+PROJECT_NAME           = SEDACS "SEDACS"
+PROJECT_NUMBER         = 1. 0. 0.
+PROJECT_BRIEF          = "Scalable Ecosys-
+tem, Driver, and Analyzer for Complex
+Chemistry Simulations (SEDACS). The
+SEDACS ecosystem will enable mas-
+sively parallel atomistic simulations that
+can seamlessly integrate with a diverse
+range of available and emerging quan-
+tum chemistry codes at different levels
+of theory."
 PROJECT_LOGO           =
 OUTPUT_DIRECTORY       = ./_build/doxygen/
 CREATE_SUBDIRS         = NO
@@ -41,9 +49,9 @@ SEPARATE_MEMBER_PAGES  = NO
 TAB_SIZE               = 4
 ALIASES                =
 TCL_SUBST              =
-OPTIMIZE_OUTPUT_FOR_C  = NO
+OPTIMIZE_OUTPUT_FOR_C  = YES
 OPTIMIZE_OUTPUT_JAVA   = NO
-OPTIMIZE_FOR_FORTRAN   = NO
+OPTIMIZE_FOR_FORTRAN   = YES
 OPTIMIZE_OUTPUT_VHDL   = NO
 OPTIMIZE_OUTPUT_SLICE  = NO
 EXTENSION_MAPPING      =
@@ -64,7 +72,7 @@ LOOKUP_CACHE_SIZE      = 0
 #---------------------------------------------------------------------------
 # Build related configuration options
 #---------------------------------------------------------------------------
-EXTRACT_ALL            = NO
+EXTRACT_ALL            = YES
 EXTRACT_PRIVATE        = NO
 EXTRACT_PRIV_VIRTUAL   = NO
 EXTRACT_PACKAGE        = NO
@@ -116,7 +124,7 @@ WARN_LOGFILE           =
 #---------------------------------------------------------------------------
 # Configuration options related to the input files
 #---------------------------------------------------------------------------
-INPUT                  = ../driver ../mods ../gpu ../proxya
+INPUT                  = ../src/sedacs/driver ../src/sedacs/ ../gpu ../proxies/fortran ../proxies/C ../proxies/python
 INPUT_ENCODING         = UTF-8
 FILE_PATTERNS          = *.c \
                          *.cc \
