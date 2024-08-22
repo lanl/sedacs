@@ -1,14 +1,14 @@
+THIS_PATH=`pwd`
+METIS_LIB="$HOME/metis-5.1.0/build/Linux-x86_64/libmetis"
+METIS_INC="$HOME/metis-5.1.0/build/Linux-x86_64/include"
+PROGRESS_LIB="$THIS_PATH/qmd-progress/install/"
+PROGRESS_INC="$THIS_PATH/qmd-progress/install/include"
+BML_LIB="$THIS_PATH/bml/install/"
+BML_INC="$THIS_PATH/bml/install/include"
 cd ./qmd-progress/examples/gpmdk/
 rm -rf build
 mkdir build
 cd build
-THIS_PATH=`pwd`
-METIS_LIB="$HOME/metis-5.1.0/build/Linux-x86_64/libmetis"
-METIS_INC="$HOME/metis-5.1.0/build/Linux-x86_64/include"
-PROGRESS_LIB="$THIS_PATH/../../../qmd-progress/install/"
-PROGRESS_INC="$THIS_PATH/../../../qmd-progress/install/include"
-BML_LIB="$THIS_PATH/../../../bml/install/"
-BML_INC="$THIS_PATH/../../../bml/install/include"
 
 # cmake using specified flags:
 # Update the -L flag in "-DEXTRA_FCFLAGS" to point to the location of metis and GKlib libraries
