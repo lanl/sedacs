@@ -27,6 +27,8 @@ class Input:
         ## Coordinates file name
         self.coordsFileName = self.get_a_string("CoordsFile=", "coords.xyz", keyVals, validKeys, verb)
         ## Coordinates file name
+        self.InitGraphType = self.get_a_string("InitGraphType=", "regular", keyVals, validKeys, verb)
+        ## Coordinates file name
         self.partitionType = self.get_a_string("PartitionType=", "regular", keyVals, validKeys, verb)
         ## Max degree for the grpah
         self.maxDeg = self.get_an_int("MaxDeg=", 100, keyVals, validKeys, verb)
@@ -38,12 +40,17 @@ class Input:
         self.thresh = self.get_a_real("Threshold=", 0.0, keyVals, validKeys, verb)
         ## A threshold for the graph
         self.gthresh = self.get_a_real("GraphThreshold=", 0.0, keyVals, validKeys, verb)
+        ## A threshold for the initial graph
+        self.gthreshinit = self.get_a_real("GraphThresholdInit=", 0.0, keyVals, validKeys, verb)
         ## A field read from input
         self.field = self.get_a_npFloatVect("Field=", np.zeros((3)), keyVals, validKeys, verb)
         ## Number of orbitals
         self.orbs = self.get_a_dict("Orbitals=", {"Bl": 1}, keyVals, validKeys, verb)
         ## Valency per atom type
         self.valency = self.get_a_dict("Valency=",{"Bl":1},keyVals,validKeys,verb)
+                ## Electronic temperature 
+        self.Tel = self.get_a_real("Tel=",0.0,keyVals,validKeys,verb)
+
         ## Number of adaptive graph iterations
         self.numAdaptIter = self.get_an_int("NumAdaptiveIter=", 1, keyVals, validKeys, verb)
         ## Engine interface type
@@ -171,7 +178,7 @@ class Input:
     #
     def get_a_bool(self, key, default, keyVals, validKeys, verb=False):
         if key in keyVals.keys():
-            myBool = bool(keyVals[key][0])
+            myBool = eval(keyVals[key][0])
         else:
             myBool = default
         if verb:

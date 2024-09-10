@@ -1,7 +1,7 @@
 from sedacs.geometry import get_mic_distances, get_contact_map
 from sedacs.file_io import read_xyz_file
-import matplotlib.pyplot as plt
-import ase.io, torch, time
+#import matplotlib.pyplot as plt
+#import ase.io, torch, time
 import numpy as np
 from warnings import warn
 
@@ -12,6 +12,11 @@ except ImportError:
     def jit(*args, **kwargs):
         return lambda f: f
     warn("Numba not installed, graph partitioning will be slow for systems above ~5k atoms")
+try:
+    from sklearn.cluster import SpectralClustering
+    SpectralClusteringLib = True 
+except: SpectralClusteringLib = False
+
 
 ##
 # @brief
@@ -30,15 +35,21 @@ DEBUG_LEVEL = 1  # > 0 gives assert statements, > 1 gives print statements.
 # @param verb Verbosity level
 # @return parts Partition containing a "list of parts" where every
 # part is a list of nodes
-def graph_partition(graph, partitionType, nparts, verb=False):
+def graph_partition(eng, graph, partitionType, nparts, coords, verb=False):
     if partitionType == "Regular":
         parts = regular_partition(graph, nparts, verb)
     elif partitionType == "Metis":
         parts = metis_partition(graph, nparts, verb)
     elif partitionType == "MinCut":
         parts = mincut_partition(graph, nparts, verb)
-    return parts
+    elif(partitionType == "SpectralClustering"):
+        parts = spectral_clustering_partition(graph, nparts, coords, do_xyz=True)
 
+    if(eng.interface == "PySEQM"):
+        for i in range(len(parts)):
+            parts[i] = sorted(parts[i])
+
+    return parts
 
 
 ## get_cut
@@ -547,6 +558,69 @@ def get_core_halo(nodeIPartition, nodeIConnections, nodeIDegree, k,
 
     # Compute the core+halo sizes.
 
+## Get the core and halo indices
+# @brief Gets the halos given a list of cores and a graph
+# @param core list of cores 
+# @param graph Graph to extract the halos from
+# @param njumps It will search the halos among the "njumps" nearest neighbors
+#
+def get_coreHaloIndices(eng, core,graph,njumps, *args):
+    coreHalo = core.copy()
+    nc = len(coreHalo)
+    nch = nc
+    nnodes = len(graph[:,0])
+    nx = np.zeros((nnodes),dtype=bool)
+    nx[:] = False # $$$ ??? what is nx ???
+
+    for k in range(nc):
+        i = coreHalo[k]
+        if(i != -1): nx[i] = True
+    #Add halos from graph
+    jump = 0
+    jumps_done_but_looking_for_odd = False
+    while jump < njumps:
+        nc1 = nch 
+        for k in range(nc1):
+            i = coreHalo[k]
+            degI = len(graph[i,:])
+            for kk in range(1, graph[i,0]+1):
+                                      # $$$ also this cycles needs to be interrupted when reaching -1 ???
+                j = graph[i,kk]
+                if   ((j != -1) & (nx[j] == False)) and  jumps_done_but_looking_for_odd == False:
+                    #### $$$ remove later ####
+                    if len(coreHalo) >= 710:
+                        break
+                    ######
+                    nch = nch + 1
+
+                    coreHalo.append(j)
+                    nx[j] = True
+                elif ((j != -1) & (nx[j] == False)) and  jumps_done_but_looking_for_odd:
+                    if (args[0].valency[args[1].symbols[args[1].types[j]]] ) % 2 == 1:
+                        nch = nch + 1
+                        coreHalo.append(j)
+                        #print('APPENDED EXTRA', j)
+                        nx[j] = True
+                        if(eng.interface == "PySEQM"): coreHalo = sorted(coreHalo)
+                        return coreHalo, nc
+        if jump == njumps - 1 and args:
+            num_el = 0
+            for II in range(len(coreHalo)):
+                num_el += args[0].valency[args[1].symbols[args[1].types[coreHalo][II]]]
+            #print('NumAt:', len(coreHalo), 'NumEl:', num_el)
+            if num_el%2 != 0:
+                print('Odd NumEl:', num_el, '. Looking for an extra atom.')
+                jumps_done_but_looking_for_odd = True
+                jump -= 1
+                
+        jump += 1
+            
+                
+    if not jumps_done_but_looking_for_odd:
+        print('\n')
+    
+    if(eng.interface == "PySEQM"): coreHalo = sorted(coreHalo)
+    return coreHalo, nc
 
 ## coords_partition
 # @brief Computes refined graph partitioning from either coordinates or 
@@ -800,6 +874,10 @@ def metis_partition(graph, nparts, verb=False):
 # @return parts Partition containing a "list of parts" where every
 # part is a list of nodes
 def mincut_partition(graph, nparts, verb, numSwapRuns = 20):
+    #np.save('graph_for_robert.npy', graph)
+    #print('saved')
+    #exit()
+    #print(graph)
 
     nodeIDegree = np.sum(graph, axis = 0)
     # Do a first partition
@@ -820,9 +898,18 @@ def mincut_partition(graph, nparts, verb, numSwapRuns = 20):
     max_node_degree = int(np.max(nodeIDegree))
 
     nodeIConnections = np.full((nNodes, max_node_degree), nNodes)
-    for i in range(nNodes):
-        nodeIConnections[i, : nodeIDegree[i]] = np.where(graph[i] == 1)[0]
+    print(nodeIConnections)
 
+    if np.min(graph) < 0:
+        nodeIDegree = np.zeros(nNodes)
+        for i in range(nNodes):
+            firstNonConnection = np.where(graph[i]==-1)[0][0]
+            nodeIConnections[i,:firstNonConnection] = graph[i,:firstNonConnection]
+            nodeIDegree[i] = firstNonConnection
+
+    else:
+        for i in range(nNodes):
+            nodeIConnections[i, : nodeIDegree[i]] = np.where(graph[i] == 1)[0]
     partitionKNumNodes = np.zeros(nparts, dtype=int)
     for i in range(nNodes):
         iK = nodeIPartition[i]
@@ -857,6 +944,122 @@ def mincut_partition(graph, nparts, verb, numSwapRuns = 20):
     parts = get_parts_from_indices(nodeIPartition, nparts)
 
     return parts
+
+## Spectral Clustering partition
+# @brief This will partition a graph according to the Spectral Clustering method
+# @param graph Graph to be partition
+# @param nparts Number of total parts
+# @param verb Verbosity level
+# @return parts Partition containing a "list of parts" where every
+# part is a list of nodes
+#
+
+def spectral_clustering_partition(graph,nparts, coords, do_xyz, max_cluster_size=None, verb=False):
+    if(SpectralClusteringLib == False):
+         print("\n ERROR: Consider installing sklearn.cluster.SpectralClustering library \n")
+         exit(0)
+    if(verb):print("\nSpectral Clustering partition:")
+
+    if do_xyz: # on xyz
+        print('  Computing spectral_clustering_partition on XYZ data.')
+        clustering = SpectralClustering(n_clusters=nparts, affinity="nearest_neighbors",random_state=0,
+                                        n_neighbors=20, n_jobs=32, n_init=20) # or 'rbf' 'nearest_neighbors'
+        cluster_labels = clustering.fit_predict(coords)
+        parts = [np.where(cluster_labels == i)[0].tolist() for i in range(nparts)]
+
+    else: # do on graph
+        numNodes = graph.shape[0]  # Add this line
+        adjacencyList = adjacency_matrix_to_graph(graph)
+        
+        # Convert adjacency list to adjacency matrix
+        adjacencyMatrixGraph = np.zeros((numNodes, numNodes))
+        for i, neighbors in enumerate(adjacencyList):
+            adjacencyMatrixGraph[i, neighbors] = 1
+            adjacencyMatrixGraph[neighbors, i] = 1
+
+        # Convert the adjacency matrix to the Laplacian matrix
+        laplacianMatrix = np.diag(np.sum(adjacencyMatrixGraph, axis=1)) - adjacencyMatrixGraph
+
+        # Calculate the first `nparts` eigenvectors of the Laplacian matrix
+        _, eigenvectors = np.linalg.eigh(laplacianMatrix)
+
+        # Use k-means clustering on the selected eigenvectors
+        clustering = SpectralClustering(n_clusters=nparts, affinity="rbf",random_state=0,
+                                        n_neighbors=20, n_jobs=32, n_init=20) # or 'rbf' 'nearest_neighbors'
+        cluster_labels = clustering.fit_predict(eigenvectors[:, :nparts])
+        parts = [np.where(cluster_labels == i)[0].tolist() for i in range(nparts)]
+
+    # Ensure clusters do not exceed max_cluster_size
+    if max_cluster_size:
+        parts = enforce_max_cluster_size_spectral(parts, adjacencyMatrixGraph, max_cluster_size)
+
+
+    return parts
+
+def adjacency_matrix_to_graph(adjacency_matrix):
+    num_nodes = adjacency_matrix.shape[0]
+    adjacency_list = [adjacency_matrix[i, 1:1 + adjacency_matrix[i, 0]] for i in range(num_nodes)]
+    return adjacency_list
+
+# Function to enforce max cluster size with iterative check for the closest cluster with available space
+def enforce_max_cluster_size_spectral(clusters, adjacency_matrix, max_size):
+    """
+    Enforces a maximum cluster size by recursively applying spectral clustering
+    to clusters that exceed the maximum size.
+    """
+    adjusted_clusters = []
+
+    for cluster in clusters:
+        if len(cluster) > max_size:
+            # Extract subgraph for the oversized cluster
+            subgraph = adjacency_matrix[np.ix_(cluster, cluster)]
+
+            # Recursively apply spectral clustering to split the cluster
+            sub_clusters = recursive_spectral_clustering(subgraph, max_size)
+
+            # Map sub-clusters back to original node indices
+            mapped_sub_clusters = [[cluster[node] for node in sub_cluster] for sub_cluster in sub_clusters]
+            adjusted_clusters.extend(mapped_sub_clusters)
+        else:
+            adjusted_clusters.append(cluster)
+
+    return adjusted_clusters
+
+def recursive_spectral_clustering(subgraph, max_size):
+    """
+    Recursively splits a cluster using spectral clustering until all sub-clusters are within the size limit.
+    """
+    num_nodes = subgraph.shape[0]
+    if num_nodes <= max_size:
+        return [list(range(num_nodes))]
+
+    # Compute the Laplacian matrix for the subgraph
+    laplacianMatrix = np.diag(np.sum(subgraph, axis=1)) - subgraph
+
+    # Compute eigenvectors of the Laplacian matrix
+    _, eigenvectors = np.linalg.eigh(laplacianMatrix)
+
+    # Perform Spectral Clustering
+    clustering = SpectralClustering(n_clusters=2, affinity="nearest_neighbors", random_state=0, n_neighbors=8, n_jobs=16, n_init=40)
+    cluster_labels = clustering.fit_predict(eigenvectors[:, :2])
+
+    # Divide nodes into two clusters
+    cluster1 = np.where(cluster_labels == 0)[0].tolist()
+    cluster2 = np.where(cluster_labels == 1)[0].tolist()
+
+    # Recursively apply to each cluster if they exceed the max size
+    final_clusters = []
+    if len(cluster1) > max_size:
+        final_clusters.extend(recursive_spectral_clustering(subgraph[np.ix_(cluster1, cluster1)], max_size))
+    else:
+        final_clusters.append(cluster1)
+
+    if len(cluster2) > max_size:
+        final_clusters.extend(recursive_spectral_clustering(subgraph[np.ix_(cluster2, cluster2)], max_size))
+    else:
+        final_clusters.append(cluster2)
+
+    return final_clusters
 
 
 ## Regular partition

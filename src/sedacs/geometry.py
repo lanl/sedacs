@@ -1,7 +1,4 @@
 import numpy as np
-import torch
-
-torch.set_default_dtype = torch.float32
 
 ## Minimum Image Convention Distances
 # @brief Builds MIC interatomic distances for periodic systems. Distances in Angstrom.

@@ -1,0 +1,9 @@
+#!/bin/bash
+THIS_PATH=`pwd`
+MOD_PATH=$THIS_PATH/../../../
+#LATTE_PATH=$THIS_PATH/../latte
+PROXYA_PATH=/home/maxim/Projects/SEDACS_1/sedacs
+PROXYA_FORTRAN_PATH=/home/maxim/Projects/SEDACS_1/sedacs/proxies/fortran
+export PYTHONPATH=$PYTHONPATH:$MOD_PATH:$LATTE_PATH:$PROXYA_PATH:$PROXYA_FORTRAN_PATH
+export PYTHONWARNINGS="ignore:Unverified HTTPS request"
+

@@ -7,22 +7,22 @@ import sys
 from sedacs.engine import Engine
 
 # import the shared library
-fortlibFileName = os.environ["PROXYA_FORTRAN_PATH"] + "/proxya_fortran.so"
-pylibFileName = os.environ["PROXYA_PYTHON_PATH"]
-sys.path.append(pylibFileName)
+#fortlibFileName = os.environ["PROXYA_FORTRAN_PATH"] + "/proxya_fortran.so"
+#pylibFileName = os.environ["PROXYA_PYTHON_PATH"]
+#sys.path.append(pylibFileName)
 
 
-try:
-    fortlib = ctypes.CDLL(fortlibFileName)
-    get_hamiltonian_fortran = fortlib.proxya_get_hamiltonian
-    get_density_matrix_fortran = fortlib.proxya_get_density_matrix
-except Exception as e:
-    fortlib = None
-    raise e
+# try:
+#     #fortlib = ctypes.CDLL(fortlibFileName)
+#     get_hamiltonian_fortran = fortlib.proxya_get_hamiltonian
+#     get_density_matrix_fortran = fortlib.proxya_get_density_matrix
+# except Exception as e:
+#     fortlib = None
+#     raise e
 
 try: 
-    from first_level import get_hamiltonian_proxy
-    from first_level import get_density_matrix_proxy
+    from proxies.python.first_level import get_hamiltonian_proxy
+    from proxies.python.first_level import get_density_matrix_proxy
 except Exception as e:
     pythlib = None
     raise e

@@ -163,43 +163,124 @@ def plot_nx_graph(nxGraph, nodeColor="r"):
 # @return graph The graph in 2D numpy array where `graph[i,k]` is the kth neighbor
 # of node i. NOTE: The 0 entry of every row is reserved to store the degree of every node.
 #
-def collect_graph_from_rho(graph, rho, thresh, nnodes, maxDeg, indices, hindex=None, verb=False):
-    rhoDim = len(rho[:, 0])
-    if graph is None:
-        graph = np.zeros((nnodes, maxDeg + 1), dtype=int)
+def collect_graph_from_rho(graph,rho,thresh,nnodes,maxDeg,indices,hindex=None,verb=False):
+   
+    rhoDim = len(rho[:,0])
+    if (graph is None):
+        graph = np.zeros((nnodes,maxDeg+1),dtype=int)
+    
+    #print('graph', graph[11])
     nats = len(indices)
     weights = np.zeros((nnodes))
     ki = 0
-
+    ki_ = 0
+    if type(rho) is not np.ndarray:
+        rho = rho.detach().numpy()
     for i in range(nats):
         ii = indices[i]
-        # Recovering the connections we already have
+        #Recovering the connections we already have
         weights[:] = 0.0
-        for j in range(1, graph[ii, 0]):
-            jj = graph[ii, j]
-            weights[jj] = thresh
 
-        # Computing the new weights by rho
-        for oi in range(hindex[ii], hindex[ii + 1]):
-            kj = 0
-            for j in range(nats):
-                jj = indices[j]
-                for oj in range(hindex[jj], hindex[jj + 1]):
-                    weights[jj] = weights[jj] + abs(rho[ki, kj])
-                    kj = kj + 1
-            ki = ki + 1
+        ###
+        j = np.arange(1, graph[ii,0])
+        weights[graph[ii,j]] = thresh
 
-        # Reasigning the connections to ii by the merged weights (the ones computed
-        # from rho and the ones already existing.
-        k = 0
-        for jj in range(nnodes):  # $$$ ??? this cycle could be interrupted ???
-            if (ii != jj) and (weights[jj] >= thresh):
-                k = k + 1
-                if k >= maxDeg + 1:
-                    raise ValueError(f"Max Degree parameter is too small: {maxDeg}")
-                graph[ii, k] = jj
+        ###
+        ki_old = ki_
+        ki_ = ki_ + hindex[ii+1] - hindex[ii]
+        #print(hindex[ii+1],(rho.shape))
+        ki_ar = np.arange(ki_old, ki_,1)
 
+        kj = 0  # Initialize kj
+        # Precompute the slice lengths for all j
+        slice_lengths = hindex[np.array(indices) + 1] - hindex[indices]
+        
+        # Vectorize the extraction of slices from rho
+        cumsum_lengths = np.cumsum(np.r_[0, slice_lengths[:-1]])
+        max_length = np.max(slice_lengths)
+        slice_indices = cumsum_lengths[:, None] + np.arange(max_length)
+        
+        # Mask to avoid out-of-bounds indexing
+        valid_mask = slice_indices < cumsum_lengths[:, None] + slice_lengths[:, None]
+        valid_indices = slice_indices[valid_mask]
+
+        flat_rho_slices = rho[ki_ar][:, kj + valid_indices]
+
+        expanded_rho_slices = np.zeros((len(ki_ar),len(slice_lengths), max_length), dtype=rho.dtype)
+        expanded_rho_slices[:,valid_mask] = flat_rho_slices
+        #if i > 94:
+            #print(expanded_rho_slices)
+            #exit(0)
+        abs_sums = np.sum(np.abs(expanded_rho_slices)**2, axis=(0,2))**0.5
+        np.add.at(weights, indices, abs_sums)
+        # if ii == 317:
+        #     print(ii, len(weights), weights[143])
+        #     print(ii, len(weights), weights[144])
+            #exit(0)
+
+        mask = (np.arange(nnodes) != ii) & (weights >= thresh)
+        valid_jj_indices = np.nonzero(mask)[0]
+        k = len(valid_jj_indices)
+        if k > maxDeg:
+            print("!!!ERROR: Max Degree parameter is too small")
+            exit(0)
+        graph[ii, 1:k+1] = valid_jj_indices[:maxDeg]
+        # if ii == 0 :
+        #     #print(expanded_rho_slices.shape[:][0][:])
+        #     print('In graph',graph[ii][0:10])
+        #     if verb:
+        #         exit(0)
         graph[ii, 0] = k
+
+        # if sum(abs(weights1-weights)) > 1e-14:
+        #     np.save( "weights.npy", weights,)
+        #     np.save( "indices.npy", indices,)
+        #     np.save( "rho.npy", rho,)
+
+        #     print('!!!NONZERO', sum(abs(weights1-weights)), ii, ki)
+        #     exit(0)
+        ###
+
+        ##
+        # for j in range(1,graph[ii,0]): # $$$ what does it do? It never enters this loop
+        #     jj = graph[ii,j]             
+        #     weights[jj] = thresh
+        # ##
+
+        # # Computing the new weights by rho 
+        # ## $$$ vectorized this ###
+        # for oi in range(hindex[ii],hindex[ii+1]):
+        #     kj = 0
+        #     for j in range(nats):
+        #         jj = indices[j]
+        #         for oj in range(hindex[jj],hindex[jj+1]):
+        #             weights[jj] = weights[jj] + abs(rho[ki,kj])#**2
+        #             kj = kj + 1
+        #         #weights[jj] = weights[jj]**0.5
+        #     ki = ki + 1
+        # ##
+
+
+        # # Reasigning the connections to ii by the merged weights (the ones computed 
+        # # from rho and the ones already existing.
+
+        # ## $$$ vectorized this ###
+        # k = 0
+        # for jj in range(nnodes): # $$$ ??? this cycle could be interrupted ???
+        #     if ii ==0 and (jj == 4 or jj == 7):
+        #         print(weights[jj])
+        #     if((ii != jj) and (weights[jj] >= thresh)):
+        #         k = k + 1
+        #         if(k >= maxDeg + 1):
+        #             print("!!!ERROR: Max Degree parameter is too small") # $$$ any way to use a warning instead of an error ?
+        #             exit(0)
+        #         graph[ii,k] = jj
+        # if ii == 0:
+        #     print('In graph',graph[ii][0:10])
+        #     if verb:
+        #         exit(0)
+        # graph[ii,0] = k
+
 
     return graph
 
