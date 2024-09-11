@@ -588,7 +588,7 @@ def get_coreHaloIndices(eng, core,graph,njumps, *args):
                 j = graph[i,kk]
                 if   ((j != -1) & (nx[j] == False)) and  jumps_done_but_looking_for_odd == False:
                     #### $$$ remove later ####
-                    if len(coreHalo) >= 710:
+                    if len(coreHalo) >= 1000:
                         break
                     ######
                     nch = nch + 1

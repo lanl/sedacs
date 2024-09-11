@@ -89,6 +89,7 @@ def get_dmErrs(eng, dm1, dm2):
         #dif = torch.abs(dm1 - dm2)            
         maxDif = torch.max(torch.abs(dm1[0,:34000,:34000] - dm2[0,:34000,:34000])).numpy()
         sumDif = torch.sum(torch.abs(dm1[0,:34000,:34000] - dm2[0,:34000,:34000])).numpy()
+        print(torch.argmax(torch.abs(dm1[0,:34000,:34000] - dm2[0,:34000,:34000])))
     else:
         print("ERROR!!!: Interface type not recognized. Use any of the following: Module,File,Socket,MDI")
         exit()

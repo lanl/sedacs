@@ -86,6 +86,18 @@ def get_hamiltonian(eng, coords, types, symbols,
         # new_idxj = torch.tensor([idx_to_idx_mapping[value.item()] for value in molSysData.molecule_whole.idxj[torch.isin(molSysData.molecule_whole.idxj, block_indices)]])
         # print('Time to get indices', time.time() - tic)
 
+        # tic = time.time()
+        # idx_to_idx_mapping = {value: idx for idx, value in enumerate(block_indices)}
+        # max_key = max(idx_to_idx_mapping.keys())
+        # lookup_tensor = torch.zeros(max_key + 1, dtype=torch.long)
+        # # Populate the lookup tensor
+        # for key, value in idx_to_idx_mapping.items():
+        #     lookup_tensor[key] = value
+        # new_idxi = lookup_tensor[molSysData.molecule_whole.idxi[torch.isin(molSysData.molecule_whole.idxi, block_indices)]]
+        # new_idxj = lookup_tensor[molSysData.molecule_whole.idxj[torch.isin(molSysData.molecule_whole.idxj, block_indices)]]
+        # #print('  t indices', time.time() - tic)
+        # print("diIndsExp {:>7.3f} |".format(time.time() - tic), end=" ")
+
         tic = time.time()
         idx_to_idx_mapping = {value: idx for idx, value in enumerate(block_indices)}
         max_key = max(idx_to_idx_mapping.keys())
@@ -93,10 +105,19 @@ def get_hamiltonian(eng, coords, types, symbols,
         # Populate the lookup tensor
         for key, value in idx_to_idx_mapping.items():
             lookup_tensor[key] = value
-        new_idxi = lookup_tensor[molSysData.molecule_whole.idxi[torch.isin(molSysData.molecule_whole.idxi, block_indices)]]
-        new_idxj = lookup_tensor[molSysData.molecule_whole.idxj[torch.isin(molSysData.molecule_whole.idxj, block_indices)]]
-        #print('  t indices', time.time() - tic)
+        max_i = molSysData.molecule_whole.idxi.max()
+        max_j = molSysData.molecule_whole.idxj.max()
+        atom_max = max(max_i,max_j)
+        in_block_mask = torch.zeros(atom_max+1,dtype=torch.bool)
+        in_block_mask[block_indices]=True
+        #isini = in_block_mask[idxi].to(torch.bool)
+        #isinj = in_block_mask[idxj].to(torch.bool)
+        #loc_i = molSysData.molecule_whole.idxi[in_block_mask[idxi].to(torch.bool)]
+        #loc_j = molSysData.molecule_whole.idxj[in_block_mask[idxj].to(torch.bool)]
+        new_idxi = lookup_tensor[molSysData.molecule_whole.idxi[in_block_mask[molSysData.molecule_whole.idxi].to(torch.bool)]]
+        new_idxj = lookup_tensor[molSysData.molecule_whole.idxj[in_block_mask[molSysData.molecule_whole.idxj].to(torch.bool)]]
         print("diIndsExp {:>7.3f} |".format(time.time() - tic), end=" ")
+        #print((new_idxi==new_idxi_).all(), (new_idxj==new_idxj_).all())
 
         # torch.save(block_indices, 'block_indices.pt')
         # torch.save(molSysData.molecule_whole.idxi, 'idxi.pt')

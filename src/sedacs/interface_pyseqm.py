@@ -118,6 +118,34 @@ def get_full_fock_pyseqm(nmol, molsize, P, M, maskd, mask, idxi, idxj, w, W, gss
          themethod, zetas, zetap, zetad, Z, F0SD, G2SD)
 
 def get_fock_pyseqm(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, parameters, maskd_sub, mask_sub):
+    # print(len(block_indices) )
+    # if len(block_indices) > 700:
+    #   tensor_dict = {}
+    #   tensor_dict['P'] = P
+    #   tensor_dict['P_sub'] = P_sub
+    #   tensor_dict['M'] = M
+    #   tensor_dict['w_2'] = w_2
+    #   tensor_dict['block_indices'] = block_indices
+    #   tensor_dict['nmol'] = nmol
+    #   tensor_dict['idxi'] = idxi
+    #   tensor_dict['idxj'] = idxj
+    #   tensor_dict['rij'] = rij
+    #   tensor_dict['parameters'] = parameters
+    #   tensor_dict['maskd_sub'] = maskd_sub
+    #   tensor_dict['mask_sub'] = mask_sub
+
+       
+    # P: diagonal dm blocks of the whole system
+    # P_sub: subsystem dm
+    # M: 1elec hamiltonian of subsystem
+    # w_2: 2c2e ints. subsystem-subsystem and subsystem-outer. no outer-outer
+    # block_indices: subsystem atom numbers
+    # nmol: number of molecules in a batch. Always 1 in SEDACS.
+    # idxi, idxj: unique pairs between atoms in subsystem or between an atom in subsystem and in the outer system.
+    # rij: distances for unique pairs
+    # parameters: seqm atomic params
+    # maskd_sub: indices of diagonal blocks in subsystem
+    # mask_sub: indices of off-diagonal blocks in subsystem
     
     
     idxi_sub_ovrlp_with_rest = torch.isin(idxi, block_indices)
@@ -178,9 +206,9 @@ def get_fock_pyseqm(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, para
 
     summ = torch.zeros(w_2[sub_inds].shape[0],4,4,dtype=dtype, device=device)
     ind = torch.tensor([[0,1,3,6],
-                            [1,2,4,7],
-                            [3,4,5,8],
-                            [6,7,8,9]],dtype=torch.int64, device=device)
+                        [1,2,4,7],
+                        [3,4,5,8],
+                        [6,7,8,9]],dtype=torch.int64, device=device)
     # Pp =P[mask], P_{mu \in A, lambda \in B}
     Pp = -0.5*P_sub[mask_sub] #* (rij.unsqueeze(-1).unsqueeze(-1) < 2.5) #*(rij > 2.0)
     #exit(0)
@@ -197,6 +225,13 @@ def get_fock_pyseqm(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, para
                      .transpose(2,3) \
                      .reshape(nmol, 4*len(block_indices), 4*len(block_indices))
     F0.add_(F0.triu(1).transpose(1,2));
+
+    # print(len(block_indices) )
+    # if len(block_indices) > 700:
+    #   tensor_dict['F0_OUTPUT'] = F0
+    #   torch.save(tensor_dict, 'fock.pt')
+    #   exit(0)
+       
     
     return F0
 

@@ -189,7 +189,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     parts = graph_partition(eng, fullGraph, sdc.partitionType, sdc.nparts, sy.coords, sdc.verb)
     sdc.nparts = len(parts)
     print('New nparts:', sdc.nparts)
-    print("Time to compute cores", time.perf_counter() - tic,"(s)")
+    print("Time to compute cores {:>7.2f} (s)".format(time.perf_counter() - tic))
     num_elements = 0
     for i in range(sdc.nparts):
         subSyCore = System(len(parts[i]))
@@ -228,6 +228,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     njumps = 2
     mu0 = -5.5
     for gsc in range(sdc.numAdaptIter):
+        TIC_iter = time.perf_counter()
         # Partition the graph
         print('\n\n|||| Adaptive iter:', gsc, '||||')
         tic = time.perf_counter()
@@ -239,7 +240,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             if sdc.verb: print("coreHalo for part", i, "=", coreHalo)
             print('N atoms in core/coreHalo {:>6d} : {:>6d} {:>6d}'.format(i, len(parts[i]), len(coreHalo)), '\n')
 
-        print("Time to compute halos", time.perf_counter() - tic,"(s)")
+        print("Time to compute halos {:>7.2f} (s)".format(time.perf_counter() - tic))
         dmOld = dm.clone()
         torch.save(dmOld, 'gs_10k_dmOld_128.pt')
         del dmOld
@@ -302,6 +303,8 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         for tensor in tensors:
             if tensor_size(tensor) > 0.1:
                 print(f"Tensor size: {tensor_size(tensor):.2f} MB | Shape: {tensor.shape} | Dtype: {tensor.dtype}")
+
+        print("t Iter {:>8.2f} (s)".format(time.perf_counter() - TIC_iter))
         
 
     ### forces calculation

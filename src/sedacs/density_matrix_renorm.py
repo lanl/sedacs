@@ -39,7 +39,7 @@ def get_density_matrix_renorm(eng, Tel, mu0, dm,
             print("ERROR: No PySEQM installed")
             exit()
         rho = get_densityMatrix_renormalized_pyseqm(eVals, Q, Tel, mu0, NH_Nh_Hs, nocc)
-        dm[:,I[0], I[1]] = 0.6*dm[:,I[0], I[1]] + 0.4*rho[:,core_indices_in_sub_expandedm]
+        dm[:,I[0], I[1]] = 0.87*dm[:,I[0], I[1]] + 0.13*rho[:,core_indices_in_sub_expandedm]
         rho = pack(rho, NH_Nh_Hs[0], NH_Nh_Hs[1])
     else:
         print("ERROR!!!: Interface type not recognized. Use any of the following: Module,File,Socket,MDI")
