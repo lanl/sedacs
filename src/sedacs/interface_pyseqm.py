@@ -235,6 +235,128 @@ def get_fock_pyseqm(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, para
     
     return F0
 
+def get_fock_pyseqm_2(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, parameters, maskd_sub, mask_sub):
+    ### optimized version by Nick. 3x faster ###
+    # P: diagonal dm blocks of the whole system
+    # P_sub: subsystem dm
+    # M: 1elec hamiltonian of subsystem
+    # w_2: 2c2e ints. subsystem-subsystem and subsystem-outer. no outer-outer
+    # block_indices: subsystem atom numbers
+    # nmol: number of molecules in a batch. Always 1 in SEDACS.
+    # idxi, idxj: unique pairs between atoms in subsystem or between an atom in subsystem and in the outer system.
+    # rij: distances for unique pairs
+    # parameters: seqm atomic params
+    # maskd_sub: indices of diagonal blocks in subsystem
+    # mask_sub: indices of off-diagonal blocks in subsystem
+
+    idx_to_idx_mapping = {value: idx for idx, value in enumerate(block_indices)}
+    max_key = max(idx_to_idx_mapping.keys())
+    lookup_tensor = torch.zeros(max_key + 1, dtype=torch.long)
+    # Populate the lookup tensor
+    for key, value in idx_to_idx_mapping.items():
+        lookup_tensor[key] = value
+    max_i = idxi.max()
+    max_j = idxj.max()
+    atom_max = max(max_i,max_j)
+    in_block_mask = torch.zeros(atom_max+1,dtype=torch.bool)
+    in_block_mask[block_indices]=True
+
+    isini = in_block_mask[idxi]#.to(torch.bool)
+    where_isini = torch.nonzero(isini).squeeze()
+
+    isinj = in_block_mask[idxj]#.to(torch.bool)
+    where_isinj = torch.nonzero(isinj).squeeze()
+
+    loc_i = idxi[isini]
+    loc_j = idxj[isinj]
+
+    idxi_sub_ovrlp_with_rest = torch.isin(idxi, block_indices)
+    idxj_sub_ovrlp_with_rest = torch.isin(idxj, block_indices)
+
+    F = M.clone()
+    Pptot = P_sub[...,1,1]+P_sub[...,2,2]+P_sub[...,3,3]
+    TMP = torch.zeros_like(M)
+    TMP[maskd_sub,0,0] = 0.5*P_sub[maskd_sub,0,0]*parameters['g_ss'][block_indices] + Pptot[maskd_sub]*(parameters['g_sp'][block_indices]-0.5*parameters['h_sp'][block_indices])
+    for i in range(1,4):
+        #(p,p)
+        TMP[maskd_sub,i,i] = P_sub[maskd_sub,0,0]*(parameters['g_sp'][block_indices]-0.5*parameters['h_sp'][block_indices]) + 0.5*P_sub[maskd_sub,i,i]*parameters['g_pp'][block_indices] \
+                        + (Pptot[maskd_sub] - P_sub[maskd_sub,i,i]) * (1.25*parameters['g_p2'][block_indices]-0.25*parameters['g_pp'][block_indices])
+        #(s,p) = (p,s) upper triangle
+        TMP[maskd_sub,0,i] = P_sub[maskd_sub,0,i]*(1.5*parameters['h_sp'][block_indices] - 0.5*parameters['g_sp'][block_indices])
+    #(p,p*)
+    for i,j in [(1,2),(1,3),(2,3)]:
+        TMP[maskd_sub,i,j] = P_sub[maskd_sub,i,j]* (0.75*parameters['g_pp'][block_indices] - 1.25*parameters['g_p2'][block_indices])
+
+    F.add_(TMP)
+    del TMP, Pptot
+
+    ##############################################
+
+    dtype = P.dtype
+    device = P.device
+    weight = torch.tensor([1.0,
+                           2.0, 1.0,
+                           2.0, 2.0, 1.0,
+                           2.0, 2.0, 2.0, 1.0],dtype=dtype, device=device).reshape((-1,10))
+
+    PA_test = (P[idxi[idxj_sub_ovrlp_with_rest]][...,(0,0,1,0,1,2,0,1,2,3),(0,1,1,2,2,2,3,3,3,3)]*weight).reshape((-1,10,1))
+    PB_test = (P[idxj[idxi_sub_ovrlp_with_rest]][...,(0,0,1,0,1,2,0,1,2,3),(0,1,1,2,2,2,3,3,3,3)]*weight).reshape((-1,1,10))
+    
+    w_2_inj=w_2[where_isinj]
+    suma_test = torch.einsum('ijk,ijk->ik',PA_test,w_2_inj)
+    del PA_test
+
+    w_2_ini=w_2[where_isini]
+    sumb_test = torch.einsum('ijk,ijk->ij',PB_test,w_2_ini)
+    del PB_test
+
+    sumA_test = torch.zeros(w_2_inj.shape[0],4,4,dtype=dtype, device=device)
+    sumB_test = torch.zeros(w_2_ini.shape[0],4,4,dtype=dtype, device=device)
+
+    sumA_test[...,(0,0,1,0,1,2,0,1,2,3),(0,1,1,2,2,2,3,3,3,3)] = suma_test
+    sumB_test[...,(0,0,1,0,1,2,0,1,2,3),(0,1,1,2,2,2,3,3,3,3)] = sumb_test
+
+    del suma_test, sumb_test
+
+    iii=lookup_tensor[loc_i]
+    indi_of_new_diag_in_old = maskd_sub[iii]
+
+    jjj = lookup_tensor[loc_j]
+    indj_of_new_diag_in_old = maskd_sub[jjj]
+
+    F.index_add_(0,indi_of_new_diag_in_old,sumB_test)
+    F.index_add_(0,indj_of_new_diag_in_old,sumA_test)
+    del sumB_test, sumA_test
+
+    ####################################################
+
+    sub_inds = idxi_sub_ovrlp_with_rest * idxj_sub_ovrlp_with_rest
+
+    summ = torch.zeros(w_2[sub_inds].shape[0],4,4,dtype=dtype, device=device)
+    ind = torch.tensor([[0,1,3,6],
+                        [1,2,4,7],
+                        [3,4,5,8],
+                        [6,7,8,9]],dtype=torch.int64, device=device)
+
+    # Pp =P[mask], P_{mu \in A, lambda \in B}
+    Pp = -0.5*P_sub[mask_sub] #* (rij.unsqueeze(-1).unsqueeze(-1) < 2.5) #*(rij > 2.0)
+    w2_sub_inds=w_2[sub_inds]
+    for i in range(4):
+        for j in range(4):
+            #\sum_{nu \in A} \sum_{sigma \in B} P_{nu, sigma} * (mu nu, lambda, sigma)
+            a1=w2_sub_inds[...,ind[i],:][...,:,ind[j]]
+            summ[...,i,j] = torch.einsum('ijk,ijk->i',Pp,a1)#torch.sum(Pp*a1,dim=(1,2))
+    del Pp
+
+    F.index_add_(0,mask_sub,summ)
+    del summ
+
+    F0 = F.reshape(nmol,len(block_indices),len(block_indices),4,4) \
+                     .transpose(2,3) \
+                     .reshape(nmol, 4*len(block_indices), 4*len(block_indices))
+    F0.add_(F0.triu(1).transpose(1,2));       
+    return F0
+
 def get_hcore_pyseqm(coords,symbols,atomTypes, verb=False):
   print('Creating Hcore.')
 

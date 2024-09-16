@@ -8,7 +8,7 @@ import sys
 import time
 from sedacs.interface_files import get_hamiltonian_files
 from sedacs.interface_modules import get_hamiltonian_module
-from sedacs.interface_pyseqm import get_fock_pyseqm, ParamContainer, get_hcore_pyseqm, get_molecule_pyseqm
+from sedacs.interface_pyseqm import get_fock_pyseqm, get_fock_pyseqm_2, ParamContainer, get_hcore_pyseqm, get_molecule_pyseqm
 from sedacs.energy import get_eElec
 from seqm.seqm_functions.two_elec_two_center_int import two_elec_two_center_int as TETCI
 from seqm.seqm_functions.hcore import hcore
@@ -157,11 +157,17 @@ def get_hamiltonian(eng, coords, types, symbols,
         P_sub[mask_sub] = P[molSysData.molecule_whole.mask[sub_inds]]
         P_diag = P[molSysData.molecule_whole.maskd]
 
-        ham = get_fock_pyseqm(P_diag, P_sub, M_sub, coulInts_test, block_indices,
+        # tic = time.time()
+        # ham = get_fock_pyseqm(P_diag, P_sub, M_sub, coulInts_test, block_indices,
+        #         molSysData.molecule_whole.nmol, molSysData.molecule_whole.idxi[subIndsUnion], molSysData.molecule_whole.idxj[subIndsUnion], molSub.rij,
+        #         molSysData.molecule_whole.parameters, maskd_sub, mask_sub) # slowest part
+        # print("FulSubFock {:>7.3f} |".format(time.time() - tic), end=" ")
+
+        ham = get_fock_pyseqm_2(P_diag, P_sub, M_sub, coulInts_test, block_indices,
                 molSysData.molecule_whole.nmol, molSysData.molecule_whole.idxi[subIndsUnion], molSysData.molecule_whole.idxj[subIndsUnion], molSub.rij,
                 molSysData.molecule_whole.parameters, maskd_sub, mask_sub) # slowest part
+        
         del coulInts_test, sub_inds, subIndsUnion, new_idxi, new_idxj
-        #print('  Time to compute Fock', time.time() - tic)
         print("FulSubFock {:>7.3f} |".format(time.time() - tic), end=" ")
 
         if doForces:
