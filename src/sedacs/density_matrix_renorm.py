@@ -8,7 +8,7 @@ import sys
 
 from sedacs.interface_modules import get_density_matrix_modules
 from sedacs.interface_pyseqm import get_densityMatrix_renormalized_pyseqm
-
+import torch
 try:
     import seqm; PYSEQM = True
     from seqm.seqm_functions.pack import pack
@@ -25,7 +25,7 @@ __all__ = ["get_density_matrix"]
 # @param ham Hamiltonian matrix
 # @verbose Verbosity
 #
-def get_density_matrix_renorm(eng, Tel, mu0, dm,
+def get_density_matrix_renorm(eng, Tel, mu0, dm, P_contr, graph_for_pairs,
                               eVals, Q, NH_Nh_Hs, I, core_indices_in_sub_expandedm, nocc, verbose=False):
     if eng.interface == "None":
         print("ERROR!!! - Write your own Hamiltonian")
@@ -39,9 +39,22 @@ def get_density_matrix_renorm(eng, Tel, mu0, dm,
             print("ERROR: No PySEQM installed")
             exit()
         rho = get_densityMatrix_renormalized_pyseqm(eVals, Q, Tel, mu0, NH_Nh_Hs, nocc)
-        dm[:,I[0], I[1]] = 0.70*dm[:,I[0], I[1]] + 0.30*rho[:,core_indices_in_sub_expandedm]
-        rho = pack(rho, NH_Nh_Hs[0], NH_Nh_Hs[1])
+        if eng.reconstruct_dm:
+            maxDif = torch.max(torch.abs(dm[:,I[0], I[1]] - rho[:,core_indices_in_sub_expandedm])).numpy()
+            sumDif = torch.sum(torch.abs(dm[:,I[0], I[1]] - rho[:,core_indices_in_sub_expandedm])).numpy()
+            print(" MAX |\u0394DM_ij|: {:>10.7f}".format(maxDif))
+            print(" \u03A3   |\u0394DM_ij|: {:>10.7f}".format(sumDif))
+            alpha = 0.16
+            dm[:,I[0], I[1]] = (1-alpha)*dm[:,I[0], I[1]] + alpha*rho[:,core_indices_in_sub_expandedm]
+
+        else:
+            maxDif = None
+            sumDif = None
+
+
+
+
     else:
         print("ERROR!!!: Interface type not recognized. Use any of the following: Module,File,Socket,MDI")
         exit()
-    return rho
+    return rho, maxDif, sumDif

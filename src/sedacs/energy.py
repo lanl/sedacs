@@ -11,7 +11,7 @@ __all__ = ["get_fock"]
 # @param ham Hamiltonian matrix
 # @verbose Verbosity
 #
-def get_eElec(eng, DM, F, Hcore):
+def get_eElec(eng, DM, F, Hcore, doTriu=True):
     if eng.interface == "None":
         print("ERROR!!! - Write your own Fock")
 
@@ -22,7 +22,7 @@ def get_eElec(eng, DM, F, Hcore):
         exit()
     elif eng.interface == "PySEQM":
 
-        return get_elec_energy_pyseqm(DM, F, Hcore)
+        return get_elec_energy_pyseqm(DM, F, Hcore, doTriu=doTriu)
         
     else:
         print("ERROR!!!: Interface type not recognized. Use any of the following: Module,File,Socket,MDI")
@@ -62,7 +62,9 @@ def get_eNuc(eng, obj):
             rho0b = 0.5 * ev / g[obj.molecule_whole.idxj]
             gam = ev / torch.sqrt(obj.molecule_whole.rij**2 + (rho0a + rho0b)**2)
         else:
-            gam = obj.w_whole[...,0,0]
+            #print('w',obj.w_whole[...,0,0].shape)
+            #gam = obj.w_whole[...,0,0]
+            gam = obj.w_ssss
         return get_nucAB_energy_pyseqm(obj.molecule_whole.Z, obj.molecule_whole.const, obj.molecule_whole.nmol, obj.molecule_whole.ni, obj.molecule_whole.nj,
                                          obj.molecule_whole.idxi, obj.molecule_whole.idxj, obj.molecule_whole.rij, \
                                          obj.rho0xi_whole, obj.rho0xj_whole, obj.molecule_whole.alp, obj.molecule_whole.chi,

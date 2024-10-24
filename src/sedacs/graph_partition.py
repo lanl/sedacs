@@ -578,6 +578,7 @@ def get_coreHaloIndices(eng, core,graph,njumps, *args):
     #Add halos from graph
     jump = 0
     jumps_done_but_looking_for_odd = False
+    extraAtoms = []
     while jump < njumps:
         nc1 = nch 
         for k in range(nc1):
@@ -588,18 +589,25 @@ def get_coreHaloIndices(eng, core,graph,njumps, *args):
                 j = graph[i,kk]
                 if   ((j != -1) & (nx[j] == False)) and  jumps_done_but_looking_for_odd == False:
                     #### $$$ remove later ####
-                    if len(coreHalo) >= 1700:
-                        break
+                    # if len(coreHalo) >= 1700:
+                    #     break
                     ######
-                    nch = nch + 1
+                    nch += 1
 
-                    coreHalo.append(j)
+                    coreHalo.append(int(j))
                     nx[j] = True
                 elif ((j != -1) & (nx[j] == False)) and  jumps_done_but_looking_for_odd:
                     if (args[0].valency[args[1].symbols[args[1].types[j]]] ) % 2 == 1:
                         nch = nch + 1
-                        coreHalo.append(j)
-                        #print('APPENDED EXTRA', j)
+                        coreHalo.append(int(j))
+                        extraAtoms.append(int(j))
+                        graph[core[0]][graph[core[0]][0]+1] = j
+                        graph[core[0]][0] += 1
+                        graph[core[0]][1:graph[core[0]][0]+1] = sorted(graph[core[0]][1:graph[core[0]][0]+1])
+                        print(graph[core[0]][0])
+                        #coreHalo.append(36)
+                        #print(j)
+                        print('APPENDED EXTRA', j)
                         nx[j] = True
                         if(eng.interface == "PySEQM"): coreHalo = sorted(coreHalo)
                         return coreHalo, nc
@@ -616,8 +624,8 @@ def get_coreHaloIndices(eng, core,graph,njumps, *args):
         jump += 1
             
                 
-    if not jumps_done_but_looking_for_odd:
-        print('\n')
+    # if not jumps_done_but_looking_for_odd:
+    #     print('\n')
     
     if(eng.interface == "PySEQM"): coreHalo = sorted(coreHalo)
     return coreHalo, nc
@@ -963,7 +971,7 @@ def spectral_clustering_partition(graph,nparts, coords, do_xyz, max_cluster_size
     if do_xyz: # on xyz
         print('  Computing spectral_clustering_partition on XYZ data.')
         clustering = SpectralClustering(n_clusters=nparts, affinity="nearest_neighbors",random_state=0,
-                                        n_neighbors=20, n_jobs=32, n_init=20) # or 'rbf' 'nearest_neighbors'
+                                        n_neighbors=8, n_jobs=32, n_init=20) # or 'rbf' 'nearest_neighbors'
         cluster_labels = clustering.fit_predict(coords)
         parts = [np.where(cluster_labels == i)[0].tolist() for i in range(nparts)]
 

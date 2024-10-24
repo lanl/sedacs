@@ -22,7 +22,6 @@ try:
     is_mpi_available = True
 except ImportError:
     is_mpi_available = False
-
 #torch = None
 import torch
 try:
@@ -96,7 +95,7 @@ def init(args):
         numranks = 1
 
     # Initialize the code by reading the input file
-    sdc = Input(args.input_file, True)
+    sdc = Input(args.input_file, verb=False)
 
     # Initialize the engine (quantum chemistry code)
     eng = Engine(rank)
@@ -157,30 +156,37 @@ def init(args):
     #    write_xyz_coordinates("subSyNL.xyz", subSy.coords, subSy.types, subSy.symbols)
 
     # Get initial graph (from a neighbor list)
-    if sdc.InitGraphType == "OverlapM":
-        print('Creating overlap matrix for initial graph.')
-        tic = time.perf_counter()
-        
-        #sdc.overlap_whole = get_overlap(eng, sy.coords, sy.symbols, sy.types, hindex)
-        #torch.save(sdc.overlap_whole, 'overlap_whole.pt')
-        sdc.overlap_whole = torch.load('overlap_whole.pt')
-        # sdc.overlap_whole[:(7+9)*4] *= 0.25 # 0.15
-        # sdc.overlap_whole[(7+9)*4:][:, :(7+9)*4] *= 0.25
-        
-        #sdc.overlap_whole = sdc.overlap_whole@sdc.overlap_whole
-        print("Time to get overlap", time.perf_counter() - tic,"(s)")
-        graphOnRank = None
-        print('Creating initial graph.')
-        tic = time.perf_counter()
-        graphNL = collect_graph_from_rho(graphOnRank, sdc.overlap_whole, sdc.gthreshinit, sy.nats, sdc.maxDeg, [i for i in range(0,sy.nats)],hindex)
-        print("Time to compute graph", time.perf_counter() - tic,"(s)")
-        #del sdc.overlap_whole
+    if rank == 0:
+        print('!!!!')
+        if sdc.InitGraphType == "OverlapM":
+            print('Creating overlap matrix for initial graph.')
+            tic = time.perf_counter()
+            
+            #sdc.overlap_whole = get_overlap(eng, sy.coords, sy.symbols, sy.types, hindex)
+            #torch.save(sdc.overlap_whole, 'overlap_whole.pt')
+            #sdc.overlap_whole = torch.load('overlap_whole.pt')
+            # sdc.overlap_whole[:(7+9)*4] *= 0.25 # 0.15
+            # sdc.overlap_whole[(7+9)*4:][:, :(7+9)*4] *= 0.25
+            
+            #sdc.overlap_whole = sdc.overlap_whole@sdc.overlap_whole
+            print("Time to get overlap", time.perf_counter() - tic,"(s)")
+            graphOnRank = None
+            print('Creating initial graph.')
+            tic = time.perf_counter()
+            graphNL = collect_graph_from_rho(graphOnRank, sdc.overlap_whole, sdc.gthreshinit, sy.nats, sdc.maxDeg, [i for i in range(0,sy.nats)],hindex)
+            print("Time to compute graph", time.perf_counter() - tic,"(s)")
+            #del sdc.overlap_whole
 
+        else:
+            #sdc.overlap_whole = torch.load('overlap_whole.pt')
+            #sdc.overlap_whole = get_overlap(eng, sy.coords, sy.symbols, sy.types, hindex)
+
+            graphNL = get_initial_graph(sy.coords, nl, sdc.rcut, sdc.maxDeg, True)
     else:
-        sdc.overlap_whole = torch.load('overlap_whole.pt')
-
-        graphNL = get_initial_graph(sy.coords, nl, sdc.rcut, sdc.maxDeg, True)
-        
+        graphNL = None
+    
+    comm.Barrier()
+    graphNL = comm.bcast(graphNL, root=0)
     fullGraph = np.zeros((sy.nats, sdc.maxDeg + 1), dtype=int)
     fullGraph[:, :] = graphNL[:, :]
 

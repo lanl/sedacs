@@ -2,6 +2,9 @@
 
 import time
 import sys
+print(sys.version)
+print(sys.executable)
+#exit()
 sys.path.insert(1, "/home/maxim/Projects/git2/PYSEQM_dev/")
 import torch
 
@@ -21,8 +24,8 @@ tic = time.perf_counter()
 args = get_args()
 
 # Initialize sedacs
-
-np.set_printoptions(threshold=sys.maxsize)
+torch.set_printoptions(precision=4, linewidth=1000, threshold = 20000 )
+np.set_printoptions(precision=4, linewidth=1000)
 
 # Initialize sdc parameters
 sdc, eng, comm, rank, numranks, sy, hindex, graphNL, nl, nlTrX, nlTrY, nlTrZ = init(args)

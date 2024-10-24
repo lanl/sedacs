@@ -520,13 +520,13 @@ def build_nlist_small(coords, latticeVectors, rcut, rank=0, numranks=1, verb=Fal
     nlTrZ = np.zeros((nats),dtype=int)
 
     for i in range(nats):
-        print(np.arange(0,i,1),np.arange(i+1,nats,1))
+        #print(np.arange(0,i,1),np.arange(i+1,nats,1))
 
         nl[i,1:i+1] = np.arange(0,i,1,dtype = int)
         nl[i,i+1:nats] = np.arange(i+1,nats,1,dtype = int)
         nl[i,0] = nats - 1
 
-        print("nl",i,nl[i,1:nats+1])    
+        #print("nl",i,nl[i,1:nats+1])    
 
     return nl, nlTrX, nlTrY, nlTrZ
 

@@ -61,12 +61,15 @@ def get_initDM(eng, sdc, coords, symbols, types, molSysData):
         if(PYSEQM == False):
             print("ERROR: No PySEQM installed")
             exit()
-        #make_dm_guess(molSysData.molecule_whole, molSysData.molecule_whole.seqm_parameters, mix_homo_lumo=False, mix_coeff=0.3, overwrite_existing_dm=True);
-        molSysData.molecule_whole.dm = torch.load("/home/maxim/Projects/SEDACS_1/sedacs/examples/pyseqm/gs_10k_dm_128.pt")
+        dm = make_dm_guess(molSysData.molecule_whole, molSysData.molecule_whole.seqm_parameters, mix_homo_lumo=False, mix_coeff=0.3, overwrite_existing_dm=True, assignDM = False)[0];
+        #dm = torch.load("/home/maxim/Projects/SEDACS_1/sedacs/examples/pyseqm/w_4_dm.pt", weights_only=True)
+        #dm = torch.load("/home/maxim/Projects/SEDACS_1/sedacs/examples/pyseqm/nanostar_dm.pt", weights_only=True)
+        #molSysData.molecule_whole.dm = torch.load("/home/maxim/Projects/SEDACS_1/sedacs/examples/pyseqm/gs_solvated_cell_dm.pt", weights_only=True)
+        #dm = torch.load("/home/maxim/Projects/SEDACS_1/sedacs/examples/pyseqm/gs_10k_dm_128.pt", weights_only=True)
         #molSysData.molecule_whole.dm = torch.load("/home/maxim/Projects/SEDACS_1/sedacs/examples/pyseqm/overlap_whole.pt")
         #molSysData.molecule_whole.dm = unpack(torch.tensor(torch.load("/home/maxim/Projects/SEDACS_1/sedacs/examples/pyseqm/overlap_whole.pt")).unsqueeze(0),
         #                           molSysData.molecule_whole.nHeavy, molSysData.molecule_whole.nHydro, molSysData.molecule_whole.species.shape[-1]*4)
-        rho = molSysData.molecule_whole.dm
+        return dm
 
     else:
         print("ERROR!!!: Interface type not recognized. Use any of the following: Module,File,Socket,MDI")
@@ -87,9 +90,8 @@ def get_dmErrs(eng, dm1, dm2):
             print("ERROR: No PySEQM installed")
             exit()
         #dif = torch.abs(dm1 - dm2)            
-        maxDif = torch.max(torch.abs(dm1[0,:34000,:34000] - dm2[0,:34000,:34000])).numpy()
-        sumDif = torch.sum(torch.abs(dm1[0,:34000,:34000] - dm2[0,:34000,:34000])).numpy()
-        print(torch.argmax(torch.abs(dm1[0,:34000,:34000] - dm2[0,:34000,:34000])))
+        maxDif = torch.max(torch.abs(dm1[0,:32000,:32000] - dm2[0,:32000,:32000])).numpy()
+        sumDif = torch.sum(torch.abs(dm1[0,:32000,:32000] - dm2[0,:32000,:32000])).numpy()
     else:
         print("ERROR!!!: Interface type not recognized. Use any of the following: Module,File,Socket,MDI")
         exit()
