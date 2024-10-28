@@ -14,6 +14,9 @@ from seqm.seqm_functions.two_elec_two_center_int import two_elec_two_center_int 
 from seqm.seqm_functions.hcore import hcore
 from seqm.seqm_functions.pack import pack
 import torch
+from torch.amp import autocast, GradScaler
+from torch.utils.checkpoint import checkpoint
+
 import numpy as np
 
 __all__ = ["get_hamiltonian"]
@@ -50,9 +53,9 @@ def get_hamiltonian(eng, coords, types, symbols,
     elif eng.interface == "PySEQM":
         
         tic = time.time()
-        block_indices = torch.tensor(partsCoreHaloIndex, dtype=torch.int64, device=P_contr.device)
+        block_indices = torch.tensor(partsCoreHaloIndex, dtype=eng.torch_int_dt, device=P_contr.device)
         # Define the length of block indices
-        block_size = torch.tensor(len(block_indices), device = P_contr.device)
+        block_size = torch.tensor(len(block_indices), device = P_contr.device, dtype=eng.torch_int_dt)
         # Vectorize diagonal indices
         maskd_sub = torch.arange(0, block_size * block_size, block_size + 1, device = P_contr.device)  # Diagonal indices
         # Vectorize upper triangle indices
@@ -61,7 +64,7 @@ def get_hamiltonian(eng, coords, types, symbols,
 
 
         print(P_contr.device, )
-        molSub = get_molecule_pyseqm(molSysData.molecule_whole.coordinates[:,partsCoreHaloIndex], symbols, types, device=P_contr.device)[0]#.to(P_contr.device)
+        molSub = get_molecule_pyseqm(eng, molSysData.molecule_whole.coordinates[:,partsCoreHaloIndex], symbols, types, device=P_contr.device)[0]#.to(P_contr.device)
         M_sub, _, _, _ = hcore(molSub, doTETCI=False) # non-diagonal h1elec
 
         #print('  Time to compute hcore', time.time() - tic)
@@ -105,14 +108,56 @@ def get_hamiltonian(eng, coords, types, symbols,
         print("subIndsUnion {:>7.3f} |".format(time.time() - tic), end=" ")
         
         tic = time.time()
-        coulInts_test, e1b, e2a, _, _ = TETCI(molSysData.molecule_whole.const, molSysData.molecule_whole.idxi[subIndsUnion], molSysData.molecule_whole.idxj[subIndsUnion],
-                molSysData.molecule_whole.ni[subIndsUnion], molSysData.molecule_whole.nj[subIndsUnion], molSysData.molecule_whole.xij[subIndsUnion], molSysData.molecule_whole.rij[subIndsUnion], molSysData.molecule_whole.Z,\
-                molSysData.molecule_whole.parameters['zeta_s'], molSysData.molecule_whole.parameters['zeta_p'], molSysData.molecule_whole.parameters['zeta_d'],\
-                molSysData.molecule_whole.parameters['s_orb_exp_tail'], molSysData.molecule_whole.parameters['p_orb_exp_tail'], molSysData.molecule_whole.parameters['d_orb_exp_tail'],\
-                molSysData.molecule_whole.parameters['g_ss'], molSysData.molecule_whole.parameters['g_pp'], molSysData.molecule_whole.parameters['g_p2'], molSysData.molecule_whole.parameters['h_sp'],\
-                molSysData.molecule_whole.parameters['F0SD'], molSysData.molecule_whole.parameters['G2SD'], molSysData.molecule_whole.parameters['rho_core'],\
-                molSysData.molecule_whole.alp, molSysData.molecule_whole.chi, molSysData.molecule_whole.method)
-        #print('  Time to compute TETCI', time.time() - tic)
+        # coulInts_test, e1b, e2a, _, _ = TETCI(molSysData.molecule_whole.const, molSysData.molecule_whole.idxi[subIndsUnion], molSysData.molecule_whole.idxj[subIndsUnion],
+        #         molSysData.molecule_whole.ni[subIndsUnion], molSysData.molecule_whole.nj[subIndsUnion], molSysData.molecule_whole.xij[subIndsUnion], molSysData.molecule_whole.rij[subIndsUnion], molSysData.molecule_whole.Z,\
+        #         molSysData.molecule_whole.parameters['zeta_s'], molSysData.molecule_whole.parameters['zeta_p'], molSysData.molecule_whole.parameters['zeta_d'],\
+        #         molSysData.molecule_whole.parameters['s_orb_exp_tail'], molSysData.molecule_whole.parameters['p_orb_exp_tail'], molSysData.molecule_whole.parameters['d_orb_exp_tail'],\
+        #         molSysData.molecule_whole.parameters['g_ss'], molSysData.molecule_whole.parameters['g_pp'], molSysData.molecule_whole.parameters['g_p2'], molSysData.molecule_whole.parameters['h_sp'],\
+        #         molSysData.molecule_whole.parameters['F0SD'], molSysData.molecule_whole.parameters['G2SD'], molSysData.molecule_whole.parameters['rho_core'],\
+        #         molSysData.molecule_whole.alp, molSysData.molecule_whole.chi, molSysData.molecule_whole.method)
+        
+        def tetci_function(const, idxi, idxj, ni, nj, xij, rij, Z,
+                   zeta_s, zeta_p, zeta_d, s_orb_exp_tail,
+                   p_orb_exp_tail, d_orb_exp_tail, g_ss,
+                   g_pp, g_p2, h_sp, F0SD, G2SD, rho_core,
+                   alp, chi, method):
+            # Call your TETCI function logic here
+            return TETCI(const, idxi, idxj, ni, nj, xij, rij, Z,
+                        zeta_s, zeta_p, zeta_d, s_orb_exp_tail,
+                        p_orb_exp_tail, d_orb_exp_tail, g_ss,
+                        g_pp, g_p2, h_sp, F0SD, G2SD, rho_core,
+                        alp, chi, method)
+
+        # Use checkpointing to call the function
+        coulInts_test, e1b, e2a, _, _ = checkpoint(
+            tetci_function,
+            molSysData.molecule_whole.const,
+            molSysData.molecule_whole.idxi[subIndsUnion],
+            molSysData.molecule_whole.idxj[subIndsUnion],
+            molSysData.molecule_whole.ni[subIndsUnion],
+            molSysData.molecule_whole.nj[subIndsUnion],
+            molSysData.molecule_whole.xij[subIndsUnion],
+            molSysData.molecule_whole.rij[subIndsUnion],
+            molSysData.molecule_whole.Z,
+            molSysData.molecule_whole.parameters['zeta_s'],
+            molSysData.molecule_whole.parameters['zeta_p'],
+            molSysData.molecule_whole.parameters['zeta_d'],
+            molSysData.molecule_whole.parameters['s_orb_exp_tail'],
+            molSysData.molecule_whole.parameters['p_orb_exp_tail'],
+            molSysData.molecule_whole.parameters['d_orb_exp_tail'],
+            molSysData.molecule_whole.parameters['g_ss'],
+            molSysData.molecule_whole.parameters['g_pp'],
+            molSysData.molecule_whole.parameters['g_p2'],
+            molSysData.molecule_whole.parameters['h_sp'],
+            molSysData.molecule_whole.parameters['F0SD'],
+            molSysData.molecule_whole.parameters['G2SD'],
+            molSysData.molecule_whole.parameters['rho_core'],
+            molSysData.molecule_whole.alp,
+            molSysData.molecule_whole.chi,
+            molSysData.molecule_whole.method
+        )
+
+
         print("TETCI&DiI {:>7.3f} |".format(time.time() - tic), end=" ")
 
         tic = time.time()
@@ -144,10 +189,10 @@ def get_hamiltonian(eng, coords, types, symbols,
         
         tic = time.time()
         
-        P_sub_from_contr = torch.zeros(len(block_indices)*len(block_indices),4,4, device = P_contr.device)
+        P_sub_from_contr = torch.zeros(len(block_indices)*len(block_indices),4,4, device = P_contr.device, dtype=eng.torch_dt)
         P_sub_from_contr = P_sub_from_contr.reshape(len(block_indices), len(block_indices), 4,4)
 
-        graph_for_pairs = torch.from_numpy(graph_for_pairs).to(P_contr.device)
+        graph_for_pairs = torch.from_numpy(graph_for_pairs).to(P_contr.device, dtype=eng.torch_int_dt)
 
         for i in range(len(block_indices)): ### $$$ needs vecorization
             if block_indices[i] in partsIndex:
@@ -213,9 +258,31 @@ def get_hamiltonian(eng, coords, types, symbols,
         #             print(block_indices[i],block_indices[j])
         #             print('ERR2',torch.sum(ERR2[i:i+1][:,j:j+1]))
 
-        ham_contr = get_fock_pyseqm_2(P_diag_contr, P_sub_from_contr, M_sub, coulInts_test, block_indices,
-                molSysData.molecule_whole.nmol, molSysData.molecule_whole.idxi[subIndsUnion], molSysData.molecule_whole.idxj[subIndsUnion], molSub.rij,
-                molSysData.molecule_whole.parameters, maskd_sub, mask_sub) # slowest part
+        # ham_contr = get_fock_pyseqm_2(P_diag_contr, P_sub_from_contr, M_sub, coulInts_test, block_indices,
+        #         molSysData.molecule_whole.nmol, molSysData.molecule_whole.idxi[subIndsUnion], molSysData.molecule_whole.idxj[subIndsUnion], molSub.rij,
+        #         molSysData.molecule_whole.parameters, maskd_sub, mask_sub) # slowest part
+
+        # Define a wrapper function for the checkpointed function with required gradients
+        def checkpointed_get_fock(M_sub, coulInts_test, idxi_grad, idxj_grad, rij_grad, 
+                                P_diag_contr, P_sub_from_contr, block_indices, nmol, 
+                                parameters, maskd_sub, mask_sub):
+            return get_fock_pyseqm_2(P_diag_contr, P_sub_from_contr, M_sub, coulInts_test, 
+                                    block_indices, nmol, idxi_grad, idxj_grad, rij_grad, 
+                                    parameters, maskd_sub, mask_sub)
+        # Use checkpoint with only the tensors requiring gradients
+        
+        ham_contr = checkpoint(
+            checkpointed_get_fock,
+            M_sub, coulInts_test, 
+            molSysData.molecule_whole.idxi[subIndsUnion],  # requires grad
+            molSysData.molecule_whole.idxj[subIndsUnion],  # requires grad
+            molSub.rij,  # requires grad
+            P_diag_contr, P_sub_from_contr, block_indices,
+            molSysData.molecule_whole.nmol,
+            molSysData.molecule_whole.parameters,
+            maskd_sub,
+            mask_sub
+            )
 
         print("FulSubFock {:>7.3f} |".format(time.time() - tic), end=" ")
 
@@ -265,20 +332,20 @@ def get_hamiltonian(eng, coords, types, symbols,
                     .transpose(2,3) \
                     .reshape(molSub.nmol, 4*molSub.molsize, 4*molSub.molsize)
             
-            core_indices_in_sub_expanded#.to(dm_contr.device)
+
+            divider = dm_contr[:,:,core_indices_in_sub_expanded].shape[1]//32
 
             eElec_contr  = 0.5*(dm_contr[:,:,core_indices_in_sub_expanded]*(h1elec_sub[:,:,core_indices_in_sub_expanded]+ham_contr[:,:,core_indices_in_sub_expanded])).sum()
             del dm_contr, h1elec_sub, ham_contr, P_sub_from_contr, M_sub, molSub
             L = eElec_contr.sum()
             print("En {:>7.3f} |".format(time.time() - tic), end=" ")
-
             tic = time.time()
             #del dm_contr, P_sub_from_contr, h1elec_sub, ham_contr, molSub
+            torch.cuda.empty_cache()
             L.backward(retain_graph=True)
-
-
             force = -molSysData.molecule_whole.coordinates.grad.detach()[0].cpu().numpy()
             molSysData.molecule_whole.coordinates.grad.zero_()
+
             
             if eng.reconstruct_dm:
                 dm = P_sub.reshape(molSub.nmol, molSub.molsize, molSub.molsize,4,4) \
@@ -294,7 +361,7 @@ def get_hamiltonian(eng, coords, types, symbols,
                 
             del  L
             print("Force {:>7.3f} |".format(time.time() - tic), end=" ")
-            torch.cuda.empty_cache()
+            
             return force, eElec_contr.detach().cpu()
         return ham_contr
         

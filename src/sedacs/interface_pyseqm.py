@@ -21,6 +21,7 @@ try:
   from seqm.seqm_functions.energy import *
   seqm.seqm_functions.scf_loop.debug=False
   import torch
+  import time
 
 except: PYSEQM = False
 
@@ -38,9 +39,8 @@ class pyseqmObjects():
         #     get_hcore_pyseqm(coords, symbols, atomTypes)
         
         self.M_whole, self.w_whole = None, None
-        self.molecule_whole = get_molecule_pyseqm(coords, symbols, atomTypes, device=device)[0].to(device)
+        self.molecule_whole = get_molecule_pyseqm(sdc, coords, symbols, atomTypes, device=device)[0].to(device)
         self.w_ssss = torch.zeros_like(self.molecule_whole.idxi)
-        #self.w_ssss[:] = -999.
         #print('Creating DM guess.')
         #make_dm_guess(self.molecule_whole, self.molecule_whole.seqm_parameters, mix_homo_lumo=False, mix_coeff=0.3, overwrite_existing_dm=True);
 
@@ -70,8 +70,8 @@ class pyseqmObjects():
 
 def get_coreHalo_ham_inds(partIndex, partCoreHaloIndex, sdc, sy, subSy, device='cpu'):
     
-    #indices_in_sub = np.linspace(0,len(partCoreHaloIndex)-1, len(partCoreHaloIndex), dtype = np.int64)
-    indices_in_sub = torch.linspace(0, len(partCoreHaloIndex) - 1, len(partCoreHaloIndex), dtype=torch.int64, device=device)
+    #indices_in_sub = np.linspace(0,len(partCoreHaloIndex)-1, len(partCoreHaloIndex), dtype = sdc.torch_int_dt)
+    indices_in_sub = torch.linspace(0, len(partCoreHaloIndex) - 1, len(partCoreHaloIndex), dtype=sdc.torch_int_dt, device=device)
 
     #core_indices_in_sub = indices_in_sub[np.isin(partCoreHaloIndex, partIndex)]
     core_indices_in_sub = indices_in_sub[torch.isin(torch.tensor(partCoreHaloIndex, device=device), torch.tensor(partIndex, device=device))] # $$$ torch.searchsorted might be better
@@ -79,7 +79,7 @@ def get_coreHalo_ham_inds(partIndex, partCoreHaloIndex, sdc, sy, subSy, device='
     block_size = 4
     # Generate the expanded indices for each block
     #base_indices = np.arange(block_size)  # Create a base index tensor of size block_size
-    base_indices = torch.arange(block_size, dtype=torch.int64, device=device)  # Create a base index tensor of size block_size
+    base_indices = torch.arange(block_size, dtype=sdc.torch_int_dt, device=device)  # Create a base index tensor of size block_size
 
     #core_indices_in_sub_expanded = np.expand_dims(core_indices_in_sub, axis=1) * block_size + base_indices  # Broadcast and add
     core_indices_in_sub_expanded = core_indices_in_sub.unsqueeze(1) * block_size + base_indices
@@ -89,11 +89,11 @@ def get_coreHalo_ham_inds(partIndex, partCoreHaloIndex, sdc, sy, subSy, device='
 
     #core_indices_in_sub_expanded = torch.from_numpy(core_indices_in_sub_expanded)
     norbs, norbs_for_every_type, hindex_sub, numel = get_hindex(sdc.orbs, sdc.valency, sy.symbols, subSy.types)
-    hindex_sub = torch.from_numpy(hindex_sub).to(device)
+    hindex_sub = torch.from_numpy(hindex_sub).to(device, dtype=sdc.torch_int_dt)
 
     
     # Given tensor of block indices and block size
-    coreHalo_rows_in_whole = torch.tensor(partCoreHaloIndex)
+    coreHalo_rows_in_whole = torch.tensor(partCoreHaloIndex, dtype=sdc.torch_int_dt)
     block_size = 4
     # Generate the expanded indices for each block
     base_indices = torch.arange(block_size)  # Create a base index tensor of size block_size
@@ -101,7 +101,7 @@ def get_coreHalo_ham_inds(partIndex, partCoreHaloIndex, sdc, sy, subSy, device='
     coreHalo_rows_in_whole_expanded = coreHalo_rows_in_whole_expanded.flatten()  # Flatten the result
 
     # Given tensor of block indices and block size
-    core_cols_in_whole = torch.tensor(partIndex)
+    core_cols_in_whole = torch.tensor(partIndex, dtype=sdc.torch_int_dt)
     # Generate the expanded indices for each block
     base_indices = torch.arange(block_size)  # Create a base index tensor of size block_size
     core_cols_in_whole_expanded = core_cols_in_whole.unsqueeze(1) * block_size + base_indices  # Broadcast and add
@@ -162,6 +162,7 @@ def get_fock_pyseqm_2(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, pa
     in_block_mask = torch.zeros(atom_max+1,dtype=torch.bool, device = P_sub.device)
     in_block_mask[block_indices]=True
 
+    
     isini = in_block_mask[idxi]#.to(torch.bool)
     where_isini = torch.nonzero(isini).squeeze()
 
@@ -171,7 +172,31 @@ def get_fock_pyseqm_2(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, pa
     loc_i = idxi[isini]
     loc_j = idxj[isinj]
 
-    idxi_sub_ovrlp_with_rest = torch.isin(idxi, block_indices)
+    
+    ### first doing idxi because its sorted
+    #     idxi_sub_ovrlp_with_rest = torch.isin(idxi, block_indices) # <- insted of this
+    # Searchsorted gives you the indices where the elements should be placed to maintain order. Works with idxi (sorted) but not with idxj (not sorted)
+    pos = torch.searchsorted(block_indices, idxi)
+    # Ensure the indices are within bounds
+    pos = torch.clamp(pos, max=len(block_indices) - 1)
+    # Check if the positions are valid and match
+    idxi_sub_ovrlp_with_rest = (pos < len(block_indices)) & (block_indices[pos] == idxi)
+
+    ### second, doing indx i because its a sequence of sorted maxtrix triangle rows
+    #     idxj_sub_ovrlp_with_rest = torch.isin(idxj, block_indices) # <- instead of this
+    # start_ind = 0
+    # end_ind = len(P) - 1
+    # idxj_sub_ovrlp_with_rest = torch.zeros(int((len(P)*(len(P)-1)/2)), dtype=torch.bool, device=P.device)
+    # tmp_j = idxj[start_ind:end_ind]
+    # pos = torch.searchsorted(block_indices, tmp_j)
+    # pos = torch.clamp(pos, max=len(block_indices) - 1)
+    # valid_top_row = (pos < len(block_indices)) & (block_indices[pos] == tmp_j)
+    # del tmp_j, pos
+    # for i in range(0,len(P)): ### $$$ needs vecorization
+    #     idxj_sub_ovrlp_with_rest[start_ind:end_ind] = valid_top_row[i:]
+    #     start_ind = end_ind
+    #     end_ind = end_ind + len(P) - i - 2
+
     idxj_sub_ovrlp_with_rest = torch.isin(idxj, block_indices)
 
     F = M.clone()
@@ -205,14 +230,13 @@ def get_fock_pyseqm_2(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, pa
     
     w_2_inj=w_2[where_isinj]
     suma_test = torch.einsum('ijk,ijk->ik',PA_test,w_2_inj)
-    del PA_test
+    sumA_test = torch.zeros(w_2_inj.shape[0],4,4,dtype=dtype, device=device)
+    del PA_test, w_2_inj
 
     w_2_ini=w_2[where_isini]
     sumb_test = torch.einsum('ijk,ijk->ij',PB_test,w_2_ini)
-    del PB_test
-
-    sumA_test = torch.zeros(w_2_inj.shape[0],4,4,dtype=dtype, device=device)
     sumB_test = torch.zeros(w_2_ini.shape[0],4,4,dtype=dtype, device=device)
+    del PB_test, w_2_ini    
 
     sumA_test[...,(0,0,1,0,1,2,0,1,2,3),(0,1,1,2,2,2,3,3,3,3)] = suma_test
     sumB_test[...,(0,0,1,0,1,2,0,1,2,3),(0,1,1,2,2,2,3,3,3,3)] = sumb_test
@@ -338,7 +362,7 @@ def get_hcore_pyseqm(coords,symbols,atomTypes, device='cpu', verb=False):
   return M, w, molecule, rho0xi, rho0xj
 
 
-def get_molecule_pyseqm(coords, symbols, atomTypes, device='cpu', verb=False):
+def get_molecule_pyseqm(sdc, coords, symbols, atomTypes, device='cpu', verb=False):
   # move to a sep file $$$
   torch.cuda.empty_cache()
   """PYSEQM"""
@@ -351,11 +375,6 @@ def get_molecule_pyseqm(coords, symbols, atomTypes, device='cpu', verb=False):
 
   if(PYSEQM == False):
     print("ERROR: No PySCF installed")
-
-
-    
-
-
 
   symbols_internal = np.array([ "Bl" ,                               
       "H" ,                                     "He",        
@@ -384,15 +403,19 @@ def get_molecule_pyseqm(coords, symbols, atomTypes, device='cpu', verb=False):
   # Convert atomTypes to `symbols_internal` indices
   atom_internal_indices = mapped_indices[atomTypes]
 
+  if sdc.torch_dt == torch.float64:
+    dtype_int = torch.int64
+  else:
+    dtype_int = torch.int32
   species = torch.as_tensor(np.array([atom_internal_indices,]),
-                          dtype=torch.int64, device=device)
+                          dtype=dtype_int, device=device)
   
   
   if torch.is_tensor(coords):
     coordinates = coords
   else:
     coordinates = torch.tensor(np.array([coords]), 
-                             device=device, dtype=torch.float64)
+                             device=device, dtype=sdc.torch_dt)
   
   #print(coordinates)
 
@@ -446,7 +469,7 @@ def get_eVals_pyseqm(H, Nocc, Tel, mu0, coreSize, core_ham_dim, molecule=None, v
   # or
   # rho_ij = SUM_k Q_ik * f_kk * Q_jk
 
-  dVals = torch.tensor([], device = core_ham_dim.device)
+  dVals = torch.tensor([], device = core_ham_dim.device, dtype=H.dtype)
   for i in range(N):
     dVals = torch.cat((dVals, torch.inner(Q[core_ham_dim,i],Q[core_ham_dim, i]).unsqueeze(0)) )
 

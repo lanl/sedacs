@@ -23,6 +23,7 @@ from sedacs.graph import get_initial_graph
 from sedacs.overlap import get_overlap
 from sedacs.interface_pyseqm import get_coreHalo_ham_inds, get_diag_guess_pyseqm
 import itertools
+import sys
 
 
 from seqm.seqm_functions.pack import pack
@@ -171,7 +172,7 @@ def get_singlePointForces(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, 
     partsPerRank = int(sdc.nparts / numranks)
     partIndex1 = rank * partsPerRank
     partIndex2 = (rank + 1) * partsPerRank
-    EELEC = torch.tensor([0.0], dtype = torch.float64)
+    EELEC = torch.tensor([0.0], dtype = eng.torch_dt)
     for partIndex in range(partIndex1, partIndex2):
         print("Rank, part", rank, partIndex)
         subSy = System(len(partsCoreHalo[partIndex]))
@@ -185,11 +186,12 @@ def get_singlePointForces(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, 
         f, eElec = get_hamiltonian(eng,subSy.coords,subSy.types,subSy.symbols, 
                               parts[partIndex], partsCoreHalo[partIndex], molSysData, P, P_contr, graph_for_pairs, graph_maskd, core_indices_in_sub_expanded, doForces = True,
                               verbose=False)
-        if mpiOnDebugFlag:
-            comm.Allreduce(f, forces, op=MPI.SUM)
-        else:
-            forces += f
+        # if mpiOnDebugFlag:
+        #     comm.Allreduce(f, forces, op=MPI.SUM)
+        # else:
+        #     forces += f
 
+        forces += f
         EELEC += eElec
         print(eElec)
         del eElec, subSy, f
@@ -218,10 +220,10 @@ def get_singlePointDM(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, 
         rho_ren, maxDif, sumDif = get_density_matrix_renorm(eng, Tel, mu0, dm, P_contr, graph_for_pairs,
                                             eValOnRank_list[partIndex], Q_list[partIndex], NH_Nh_Hs_list[partIndex], I_list[partIndex], core_indices_in_sub_expanded_list[partIndex], Nocc_list[partIndex])
         
-        indices_in_sub = np.linspace(0,len(partsCoreHalo[partIndex])-1, len(partsCoreHalo[partIndex]), dtype = np.int64)
+        indices_in_sub = np.linspace(0,len(partsCoreHalo[partIndex])-1, len(partsCoreHalo[partIndex]), dtype = eng.np_int_dt)
         core_indices_in_sub = indices_in_sub[np.isin(partsCoreHalo[partIndex], parts[partIndex])]
         
-        alpha = 0.16
+        alpha = 0.6
         P_contr_maxDif = []
         P_contr_sumDif = 0
         for i in range(len(parts[partIndex])):
@@ -283,6 +285,35 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     device = 'cpu'
     eng.reconstruct_dm = False
     sdc.reconstruct_dm = eng.reconstruct_dm
+
+    if torch.get_default_dtype() == torch.float32:
+
+        eng.torch_dt = torch.float32
+        sdc.torch_dt = eng.torch_dt
+
+        eng.torch_int_dt = torch.int32
+        sdc.torch_int_dt = eng.torch_int_dt
+
+        eng.np_dt = np.float32
+        sdc.np_dt = eng.np_dt
+
+        eng.np_int_dt = np.int32
+        sdc.np_int_dt = eng.np_int_dt
+    else:
+        eng.torch_dt = torch.float64
+        sdc.torch_dt = eng.torch_dt
+
+        eng.torch_int_dt = torch.int64
+        sdc.torch_int_dt = eng.torch_int_dt
+
+        eng.np_dt = np.float64
+        sdc.np_dt = eng.np_dt
+
+        eng.np_int_dt = np.int64
+        sdc.np_int_dt = eng.np_int_dt
+
+    
+
     njumps = 1
 
     tic = time.perf_counter()
@@ -341,7 +372,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                 sub_counter += 1 
             counter += int(sdc.maxDeg - graph_for_pairs[j][0])
 
-        P_contr = torch.zeros(sy.nats*sdc.maxDeg,4,4, dtype=molSysData.molecule_whole.coordinates.dtype, device=device)  # density matrix
+        P_contr = torch.zeros(sy.nats*sdc.maxDeg,4,4, dtype=eng.torch_dt, device=device)  # density matrix
         P_contr[graph_maskd] = get_diag_guess_pyseqm(molSysData.molecule_whole, sy)
         P_contr = P_contr.reshape(sy.nats, sdc.maxDeg, 4,4).transpose(0,1)
         graph_maskd = np.array(graph_maskd)
@@ -385,10 +416,10 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
 
         if eng.reconstruct_dm:
             dm_size = comm.bcast(dm_size, root=0)
-            win = MPI.Win.Allocate_shared(nbytes, 8, comm=comm) # 8 is the size of torch.float64
+            win = MPI.Win.Allocate_shared(nbytes, torch.tensor(0, dtype=eng.torch_dt).element_size(), comm=comm) # 8 is the size of torch.float64
             buf, itemsize = win.Shared_query(0) 
-            assert itemsize == MPI.DOUBLE.Get_size() 
-            ary = np.ndarray(buffer=buf, dtype='d', shape=(dm_size))
+            #assert itemsize == MPI.DOUBLE.Get_size() 
+            ary = np.ndarray(buffer=buf, dtype=eng.np_dt, shape=(dm_size))
             if rank == 0:
                 ary[:] = dm.numpy()   
             comm.Barrier()
@@ -398,10 +429,10 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             print(dm.shape)
 
         P_contr_size = comm.bcast(P_contr_size, root=0)
-        P_contr_win = MPI.Win.Allocate_shared(P_contr_nbytes, 8, comm=comm) # 8 is the size of torch.float64
+        P_contr_win = MPI.Win.Allocate_shared(P_contr_nbytes, torch.tensor(0, dtype=eng.torch_dt).element_size(), comm=comm) # 8 is the size of torch.float64
         P_contr_buf, P_contr_itemsize = P_contr_win.Shared_query(0) 
-        assert P_contr_itemsize == MPI.DOUBLE.Get_size() 
-        P_contr_ary = np.ndarray(buffer=P_contr_buf, dtype='d', shape=(P_contr_size))
+        #assert P_contr_itemsize == MPI.DOUBLE.Get_size() 
+        P_contr_ary = np.ndarray(buffer=P_contr_buf, dtype=eng.np_dt, shape=(P_contr_size))
         if rank == 0:
             P_contr_ary[:] = P_contr.cpu().numpy()   
         comm.Barrier()
@@ -548,116 +579,131 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         print("t Iter {:>8.2f} (s)".format(time.perf_counter() - TIC_iter))
 
     ### forces calculation
-    device = 'cuda'
-    del molSysData
-    molSysData = get_molSysData(eng, sdc, sy.coords, sy.symbols, sy.types, device=device) #object with whatever initial parameters and tensors
-    P_contr = P_contr.to(device)
-    if rank == 0:
-        #forces = np.zeros((sy.coords.shape))
-        f_size = [sy.nats,3]
-        f_nbytes = sy.nats*3 * np.float64(0).nbytes
+    num_gpus = torch.cuda.device_count()
+    color = 0 if rank < num_gpus else 1
+    gpu_comm = comm.Split(color=color, key=rank)
 
-        tic = time.perf_counter()
-
-        partsCoreHalo = []
-        print("\nCore and halos indices for every part:")
-        for i in range(sdc.nparts):
-            coreHalo, nc = get_coreHaloIndices(eng, parts[i], fullGraph, njumps, sdc, sy)
-            partsCoreHalo.append(coreHalo)
-            if sdc.verb: print("coreHalo for part", i, "=", coreHalo)
-            print('N atoms in core/coreHalo {:>6d} : {:>6d} {:>6d}'.format(i, len(parts[i]), len(coreHalo)), '\n')
-
-        new_graph_for_pairs = fullGraph.copy()
-        for i in range(sy.nats):
-            for sublist_idx in range(len(parts)):
-                if i in parts[sublist_idx]:
-                    new_graph_for_pairs[i][0] = len(partsCoreHalo[sublist_idx])
-                    new_graph_for_pairs[i][1:new_graph_for_pairs[i][0]+1] = partsCoreHalo[sublist_idx]
-
-        #### THIS IS BAD. NEEDS TO BE FIXEd $$$
-        P_contr_new = torch.zeros_like(P_contr, device=device)
-        for i in range(len(new_graph_for_pairs)):
-            P_contr_new[:,i][  :new_graph_for_pairs[i][0]  ][   np.isin(new_graph_for_pairs[i][1:new_graph_for_pairs[i][0]+1], graph_for_pairs[i][1:graph_for_pairs[i][0]+1])   ] = \
-                P_contr[:,i][:graph_for_pairs[i][0]][   np.isin(graph_for_pairs[i][1:graph_for_pairs[i][0]+1], new_graph_for_pairs[i][1:new_graph_for_pairs[i][0]+1])   ]
-        P_contr[:] = P_contr_new[:]
-        del P_contr_new
-
-        graph_for_pairs = new_graph_for_pairs
-        graph_maskd = []
-        counter = 0
-        for j in range(len(graph_for_pairs)):
-            sub_counter = 0
-            for i in graph_for_pairs[j][1:graph_for_pairs[j][0]+1]: 
-                if i==j:
-                    graph_maskd.append(counter)
-                counter +=1
-                sub_counter += 1 
-            counter += int(sdc.maxDeg - graph_for_pairs[j][0])
-    else:
-        #forces = None
-        f_size = None
-        f_nbytes = 0
-        partsCoreHalo = None
-        new_graph_for_pairs = None
-        graph_for_pairs = None
-        graph_maskd = None
-
-    if mpiOnDebugFlag:
-        f_size = comm.bcast(f_size, root=0)
-        f_nbytes = comm.bcast(f_nbytes, root=0)
-        partsCoreHalo = comm.bcast(partsCoreHalo, root=0)
-        comm.Barrier()
     
-        f_win = MPI.Win.Allocate_shared(f_nbytes, 8, comm=comm) # 8 is the size of torch.float64
-        f_buf, f_itemsize = f_win.Shared_query(0) 
-        assert f_itemsize == MPI.DOUBLE.Get_size() 
-        forces = np.ndarray(buffer=f_buf, dtype='d', shape=(f_size))
-
-        graph_for_pairs = comm.bcast(graph_for_pairs, root=0)
-        new_graph_for_pairs = comm.bcast(new_graph_for_pairs, root=0)
-        graph_maskd = comm.bcast(graph_maskd, root=0)
-
+    if rank < num_gpus:
+        device = 'cuda:{}'.format(rank)
+        del molSysData
+        molSysData = get_molSysData(eng, sdc, sy.coords, sy.symbols, sy.types, device=device) #object with whatever initial parameters and tensors
+        P_contr = P_contr.to(device)
         if rank == 0:
-            forces[:] = .0
-        comm.Barrier()
-    else:
-        forces = np.zeros((sy.coords.shape))
-    
-    if eng.interface == "PySEQM":
-        if eng.reconstruct_dm:
-            print()
-            eElec = get_singlePointForces(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, forces, molSysData,
-                            dm.reshape((molSysData.molecule_whole.nmol, molSysData.molecule_whole.molsize,4, molSysData.molecule_whole.molsize,4)) \
-                            .transpose(2,3).reshape(molSysData.molecule_whole.nmol*molSysData.molecule_whole.molsize*molSysData.molecule_whole.molsize,4,4),P_contr, graph_for_pairs, graph_maskd)
-        else:
-            eElec = get_singlePointForces(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, forces, molSysData,
-                            None, P_contr, graph_for_pairs, graph_maskd)
+            forces = np.zeros((sy.coords.shape))
+            #f_size = [sy.nats,3]
+            #f_nbytes = sy.nats*3 * np.float64(0).nbytes
 
-        if mpiOnDebugFlag:
-            comm.Barrier()
-            eElec_LIST = comm.gather(eElec, root=0)
+            tic = time.perf_counter()
+
+            partsCoreHalo = []
+            print("\nCore and halos indices for every part:")
+            for i in range(sdc.nparts):
+                coreHalo, nc = get_coreHaloIndices(eng, parts[i], fullGraph, njumps, sdc, sy)
+                partsCoreHalo.append(coreHalo)
+                if sdc.verb: print("coreHalo for part", i, "=", coreHalo)
+                print('N atoms in core/coreHalo {:>6d} : {:>6d} {:>6d}'.format(i, len(parts[i]), len(coreHalo)), '\n')
+
+            new_graph_for_pairs = fullGraph.copy()
+            for i in range(sy.nats):
+                for sublist_idx in range(len(parts)):
+                    if i in parts[sublist_idx]:
+                        new_graph_for_pairs[i][0] = len(partsCoreHalo[sublist_idx])
+                        new_graph_for_pairs[i][1:new_graph_for_pairs[i][0]+1] = partsCoreHalo[sublist_idx]
+
+            #### THIS IS BAD. NEEDS TO BE FIXEd $$$
+            P_contr_new = torch.zeros_like(P_contr, device=device)
+            for i in range(len(new_graph_for_pairs)):
+                P_contr_new[:,i][  :new_graph_for_pairs[i][0]  ][   np.isin(new_graph_for_pairs[i][1:new_graph_for_pairs[i][0]+1], graph_for_pairs[i][1:graph_for_pairs[i][0]+1])   ] = \
+                    P_contr[:,i][:graph_for_pairs[i][0]][   np.isin(graph_for_pairs[i][1:graph_for_pairs[i][0]+1], new_graph_for_pairs[i][1:new_graph_for_pairs[i][0]+1])   ]
+            P_contr[:] = P_contr_new[:]
+            del P_contr_new
+
+            graph_for_pairs = new_graph_for_pairs
+            graph_maskd = []
+            counter = 0
+            for j in range(len(graph_for_pairs)):
+                sub_counter = 0
+                for i in graph_for_pairs[j][1:graph_for_pairs[j][0]+1]: 
+                    if i==j:
+                        graph_maskd.append(counter)
+                    counter +=1
+                    sub_counter += 1 
+                counter += int(sdc.maxDeg - graph_for_pairs[j][0])
         else:
-            eElec_LIST = eElec
-    else:
-        get_singlePointForces(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, forces, molSysData, dm)
-    print("Time to get electron forces", time.perf_counter() - tic,"(s)")
-    
-    if rank == 0:
-        #print("eElec:   {:>10.7f}".format(eElec[0]),)
-        print("eElec:   {:>10.7f}".format(sum(eElec_LIST)[0]),)
-        tic = time.perf_counter()
-        eNucAB = get_eNuc(eng, molSysData)
-        eTot, eNuc = get_eTot(eng, molSysData, eNucAB, 0)
-        print("Enuc:   {:>10.7f}".format(eNuc),)
-        L = eNuc.sum()
-        L.backward()
-        forceNuc = -molSysData.molecule_whole.coordinates.grad.detach()
-        molSysData.molecule_whole.coordinates.grad.zero_()
-        print("Time to get nuclear forces", time.perf_counter() - tic,"(s)")
-        #print(forceNuc)
-        #np.save('forces_test.np', (forces+forceNuc.numpy()[0]), )
-        #np.save('forces_test.np', (forces), )
-        np.save('forces_test.np', (forceNuc.cpu().numpy()[0]), )
+            forces = None
+            #f_size = None
+            #f_nbytes = 0
+            partsCoreHalo = None
+            new_graph_for_pairs = None
+            graph_for_pairs = None
+            graph_maskd = None
+
+        
+        if mpiOnDebugFlag:
+            #f_size = comm.bcast(f_size, root=0)
+            #f_nbytes = comm.bcast(f_nbytes, root=0)
+            forces = gpu_comm.bcast(forces, root=0)
+            print('HERE1')
+            partsCoreHalo = gpu_comm.bcast(partsCoreHalo, root=0)
+            print('BARR')
+            gpu_comm.Barrier()
+        
+            #f_win = MPI.Win.Allocate_shared(f_nbytes, torch.tensor(0, dtype=eng.torch_dt).element_size(), comm=comm) # 8 is the size of torch.float64
+            #f_buf, f_itemsize = f_win.Shared_query(0) 
+            #assert f_itemsize == MPI.DOUBLE.Get_size() 
+            #forces = np.ndarray(buffer=f_buf, dtype='d', shape=(f_size))
+
+            graph_for_pairs = gpu_comm.bcast(graph_for_pairs, root=0)
+            new_graph_for_pairs = gpu_comm.bcast(new_graph_for_pairs, root=0)
+            graph_maskd = gpu_comm.bcast(graph_maskd, root=0)
+
+            if rank == 0:
+                forces[:] = .0
+            gpu_comm.Barrier()
+        else:
+            forces = np.zeros((sy.coords.shape))
+        print('rank', rank)
+        if eng.interface == "PySEQM":
+            if eng.reconstruct_dm:
+                print()
+                eElec = get_singlePointForces(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, forces, molSysData,
+                                dm.reshape((molSysData.molecule_whole.nmol, molSysData.molecule_whole.molsize,4, molSysData.molecule_whole.molsize,4)) \
+                                .transpose(2,3).reshape(molSysData.molecule_whole.nmol*molSysData.molecule_whole.molsize*molSysData.molecule_whole.molsize,4,4),P_contr, graph_for_pairs, graph_maskd)
+            else:
+                eElec = get_singlePointForces(sdc, eng, rank, num_gpus, gpu_comm, parts, partsCoreHalo, sy, hindex, forces, molSysData,
+                                None, P_contr, graph_for_pairs, graph_maskd)
+
+            if mpiOnDebugFlag:
+                gpu_comm.Barrier()
+                gpu_comm.Allreduce(MPI.IN_PLACE, forces, op=MPI.SUM)
+
+                eElec_LIST = gpu_comm.gather(eElec, root=0)
+            else:
+                eElec_LIST = eElec
+        else:
+            get_singlePointForces(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, forces, molSysData, dm)
+        print("Time to get electron forces", time.perf_counter() - tic,"(s)")
+        
+        if rank == 0:
+            if mpiOnDebugFlag:
+                print("eElec:   {:>10.7f}".format(sum(eElec_LIST)[0]),)
+            else:
+                print("eElec:   {:>10.7f}".format(eElec[0]),)
+            
+            tic = time.perf_counter()
+            eNucAB = get_eNuc(eng, molSysData)
+            eTot, eNuc = get_eTot(eng, molSysData, eNucAB, 0)
+            print("Enuc:   {:>10.7f}".format(eNuc),)
+            L = eNuc.sum()
+            L.backward()
+            forceNuc = -molSysData.molecule_whole.coordinates.grad.detach()
+            molSysData.molecule_whole.coordinates.grad.zero_()
+            print("Time to get nuclear forces", time.perf_counter() - tic,"(s)")
+            #print(forceNuc)
+            np.save('forces_test.np', (forces+forceNuc.cpu().numpy()[0]), )
+            #np.save('forces_test.np', (forces), )
+            #np.save('forces_test.np', (forceNuc.cpu().numpy()[0]), )
 
 
     # fockFull = get_fock(eng, molSysData)
