@@ -24,8 +24,8 @@ tic = time.perf_counter()
 args = get_args()
 
 # Initialize sedacs
-torch.set_printoptions(precision=4, linewidth=1000, threshold = 20000 )
-np.set_printoptions(precision=4, linewidth=1000)
+torch.set_printoptions(precision=4, linewidth=300, threshold = 20000 )
+np.set_printoptions(precision=4, linewidth=300)
 
 # Initialize sdc parameters
 sdc, eng, comm, rank, numranks, sy, hindex, graphNL, nl, nlTrX, nlTrY, nlTrZ = init(args)

@@ -18,8 +18,21 @@ from torch.amp import autocast, GradScaler
 from torch.utils.checkpoint import checkpoint
 
 import numpy as np
+from mpi4py import MPI
+import psutil
+import gc
 
 __all__ = ["get_hamiltonian"]
+
+def get_tensors():
+    for obj in gc.get_objects():
+        try:
+            if torch.is_tensor(obj):
+                yield obj
+        except Exception as e:
+            pass
+def tensor_size(tensor):
+    return tensor.element_size() * tensor.nelement() / (1024 ** 2)
 
 
 ## Build the non-scf Hamiltonian matrix.
@@ -30,6 +43,11 @@ __all__ = ["get_hamiltonian"]
 # @param symbols Symbols for every atom type
 # @verbose Verbosity
 #
+def print_memory_usage(rank, node_rank, message):
+    process = psutil.Process()
+    mem_info = process.memory_info()
+    print(f"{message} | Rank: {rank}, Node Rank: {node_rank}, Memory Usage: {mem_info.rss / (1024 ** 2):.2f} MB")
+
 def get_hamiltonian(eng, coords, types, symbols,
                     partsIndex, partsCoreHaloIndex, molSysData, P, P_contr, graph_for_pairs, graph_maskd, core_indices_in_sub_expanded, doForces = False,
                     verbose=False):
@@ -51,6 +69,9 @@ def get_hamiltonian(eng, coords, types, symbols,
     elif eng.interface == "File":
         return get_hamiltonian_files(eng, coords, types, symbols, verb=verbose)
     elif eng.interface == "PySEQM":
+
+        
+
         
         tic = time.time()
         block_indices = torch.tensor(partsCoreHaloIndex, dtype=eng.torch_int_dt, device=P_contr.device)
@@ -63,102 +84,179 @@ def get_hamiltonian(eng, coords, types, symbols,
         #mask_sub_lower_TEST = torch.cat([torch.arange(i * block_size + i-1, i * block_size-1, -1) for i in range(block_size-1, 0,-1)])
 
 
-        print(P_contr.device, )
-        molSub = get_molecule_pyseqm(eng, molSysData.molecule_whole.coordinates[:,partsCoreHaloIndex], symbols, types, device=P_contr.device)[0]#.to(P_contr.device)
+        if doForces:
+            molSub = get_molecule_pyseqm(eng, molSysData.molecule_whole.coordinates[:,partsCoreHaloIndex], symbols, types, device=P_contr.device)[0]#.to(P_contr.device)
+        else:
+            with torch.no_grad():
+                molSub = get_molecule_pyseqm(eng, molSysData.molecule_whole.coordinates[:,partsCoreHaloIndex], symbols, types, device=P_contr.device)[0]#.to(P_contr.device)
         M_sub, _, _, _ = hcore(molSub, doTETCI=False) # non-diagonal h1elec
 
         #print('  Time to compute hcore', time.time() - tic)
         print("t: h1elNonDi {:>7.3f} |".format(time.time() - tic), end=" ")
 
-        # tic = time.time()
-        # ###rij_sub = molSysData.molecule_whole.rij[sub_inds]
-        # subIndsUnion_i = torch.isin(molSysData.molecule_whole.idxi, block_indices)
-        # subIndsUnion_j = torch.isin(molSysData.molecule_whole.idxj, block_indices)
-        # subIndsUnion = subIndsUnion_i + subIndsUnion_j
-        # del subIndsUnion_i, subIndsUnion_j
-        # #subIndsUnion = torch.isin(molSysData.molecule_whole.idxi, block_indices) + torch.isin(molSysData.molecule_whole.idxj, block_indices)
-        # print("subIndsUnion {:>7.3f} |".format(time.time() - tic), end=" ")
+        if eng.use_pyseqm_lt:
+            # tic = time.time()
+            # ###rij_sub = molSysData.molecule_whole.rij[sub_inds]
+            # subIndsUnion_i = torch.isin(molSysData.molecule_whole.idxi, block_indices)
+            # subIndsUnion_j = torch.isin(molSysData.molecule_whole.idxj, block_indices)
+            # subIndsUnion = subIndsUnion_i + subIndsUnion_j
+            # del subIndsUnion_i, subIndsUnion_j
+            # #subIndsUnion = torch.isin(molSysData.molecule_whole.idxi, block_indices) + torch.isin(molSysData.molecule_whole.idxj, block_indices)
+            # print("subIndsUnion {:>7.3f} |".format(time.time() - tic), end=" ")
 
-        tic = time.time()
-        ### first doing idxi because its sorted
-        # Searchsorted gives you the indices where the elements should be placed to maintain order. Works with idxi (sorted) but not with idxj (not sorted)
-        pos = torch.searchsorted(block_indices, molSysData.molecule_whole.idxi)
-        # Ensure the indices are within bounds
-        pos = torch.clamp(pos, max=len(block_indices) - 1)
-        # Check if the positions are valid and match
-        subIndsUnion_i = (pos < len(block_indices)) & (block_indices[pos] == molSysData.molecule_whole.idxi)
+            tic = time.time()
+            ### first doing idxi because its sorted
+            # Searchsorted gives you the indices where the elements should be placed to maintain order. Works with idxi (sorted) but not with idxj (not sorted)
+            pos = torch.searchsorted(block_indices, molSysData.molecule_whole.idxi)
+            # Ensure the indices are within bounds
+            pos = torch.clamp(pos, max=len(block_indices) - 1)
+            # Check if the positions are valid and match
+            subIndsUnion_i = (pos < len(block_indices)) & (block_indices[pos] == molSysData.molecule_whole.idxi)
 
-        ### second, doing indx i because its a sequence of sorted maxtrix triangle rows
-        start_ind = 0
-        end_ind = molSysData.molecule_whole.molsize - 1
-        subIndsUnion_j = torch.zeros(int((molSysData.molecule_whole.molsize*(molSysData.molecule_whole.molsize-1)/2)), dtype=torch.bool, device=P_contr.device)
-        tmp_j = molSysData.molecule_whole.idxj[start_ind:end_ind]
-        pos = torch.searchsorted(block_indices, tmp_j)
-        pos = torch.clamp(pos, max=len(block_indices) - 1)
-        valid_top_row = (pos < len(block_indices)) & (block_indices[pos] == tmp_j)
-        del tmp_j, pos
-        for i in range(0,molSysData.molecule_whole.molsize): ### $$$ needs vecorization
-            subIndsUnion_j[start_ind:end_ind] = valid_top_row[i:]
-            start_ind = end_ind
-            end_ind = end_ind + molSysData.molecule_whole.molsize - i - 2
+            ### second, doing indx i because its a sequence of sorted maxtrix triangle rows
+            start_ind = 0
+            end_ind = molSysData.molecule_whole.molsize - 1
+            subIndsUnion_j = torch.zeros(int((molSysData.molecule_whole.molsize*(molSysData.molecule_whole.molsize-1)/2)), dtype=torch.bool, device=P_contr.device)
+            tmp_j = molSysData.molecule_whole.idxj[start_ind:end_ind]
+            pos = torch.searchsorted(block_indices, tmp_j)
+            pos = torch.clamp(pos, max=len(block_indices) - 1)
+            valid_top_row = (pos < len(block_indices)) & (block_indices[pos] == tmp_j)
+            del tmp_j, pos
+            for i in range(0,molSysData.molecule_whole.molsize): ### $$$ needs vecorization
+                subIndsUnion_j[start_ind:end_ind] = valid_top_row[i:]
+                start_ind = end_ind
+                end_ind = end_ind + molSysData.molecule_whole.molsize - i - 2
 
-        subIndsUnion = subIndsUnion_i + subIndsUnion_j
-        del subIndsUnion_i, subIndsUnion_j, valid_top_row
-        #subIndsUnion = torch.isin(molSysData.molecule_whole.idxi, block_indices) + torch.isin(molSysData.molecule_whole.idxj, block_indices)
-        print("subIndsUnion {:>7.3f} |".format(time.time() - tic), end=" ")
+            subIndsUnion = subIndsUnion_i + subIndsUnion_j
+            del subIndsUnion_i, subIndsUnion_j, valid_top_row
+            #subIndsUnion = torch.isin(molSysData.molecule_whole.idxi, block_indices) + torch.isin(molSysData.molecule_whole.idxj, block_indices)
+            print("subIndsUnion {:>7.3f} |".format(time.time() - tic), end=" ")
+
+            tic = time.time()
+            coulInts_test, e1b, e2a, _, _ = TETCI(molSysData.molecule_whole.const, molSysData.molecule_whole.idxi[subIndsUnion], molSysData.molecule_whole.idxj[subIndsUnion],
+                molSysData.molecule_whole.ni[subIndsUnion], molSysData.molecule_whole.nj[subIndsUnion], molSysData.molecule_whole.xij[subIndsUnion], molSysData.molecule_whole.rij[subIndsUnion], molSysData.molecule_whole.Z,\
+                molSysData.molecule_whole.parameters['zeta_s'], molSysData.molecule_whole.parameters['zeta_p'], molSysData.molecule_whole.parameters['zeta_d'],\
+                molSysData.molecule_whole.parameters['s_orb_exp_tail'], molSysData.molecule_whole.parameters['p_orb_exp_tail'], molSysData.molecule_whole.parameters['d_orb_exp_tail'],\
+                molSysData.molecule_whole.parameters['g_ss'], molSysData.molecule_whole.parameters['g_pp'], molSysData.molecule_whole.parameters['g_p2'], molSysData.molecule_whole.parameters['h_sp'],\
+                molSysData.molecule_whole.parameters['F0SD'], molSysData.molecule_whole.parameters['G2SD'], molSysData.molecule_whole.parameters['rho_core'],\
+                molSysData.molecule_whole.alp, molSysData.molecule_whole.chi, molSysData.molecule_whole.method)
+            print("TETCI&DiI {:>7.3f} |".format(time.time() - tic), end=" ")
         
-        tic = time.time()
-        # coulInts_test, e1b, e2a, _, _ = TETCI(molSysData.molecule_whole.const, molSysData.molecule_whole.idxi[subIndsUnion], molSysData.molecule_whole.idxj[subIndsUnion],
-        #         molSysData.molecule_whole.ni[subIndsUnion], molSysData.molecule_whole.nj[subIndsUnion], molSysData.molecule_whole.xij[subIndsUnion], molSysData.molecule_whole.rij[subIndsUnion], molSysData.molecule_whole.Z,\
-        #         molSysData.molecule_whole.parameters['zeta_s'], molSysData.molecule_whole.parameters['zeta_p'], molSysData.molecule_whole.parameters['zeta_d'],\
-        #         molSysData.molecule_whole.parameters['s_orb_exp_tail'], molSysData.molecule_whole.parameters['p_orb_exp_tail'], molSysData.molecule_whole.parameters['d_orb_exp_tail'],\
-        #         molSysData.molecule_whole.parameters['g_ss'], molSysData.molecule_whole.parameters['g_pp'], molSysData.molecule_whole.parameters['g_p2'], molSysData.molecule_whole.parameters['h_sp'],\
-        #         molSysData.molecule_whole.parameters['F0SD'], molSysData.molecule_whole.parameters['G2SD'], molSysData.molecule_whole.parameters['rho_core'],\
-        #         molSysData.molecule_whole.alp, molSysData.molecule_whole.chi, molSysData.molecule_whole.method)
+        else:
+            tic = time.time()
+            dtypeTEST = molSysData.molecule_whole.Z.dtype # torch.long
+            atom_index = torch.arange(molSysData.molecule_whole.nmol*molSysData.molecule_whole.molsize, device=P_contr.device,dtype=torch.int64)
+
+            # Prepare lists to hold the indices that will form iii and jjj
+            iii_list = []
+            jjj_list = []
+
+            # Loop over atom_index and handle vectorized operations within each iteration
+            for i in atom_index: ### $$$ needs vectorization
+                if i in block_indices:
+                    jj = torch.arange(i + 1, molSysData.molecule_whole.molsize, dtype=dtypeTEST, device=P_contr.device)
+                    ii = torch.full_like(jj, i)  # Create a tensor of `i` repeated for each `j`
+
+                    # If `i` is in block_indices, add all pairs (i, jj)
+                    iii_list.append(ii)
+                    jjj_list.append(jj)
+                else:
+                    jj = torch.arange(i + 1, molSysData.molecule_whole.molsize, dtype=dtypeTEST, device=P_contr.device)
+
+                    # If `i` is not in block_indices, use binary search for checking presence in sorted `block_indices`
+                    idx_in_block = torch.searchsorted(block_indices, jj)
+
+                    # Ensure indices are within bounds of block_indices
+                    in_bounds_mask = idx_in_block < len(block_indices)
+                    valid_idx_in_block = idx_in_block[in_bounds_mask]
+                    valid_jj = jj[in_bounds_mask]
+
+                    # Now check if the values at valid indices match the elements in jj
+                    mask_j_in_block = block_indices[valid_idx_in_block] == valid_jj
+                    
+                    # Append only the values where jj is in block_indices
+                    ii = torch.full_like(jj, i)  # Create a tensor of `i` repeated for each `j`
+                    
+                    iii_list.append(ii[in_bounds_mask][mask_j_in_block])
+                    jjj_list.append(valid_jj[mask_j_in_block])
+
+            # Concatenate all the lists to form the final iii and jjj tensors
+            iii = torch.cat(iii_list) if iii_list else torch.tensor([], dtype=dtypeTEST)
+            jjj = torch.cat(jjj_list) if jjj_list else torch.tensor([], dtype=dtypeTEST)
+
+            paircoord = molSysData.molecule_whole.coordinates[0,iii] - molSysData.molecule_whole.coordinates[0,jjj]
+            pairdist = torch.sqrt(torch.square(paircoord).sum(dim=1))
+
+            r_ij = pairdist * molSysData.molecule_whole.const.length_conversion_factor
+            x_ij = -paircoord / pairdist.unsqueeze(1)
+            
+            print("idxi&idxj {:>7.3f} |".format(time.time() - tic), end=" ")
+
+            tic = time.time()
+            coulInts_test, e1b, e2a, _, _ = TETCI(molSysData.molecule_whole.const, iii, jjj,
+                    molSysData.molecule_whole.Z[iii], molSysData.molecule_whole.Z[jjj], x_ij, r_ij, molSysData.molecule_whole.Z,\
+                    molSysData.molecule_whole.parameters['zeta_s'], molSysData.molecule_whole.parameters['zeta_p'], molSysData.molecule_whole.parameters['zeta_d'],\
+                    molSysData.molecule_whole.parameters['s_orb_exp_tail'], molSysData.molecule_whole.parameters['p_orb_exp_tail'], molSysData.molecule_whole.parameters['d_orb_exp_tail'],\
+                    molSysData.molecule_whole.parameters['g_ss'], molSysData.molecule_whole.parameters['g_pp'], molSysData.molecule_whole.parameters['g_p2'], molSysData.molecule_whole.parameters['h_sp'],\
+                    molSysData.molecule_whole.parameters['F0SD'], molSysData.molecule_whole.parameters['G2SD'], molSysData.molecule_whole.parameters['rho_core'],\
+                    molSysData.molecule_whole.alp, molSysData.molecule_whole.chi, molSysData.molecule_whole.method)
+
+            coulInts_test, e1b, e2a, _, _ = TETCI(molSysData.molecule_whole.const, iii, jjj,
+                    molSysData.molecule_whole.Z[iii], molSysData.molecule_whole.Z[jjj], x_ij, r_ij, molSysData.molecule_whole.Z,\
+                    molSysData.molecule_whole.parameters['zeta_s'], molSysData.molecule_whole.parameters['zeta_p'], molSysData.molecule_whole.parameters['zeta_d'],\
+                    molSysData.molecule_whole.parameters['s_orb_exp_tail'], molSysData.molecule_whole.parameters['p_orb_exp_tail'], molSysData.molecule_whole.parameters['d_orb_exp_tail'],\
+                    molSysData.molecule_whole.parameters['g_ss'], molSysData.molecule_whole.parameters['g_pp'], molSysData.molecule_whole.parameters['g_p2'], molSysData.molecule_whole.parameters['h_sp'],\
+                    molSysData.molecule_whole.parameters['F0SD'], molSysData.molecule_whole.parameters['G2SD'], molSysData.molecule_whole.parameters['rho_core'],\
+                    molSysData.molecule_whole.alp, molSysData.molecule_whole.chi, molSysData.molecule_whole.method)
+            
+
+            print("TETCI&DiI {:>7.3f} |".format(time.time() - tic), end=" ")
+
         
-        def tetci_function(const, idxi, idxj, ni, nj, xij, rij, Z,
-                   zeta_s, zeta_p, zeta_d, s_orb_exp_tail,
-                   p_orb_exp_tail, d_orb_exp_tail, g_ss,
-                   g_pp, g_p2, h_sp, F0SD, G2SD, rho_core,
-                   alp, chi, method):
-            # Call your TETCI function logic here
-            return TETCI(const, idxi, idxj, ni, nj, xij, rij, Z,
-                        zeta_s, zeta_p, zeta_d, s_orb_exp_tail,
-                        p_orb_exp_tail, d_orb_exp_tail, g_ss,
-                        g_pp, g_p2, h_sp, F0SD, G2SD, rho_core,
-                        alp, chi, method)
-
-        # Use checkpointing to call the function
-        coulInts_test, e1b, e2a, _, _ = checkpoint(
-            tetci_function,
-            molSysData.molecule_whole.const,
-            molSysData.molecule_whole.idxi[subIndsUnion],
-            molSysData.molecule_whole.idxj[subIndsUnion],
-            molSysData.molecule_whole.ni[subIndsUnion],
-            molSysData.molecule_whole.nj[subIndsUnion],
-            molSysData.molecule_whole.xij[subIndsUnion],
-            molSysData.molecule_whole.rij[subIndsUnion],
-            molSysData.molecule_whole.Z,
-            molSysData.molecule_whole.parameters['zeta_s'],
-            molSysData.molecule_whole.parameters['zeta_p'],
-            molSysData.molecule_whole.parameters['zeta_d'],
-            molSysData.molecule_whole.parameters['s_orb_exp_tail'],
-            molSysData.molecule_whole.parameters['p_orb_exp_tail'],
-            molSysData.molecule_whole.parameters['d_orb_exp_tail'],
-            molSysData.molecule_whole.parameters['g_ss'],
-            molSysData.molecule_whole.parameters['g_pp'],
-            molSysData.molecule_whole.parameters['g_p2'],
-            molSysData.molecule_whole.parameters['h_sp'],
-            molSysData.molecule_whole.parameters['F0SD'],
-            molSysData.molecule_whole.parameters['G2SD'],
-            molSysData.molecule_whole.parameters['rho_core'],
-            molSysData.molecule_whole.alp,
-            molSysData.molecule_whole.chi,
-            molSysData.molecule_whole.method
-        )
 
 
-        print("TETCI&DiI {:>7.3f} |".format(time.time() - tic), end=" ")
+        
+        # def tetci_function(const, idxi, idxj, ni, nj, xij, rij, Z,
+        #            zeta_s, zeta_p, zeta_d, s_orb_exp_tail,
+        #            p_orb_exp_tail, d_orb_exp_tail, g_ss,
+        #            g_pp, g_p2, h_sp, F0SD, G2SD, rho_core,
+        #            alp, chi, method):
+        #     # Call your TETCI function logic here
+        #     return TETCI(const, idxi, idxj, ni, nj, xij, rij, Z,
+        #                 zeta_s, zeta_p, zeta_d, s_orb_exp_tail,
+        #                 p_orb_exp_tail, d_orb_exp_tail, g_ss,
+        #                 g_pp, g_p2, h_sp, F0SD, G2SD, rho_core,
+        #                 alp, chi, method)
+
+        # # Use checkpointing to call the function
+        # coulInts_test, e1b, e2a, _, _ = checkpoint(
+        #     tetci_function,
+        #     molSysData.molecule_whole.const,
+        #     molSysData.molecule_whole.idxi[subIndsUnion],
+        #     molSysData.molecule_whole.idxj[subIndsUnion],
+        #     molSysData.molecule_whole.ni[subIndsUnion],
+        #     molSysData.molecule_whole.nj[subIndsUnion],
+        #     molSysData.molecule_whole.xij[subIndsUnion],
+        #     molSysData.molecule_whole.rij[subIndsUnion],
+        #     molSysData.molecule_whole.Z,
+        #     molSysData.molecule_whole.parameters['zeta_s'],
+        #     molSysData.molecule_whole.parameters['zeta_p'],
+        #     molSysData.molecule_whole.parameters['zeta_d'],
+        #     molSysData.molecule_whole.parameters['s_orb_exp_tail'],
+        #     molSysData.molecule_whole.parameters['p_orb_exp_tail'],
+        #     molSysData.molecule_whole.parameters['d_orb_exp_tail'],
+        #     molSysData.molecule_whole.parameters['g_ss'],
+        #     molSysData.molecule_whole.parameters['g_pp'],
+        #     molSysData.molecule_whole.parameters['g_p2'],
+        #     molSysData.molecule_whole.parameters['h_sp'],
+        #     molSysData.molecule_whole.parameters['F0SD'],
+        #     molSysData.molecule_whole.parameters['G2SD'],
+        #     molSysData.molecule_whole.parameters['rho_core'],
+        #     molSysData.molecule_whole.alp,
+        #     molSysData.molecule_whole.chi,
+        #     molSysData.molecule_whole.method
+        # )
+        
 
         tic = time.time()
         idx_to_idx_mapping = {value: idx for idx, value in enumerate(block_indices)}
@@ -167,25 +265,39 @@ def get_hamiltonian(eng, coords, types, symbols,
         # Populate the lookup tensor
         for key, value in idx_to_idx_mapping.items():
             lookup_tensor[key] = value
-        max_i = molSysData.molecule_whole.idxi.max()
-        max_j = molSysData.molecule_whole.idxj.max()
-        atom_max = max(max_i,max_j)
-        in_block_mask = torch.zeros(atom_max+1,dtype=torch.bool, device = P_contr.device)
-        in_block_mask[block_indices]=True
-        new_idxi = lookup_tensor[molSysData.molecule_whole.idxi[in_block_mask[molSysData.molecule_whole.idxi].to(torch.bool)]]
-        new_idxj = lookup_tensor[molSysData.molecule_whole.idxj[in_block_mask[molSysData.molecule_whole.idxj].to(torch.bool)]]
-        print("diIndsExp {:>7.3f} |".format(time.time() - tic), end=" ")
-        
-        # add diagonal to h1elec
-        tic = time.time()
-        ### $$$ index_add_ is very slow!
-        M_sub.index_add_(0,molSub.maskd[new_idxi], e1b[torch.isin(molSysData.molecule_whole.idxi[subIndsUnion], block_indices)])
-        M_sub.index_add_(0,molSub.maskd[new_idxj], e2a[torch.isin(molSysData.molecule_whole.idxj[subIndsUnion], block_indices)])
+        if eng.use_pyseqm_lt:
+            in_block_mask = torch.zeros(molSysData.molecule_whole.molsize, dtype=torch.bool, device = P_contr.device)
+            in_block_mask[block_indices]=True
+            new_idxi = lookup_tensor[molSysData.molecule_whole.idxi[in_block_mask[molSysData.molecule_whole.idxi].to(torch.bool)]]
+            new_idxj = lookup_tensor[molSysData.molecule_whole.idxj[in_block_mask[molSysData.molecule_whole.idxj].to(torch.bool)]]
+            print("diIndsExp {:>7.3f} |".format(time.time() - tic), end=" ")
+            tic = time.time()
+            # add diagonal to h1elec
+            M_sub.index_add_(0,molSub.maskd[new_idxi], e1b[torch.isin(molSysData.molecule_whole.idxi[subIndsUnion], block_indices)])
+            M_sub.index_add_(0,molSub.maskd[new_idxj], e2a[torch.isin(molSysData.molecule_whole.idxj[subIndsUnion], block_indices)])
+            print("h1elDiUpd {:>7.3f} |".format(time.time() - tic), end=" ")
+        else:
+            # Calculate the repeated counts for each index in block_indices
+            repeats = molSysData.molecule_whole.molsize - 1 - block_indices
+            # Use `torch.repeat_interleave` to create the final tensor without needing a for loop
+            new_iii = torch.repeat_interleave(torch.arange(len(block_indices), device = P_contr.device), repeats)
+
+            new_jjj_list = []
+            top_row = torch.arange(0, molSub.molsize, dtype=block_indices.dtype)
+            start_indices = torch.cumsum((lookup_tensor[:] != 0).to(dtype=torch.long), dim=0) + 1
+            start_indices[:block_indices[0]] = 0
+            # Generate slices from top_row based on start_indices for each row
+            new_jjj_list = ([top_row[start:] for start in start_indices])
+            new_jjj = torch.cat(new_jjj_list)
+            print("diIndsExp {:>7.3f} |".format(time.time() - tic), end=" ")
+            ### $$$ index_add_ is very slow!
+            tic = time.time()
+            M_sub.index_add_(0,molSub.maskd[new_iii], e1b[torch.isin(iii, block_indices)])
+            M_sub.index_add_(0,molSub.maskd[new_jjj], e2a[torch.isin(jjj, block_indices)])
+            print("h1elDiUpd {:>7.3f} |".format(time.time() - tic), end=" ")
+            del repeats, new_iii, new_jjj_list, new_jjj, top_row
         del e1b, e2a, _
 
-        #torch.cuda.synchronize()
-        #print('  Time to update hcore diag', time.time() - tic)
-        print("h1elDiUpd {:>7.3f} |".format(time.time() - tic), end=" ")
         
         tic = time.time()
         
@@ -258,31 +370,37 @@ def get_hamiltonian(eng, coords, types, symbols,
         #             print(block_indices[i],block_indices[j])
         #             print('ERR2',torch.sum(ERR2[i:i+1][:,j:j+1]))
 
-        # ham_contr = get_fock_pyseqm_2(P_diag_contr, P_sub_from_contr, M_sub, coulInts_test, block_indices,
-        #         molSysData.molecule_whole.nmol, molSysData.molecule_whole.idxi[subIndsUnion], molSysData.molecule_whole.idxj[subIndsUnion], molSub.rij,
-        #         molSysData.molecule_whole.parameters, maskd_sub, mask_sub) # slowest part
+        if eng.use_pyseqm_lt:
+            ham_contr = get_fock_pyseqm_2(P_diag_contr, P_sub_from_contr, M_sub, coulInts_test, block_indices,
+                    molSysData.molecule_whole.nmol, molSysData.molecule_whole.idxi[subIndsUnion], molSysData.molecule_whole.idxj[subIndsUnion], molSub.rij,
+                    molSysData.molecule_whole.parameters, maskd_sub, mask_sub) # slowest part
+        else:
+            ham_contr = get_fock_pyseqm_2(P_diag_contr, P_sub_from_contr, M_sub, coulInts_test, block_indices,
+                    molSysData.molecule_whole.nmol, iii, jjj, molSub.rij,
+                    molSysData.molecule_whole.parameters, maskd_sub, mask_sub) # slowest part
+
 
         # Define a wrapper function for the checkpointed function with required gradients
-        def checkpointed_get_fock(M_sub, coulInts_test, idxi_grad, idxj_grad, rij_grad, 
-                                P_diag_contr, P_sub_from_contr, block_indices, nmol, 
-                                parameters, maskd_sub, mask_sub):
-            return get_fock_pyseqm_2(P_diag_contr, P_sub_from_contr, M_sub, coulInts_test, 
-                                    block_indices, nmol, idxi_grad, idxj_grad, rij_grad, 
-                                    parameters, maskd_sub, mask_sub)
-        # Use checkpoint with only the tensors requiring gradients
+        # def checkpointed_get_fock(M_sub, coulInts_test, idxi_grad, idxj_grad, rij_grad, 
+        #                         P_diag_contr, P_sub_from_contr, block_indices, nmol, 
+        #                         parameters, maskd_sub, mask_sub):
+        #     return get_fock_pyseqm_2(P_diag_contr, P_sub_from_contr, M_sub, coulInts_test, 
+        #                             block_indices, nmol, idxi_grad, idxj_grad, rij_grad, 
+        #                             parameters, maskd_sub, mask_sub)
+        # # Use checkpoint with only the tensors requiring gradients
         
-        ham_contr = checkpoint(
-            checkpointed_get_fock,
-            M_sub, coulInts_test, 
-            molSysData.molecule_whole.idxi[subIndsUnion],  # requires grad
-            molSysData.molecule_whole.idxj[subIndsUnion],  # requires grad
-            molSub.rij,  # requires grad
-            P_diag_contr, P_sub_from_contr, block_indices,
-            molSysData.molecule_whole.nmol,
-            molSysData.molecule_whole.parameters,
-            maskd_sub,
-            mask_sub
-            )
+        # ham_contr = checkpoint(
+        #     checkpointed_get_fock,
+        #     M_sub, coulInts_test, 
+        #     molSysData.molecule_whole.idxi[subIndsUnion],  # requires grad
+        #     molSysData.molecule_whole.idxj[subIndsUnion],  # requires grad
+        #     molSub.rij,  # requires grad
+        #     P_diag_contr, P_sub_from_contr, block_indices,
+        #     molSysData.molecule_whole.nmol,
+        #     molSysData.molecule_whole.parameters,
+        #     maskd_sub,
+        #     mask_sub
+        #     )
 
         print("FulSubFock {:>7.3f} |".format(time.time() - tic), end=" ")
 
@@ -318,7 +436,12 @@ def get_hamiltonian(eng, coords, types, symbols,
             diag_err = torch.sum(abs(P_diag_contr-P_diag))
             print('diag_err', diag_err)
 
-        del coulInts_test, subIndsUnion, new_idxi, new_idxj, P_diag_contr, maskd_sub, mask_sub, idx_to_idx_mapping, lookup_tensor
+        del coulInts_test, P_diag_contr, maskd_sub, mask_sub, lookup_tensor, max_key
+        if eng.use_pyseqm_lt:
+            del subIndsUnion, idx_to_idx_mapping, new_idxi, new_idxj, in_block_mask
+        else:
+            del iii, jjj, r_ij, x_ij
+        torch.cuda.empty_cache()
 
         if doForces:
             
@@ -363,6 +486,9 @@ def get_hamiltonian(eng, coords, types, symbols,
             print("Force {:>7.3f} |".format(time.time() - tic), end=" ")
             
             return force, eElec_contr.detach().cpu()
+        else:
+            del M_sub, P_sub_from_contr, molSub
+            #print_memory_usage(len(partsIndex), 99, "HAM memory usage")
         return ham_contr
         
 

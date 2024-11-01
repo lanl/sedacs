@@ -29,8 +29,8 @@ except: PYSEQM = False
 import scipy
 from scipy.linalg import fractional_matrix_power
 
-class pyseqmObjects():
-    def __init__(self, sdc, coords,symbols,atomTypes, device='cpu'):
+class pyseqmObjects(torch.nn.Module):
+    def __init__(self, sdc, coords, symbols,atomTypes, do_large_tensors=True, device='cpu'):
         """
         Constructor
         """
@@ -39,31 +39,20 @@ class pyseqmObjects():
         #     get_hcore_pyseqm(coords, symbols, atomTypes)
         
         self.M_whole, self.w_whole = None, None
-        self.molecule_whole = get_molecule_pyseqm(sdc, coords, symbols, atomTypes, device=device)[0].to(device)
-        self.w_ssss = torch.zeros_like(self.molecule_whole.idxi)
-        #print('Creating DM guess.')
-        #make_dm_guess(self.molecule_whole, self.molecule_whole.seqm_parameters, mix_homo_lumo=False, mix_coeff=0.3, overwrite_existing_dm=True);
+        self.molecule_whole = get_molecule_pyseqm(sdc, coords, symbols, atomTypes, do_large_tensors=do_large_tensors, device=device)[0].to(device)
+        if do_large_tensors:
+          self.w_ssss = torch.zeros_like(self.molecule_whole.idxi)
+          #print('Creating DM guess.')
+          #make_dm_guess(self.molecule_whole, self.molecule_whole.seqm_parameters, mix_homo_lumo=False, mix_coeff=0.3, overwrite_existing_dm=True);
 
-        ev = 27.21
-        rho_0 = 0.5*ev/self.molecule_whole.parameters['g_ss']
-        self.rho0xi_whole = rho_0[self.molecule_whole.idxi].clone()
-        self.rho0xj_whole = rho_0[self.molecule_whole.idxj].clone()
-        A = (self.molecule_whole.parameters['rho_core'][self.molecule_whole.idxi] != 0.000)
-        B = (self.molecule_whole.parameters['rho_core'][self.molecule_whole.idxj] != 0.000)
-        self.rho0xi_whole[A] =self.molecule_whole.parameters['rho_core'][self.molecule_whole.idxi][A]
-        self.rho0xj_whole[B] =self.molecule_whole.parameters['rho_core'][self.molecule_whole.idxj][B]
-
-   
-
-# def get_pyseqmObjects(coords,symbols,atomTypes):
-#     print('Loading the molecule and parameters.')
-#     M_whole, w_whole, molecule_whole, rho0xi_whole, rho0xj_whole = get_hcore_pyseqm(sy.coords, sy.symbols, sy.types, sdc, verb=False)
-#     Hcore_whole = M_whole.reshape(molecule_whole.nmol,molecule_whole.molsize,molecule_whole.molsize,4,4) \
-#                  .transpose(2,3) \
-#                  .reshape(molecule_whole.nmol, 4*molecule_whole.molsize, 4*molecule_whole.molsize)
-    
-#     print('Creating DM guess.')
-#     make_dm_guess(molecule_whole, molecule_whole.seqm_parameters, mix_homo_lumo=False, mix_coeff=0.3, overwrite_existing_dm=True);
+          ev = 27.21
+          rho_0 = 0.5*ev/self.molecule_whole.parameters['g_ss']
+          self.rho0xi_whole = rho_0[self.molecule_whole.idxi].clone()
+          self.rho0xj_whole = rho_0[self.molecule_whole.idxj].clone()
+          A = (self.molecule_whole.parameters['rho_core'][self.molecule_whole.idxi] != 0.000)
+          B = (self.molecule_whole.parameters['rho_core'][self.molecule_whole.idxj] != 0.000)
+          self.rho0xi_whole[A] =self.molecule_whole.parameters['rho_core'][self.molecule_whole.idxi][A]
+          self.rho0xj_whole[B] =self.molecule_whole.parameters['rho_core'][self.molecule_whole.idxj][B]
 
 
 
@@ -362,7 +351,7 @@ def get_hcore_pyseqm(coords,symbols,atomTypes, device='cpu', verb=False):
   return M, w, molecule, rho0xi, rho0xj
 
 
-def get_molecule_pyseqm(sdc, coords, symbols, atomTypes, device='cpu', verb=False):
+def get_molecule_pyseqm(sdc, coords, symbols, atomTypes, do_large_tensors=True, device='cpu', verb=False):
   # move to a sep file $$$
   torch.cuda.empty_cache()
   """PYSEQM"""
@@ -441,7 +430,7 @@ def get_molecule_pyseqm(sdc, coords, symbols, atomTypes, device='cpu', verb=Fals
                     }
 
   
-  molecule = Molecule(const, seqm_parameters, coordinates, species).to(device)
+  molecule = Molecule(const, seqm_parameters, coordinates, species, do_large_tensors=do_large_tensors).to(device)
 
   ### Create electronic structure driver:
   

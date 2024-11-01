@@ -20,7 +20,7 @@ __all__ = ["get_eVals"]
 # @param ham Hamiltonian matrix
 # @verbose Verbosity
 #
-def get_molSysData(eng, sdc, coords,symbols,atomTypes, device='cpu'):
+def get_molSysData(eng, sdc, coords,symbols,atomTypes, do_large_tensors=True, device='cpu'):
     if eng.interface == "None":
         print("ERROR!!! - Write your own Data")
 
@@ -30,6 +30,6 @@ def get_molSysData(eng, sdc, coords,symbols,atomTypes, device='cpu'):
         print('TBD')
         exit()
     elif eng.interface == "PySEQM":
-        return pyseqmObjects(sdc, coords,symbols,atomTypes, device=device)
+        return pyseqmObjects(sdc, coords,symbols,atomTypes, do_large_tensors=do_large_tensors, device=device)
 
     return
