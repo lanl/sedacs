@@ -81,24 +81,23 @@ def get_coreHalo_ham_inds(partIndex, partCoreHaloIndex, sdc, sy, subSy, device='
     hindex_sub = torch.from_numpy(hindex_sub).to(device, dtype=sdc.torch_int_dt)
 
     
-    # Given tensor of block indices and block size
-    coreHalo_rows_in_whole = torch.tensor(partCoreHaloIndex, dtype=sdc.torch_int_dt)
-    block_size = 4
-    # Generate the expanded indices for each block
-    base_indices = torch.arange(block_size)  # Create a base index tensor of size block_size
-    coreHalo_rows_in_whole_expanded = coreHalo_rows_in_whole.unsqueeze(1) * block_size + base_indices  # Broadcast and add
-    coreHalo_rows_in_whole_expanded = coreHalo_rows_in_whole_expanded.flatten()  # Flatten the result
-
-    # Given tensor of block indices and block size
-    core_cols_in_whole = torch.tensor(partIndex, dtype=sdc.torch_int_dt)
-    # Generate the expanded indices for each block
-    base_indices = torch.arange(block_size)  # Create a base index tensor of size block_size
-    core_cols_in_whole_expanded = core_cols_in_whole.unsqueeze(1) * block_size + base_indices  # Broadcast and add
-    core_cols_in_whole_expanded = core_cols_in_whole_expanded.flatten()  # Flatten the result
     
     
     #I_core = torch.meshgrid(core_cols_in_whole_expanded, core_cols_in_whole_expanded, indexing='ij')
     if sdc.reconstruct_dm:
+        # Given tensor of block indices and block size
+        coreHalo_rows_in_whole = torch.tensor(partCoreHaloIndex, dtype=sdc.torch_int_dt)
+        # Generate the expanded indices for each block
+        coreHalo_rows_in_whole_expanded = coreHalo_rows_in_whole.unsqueeze(1) * block_size + base_indices  # Broadcast and add
+        coreHalo_rows_in_whole_expanded = coreHalo_rows_in_whole_expanded.flatten()  # Flatten the result
+
+        # Given tensor of block indices and block size
+        core_cols_in_whole = torch.tensor(partIndex, dtype=sdc.torch_int_dt)
+        # Generate the expanded indices for each block
+        core_cols_in_whole_expanded = core_cols_in_whole.unsqueeze(1) * block_size + base_indices  # Broadcast and add
+        core_cols_in_whole_expanded = core_cols_in_whole_expanded.flatten()  # Flatten the result
+        #I_core = torch.meshgrid(core_cols_in_whole_expanded, core_cols_in_whole_expanded, indexing='ij')
+
         I = torch.meshgrid(coreHalo_rows_in_whole_expanded, core_cols_in_whole_expanded, indexing='ij', device=device)
         I_halo = torch.meshgrid(coreHalo_rows_in_whole_expanded, coreHalo_rows_in_whole_expanded, indexing='ij', device=device)
     else:
@@ -186,7 +185,9 @@ def get_fock_pyseqm_2(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, pa
     #     start_ind = end_ind
     #     end_ind = end_ind + len(P) - i - 2
 
+    
     idxj_sub_ovrlp_with_rest = torch.isin(idxj, block_indices)
+
 
     F = M.clone()
     Pptot = P_sub[...,1,1]+P_sub[...,2,2]+P_sub[...,3,3]
@@ -216,7 +217,7 @@ def get_fock_pyseqm_2(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, pa
 
     PA_test = (P[idxi[idxj_sub_ovrlp_with_rest]][...,(0,0,1,0,1,2,0,1,2,3),(0,1,1,2,2,2,3,3,3,3)]*weight).reshape((-1,10,1))
     PB_test = (P[idxj[idxi_sub_ovrlp_with_rest]][...,(0,0,1,0,1,2,0,1,2,3),(0,1,1,2,2,2,3,3,3,3)]*weight).reshape((-1,1,10))
-    
+
     w_2_inj=w_2[where_isinj]
     suma_test = torch.einsum('ijk,ijk->ik',PA_test,w_2_inj)
     sumA_test = torch.zeros(w_2_inj.shape[0],4,4,dtype=dtype, device=device)
@@ -469,7 +470,6 @@ def get_densityMatrix_renormalized_pyseqm(E_val, Q, Tel, mu0, NH_Nh_Hs, Nocc):
   
   kB = 8.61739e-5 # eV/K, kB = 6.33366256e-6 Ry/K, kB = 3.166811429e-6 Ha/K, #kB = 3.166811429e-6 #Ha/K
   beta = 1./(kB*Tel)
-  #print(type(E_val), E_val)
   f = 1/(torch.exp(beta*(E_val - mu0)) + 1)
   
   # two lines below are vectorization of this: D = 2*sum(torch.outer(Q[:, i],Q[:, i]*f[i]) for i in range(Nocc))
@@ -479,7 +479,7 @@ def get_densityMatrix_renormalized_pyseqm(E_val, Q, Tel, mu0, NH_Nh_Hs, Nocc):
   #D = 2*sum(torch.outer(Q[:, i],Q[:, i]) for i in range(Nocc))
   D = unpack(D, NH_Nh_Hs[0], NH_Nh_Hs[1], NH_Nh_Hs[2])
 
-  return D.detach()
+  return D
 
 def get_hamiltonian_pyseqm_uhf(coords,symbols,atomTypes, hindex, verb=False):
   # move to a sep file $$$

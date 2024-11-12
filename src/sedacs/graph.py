@@ -167,7 +167,7 @@ def collect_graph_from_rho(graph,rho,thresh,nnodes,maxDeg,indices,hindex=None,ve
    
     rhoDim = len(rho[:,0])
     if (graph is None):
-        graph = np.zeros((nnodes,maxDeg+1),dtype=int)
+        graph = np.zeros((nnodes,maxDeg+1),dtype=int) - 1
     
     #print('graph', graph[11])
     nats = len(indices)
@@ -182,13 +182,12 @@ def collect_graph_from_rho(graph,rho,thresh,nnodes,maxDeg,indices,hindex=None,ve
         weights[:] = 0.0
 
         ###
-        j = np.arange(1, graph[ii,0])
+        j = np.arange(1, graph[ii,0]+1)
         weights[graph[ii,j]] = thresh
 
         ###
         ki_old = ki_
         ki_ = ki_ + hindex[ii+1] - hindex[ii]
-        #print(hindex[ii+1],(rho.shape))
         ki_ar = np.arange(ki_old, ki_,1)
 
         kj = 0  # Initialize kj
@@ -208,15 +207,8 @@ def collect_graph_from_rho(graph,rho,thresh,nnodes,maxDeg,indices,hindex=None,ve
 
         expanded_rho_slices = np.zeros((len(ki_ar),len(slice_lengths), max_length), dtype=rho.dtype)
         expanded_rho_slices[:,valid_mask] = flat_rho_slices
-        #if i > 94:
-            #print(expanded_rho_slices)
-            #exit(0)
         abs_sums = np.sum(np.abs(expanded_rho_slices)**2, axis=(0,2))**0.5
         np.add.at(weights, indices, abs_sums)
-        # if ii == 317:
-        #     print(ii, len(weights), weights[143])
-        #     print(ii, len(weights), weights[144])
-            #exit(0)
 
         mask = (np.arange(nnodes) != ii) & (weights >= thresh)
         valid_jj_indices = np.nonzero(mask)[0]
@@ -225,11 +217,6 @@ def collect_graph_from_rho(graph,rho,thresh,nnodes,maxDeg,indices,hindex=None,ve
             print("!!!ERROR: Max Degree parameter is too small")
             exit(0)
         graph[ii, 1:k+1] = valid_jj_indices[:maxDeg]
-        # if ii == 0 :
-        #     #print(expanded_rho_slices.shape[:][0][:])
-        #     print('In graph',graph[ii][0:10])
-        #     if verb:
-        #         exit(0)
         graph[ii, 0] = k
 
         # if sum(abs(weights1-weights)) > 1e-14:
@@ -332,7 +319,41 @@ def add_graphs(graphA, graphB):
 
     return graphC
 
+## Add/merge multiple graphs (union operation)
+# @brief This will merge or add multiple graphs
+# @param graphs Graphs to be merged
+# @return graphC Resulting graph
+#
+def add_mult_graphs(graphs):
+    # Ensure all graphs have the same number of nodes
+    nnodes = graphs[0].shape[0]
+    maxDeg = graphs[0].shape[1]
+    
+    if not all(graph.shape[0] == nnodes for graph in graphs):
+        print("!!!ERROR: All graphs must have the same number of nodes")
+        return None
 
+    # Initialize the result graph `graphC` with -1s
+    graphC = np.full((nnodes, maxDeg), -1, dtype=int)
+
+    # Initialize a combined adjacency matrix for all graphs
+    adjC = np.zeros((nnodes, nnodes), dtype=bool)
+
+    # Populate combined adjacency matrix based on input graphs
+    for graph in graphs:
+        adj = np.zeros((nnodes, nnodes), dtype=bool)
+        for i in range(nnodes):
+            adj[i, graph[i, 1:graph[i, 0] + 1]] = True
+        adjC = np.logical_or(adjC, adj)
+
+    # Fill `graphC` based on the combined adjacency matrix `adjC`
+    for i in range(nnodes):
+        neighbors = np.where(adjC[i])[0]
+        graphC[i, 0] = len(neighbors)  # Number of neighbors
+        if len(neighbors) > 0:
+            graphC[i, 1:len(neighbors) + 1] = neighbors
+
+    return graphC
 ## Multiply two Adjacencies
 # @brief The ij of the resulting graph will be connected
 # if i in A and j in B have a common directly connected node k.

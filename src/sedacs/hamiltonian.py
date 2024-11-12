@@ -146,38 +146,35 @@ def get_hamiltonian(eng, coords, types, symbols,
             tic = time.time()
             dtypeTEST = molSysData.molecule_whole.Z.dtype # torch.long
             atom_index = torch.arange(molSysData.molecule_whole.nmol*molSysData.molecule_whole.molsize, device=P_contr.device,dtype=torch.int64)
+            len_block_indices = len(block_indices)
 
             # Prepare lists to hold the indices that will form iii and jjj
             iii_list = []
             jjj_list = []
+            pos = torch.searchsorted(block_indices, atom_index)
+            pos = torch.clamp(pos, max=len(block_indices) - 1)
+            mask_atom_index_in_block_indices = (pos < len(block_indices)) & (block_indices[pos] == atom_index)
+
 
             # Loop over atom_index and handle vectorized operations within each iteration
-            for i in atom_index: ### $$$ needs vectorization
-                if i in block_indices:
-                    jj = torch.arange(i + 1, molSysData.molecule_whole.molsize, dtype=dtypeTEST, device=P_contr.device)
-                    ii = torch.full_like(jj, i)  # Create a tensor of `i` repeated for each `j`
-
-                    # If `i` is in block_indices, add all pairs (i, jj)
+            for i in range(len(mask_atom_index_in_block_indices)): ### $$$ needs vectorization
+                jj = atom_index[i+1:]
+                ii = torch.full_like(jj, i)  # Create a tensor of `i` repeated for each `j`
+                # If `i` is in block_indices, add all pairs (i, jj)
+                if mask_atom_index_in_block_indices[i]:
                     iii_list.append(ii)
                     jjj_list.append(jj)
                 else:
-                    jj = torch.arange(i + 1, molSysData.molecule_whole.molsize, dtype=dtypeTEST, device=P_contr.device)
-
                     # If `i` is not in block_indices, use binary search for checking presence in sorted `block_indices`
-                    idx_in_block = torch.searchsorted(block_indices, jj)
-
                     # Ensure indices are within bounds of block_indices
-                    in_bounds_mask = idx_in_block < len(block_indices)
-                    valid_idx_in_block = idx_in_block[in_bounds_mask]
-                    valid_jj = jj[in_bounds_mask]
+                    valid_idx_in_block = pos[i+1:][mask_atom_index_in_block_indices[i+1:]]
+                    valid_jj = jj[mask_atom_index_in_block_indices[i+1:]]
 
                     # Now check if the values at valid indices match the elements in jj
                     mask_j_in_block = block_indices[valid_idx_in_block] == valid_jj
-                    
+
                     # Append only the values where jj is in block_indices
-                    ii = torch.full_like(jj, i)  # Create a tensor of `i` repeated for each `j`
-                    
-                    iii_list.append(ii[in_bounds_mask][mask_j_in_block])
+                    iii_list.append(ii[mask_atom_index_in_block_indices[i+1:]][mask_j_in_block])
                     jjj_list.append(valid_jj[mask_j_in_block])
 
             # Concatenate all the lists to form the final iii and jjj tensors
@@ -200,16 +197,6 @@ def get_hamiltonian(eng, coords, types, symbols,
                     molSysData.molecule_whole.parameters['g_ss'], molSysData.molecule_whole.parameters['g_pp'], molSysData.molecule_whole.parameters['g_p2'], molSysData.molecule_whole.parameters['h_sp'],\
                     molSysData.molecule_whole.parameters['F0SD'], molSysData.molecule_whole.parameters['G2SD'], molSysData.molecule_whole.parameters['rho_core'],\
                     molSysData.molecule_whole.alp, molSysData.molecule_whole.chi, molSysData.molecule_whole.method)
-
-            coulInts_test, e1b, e2a, _, _ = TETCI(molSysData.molecule_whole.const, iii, jjj,
-                    molSysData.molecule_whole.Z[iii], molSysData.molecule_whole.Z[jjj], x_ij, r_ij, molSysData.molecule_whole.Z,\
-                    molSysData.molecule_whole.parameters['zeta_s'], molSysData.molecule_whole.parameters['zeta_p'], molSysData.molecule_whole.parameters['zeta_d'],\
-                    molSysData.molecule_whole.parameters['s_orb_exp_tail'], molSysData.molecule_whole.parameters['p_orb_exp_tail'], molSysData.molecule_whole.parameters['d_orb_exp_tail'],\
-                    molSysData.molecule_whole.parameters['g_ss'], molSysData.molecule_whole.parameters['g_pp'], molSysData.molecule_whole.parameters['g_p2'], molSysData.molecule_whole.parameters['h_sp'],\
-                    molSysData.molecule_whole.parameters['F0SD'], molSysData.molecule_whole.parameters['G2SD'], molSysData.molecule_whole.parameters['rho_core'],\
-                    molSysData.molecule_whole.alp, molSysData.molecule_whole.chi, molSysData.molecule_whole.method)
-            
-
             print("TETCI&DiI {:>7.3f} |".format(time.time() - tic), end=" ")
 
         
@@ -294,33 +281,39 @@ def get_hamiltonian(eng, coords, types, symbols,
             tic = time.time()
             M_sub.index_add_(0,molSub.maskd[new_iii], e1b[torch.isin(iii, block_indices)])
             M_sub.index_add_(0,molSub.maskd[new_jjj], e2a[torch.isin(jjj, block_indices)])
-            print("h1elDiUpd {:>7.3f} |".format(time.time() - tic), end=" ")
             del repeats, new_iii, new_jjj_list, new_jjj, top_row
+            print("h1elDiUpd {:>7.3f} |".format(time.time() - tic), end=" ")
+            
         del e1b, e2a, _
 
         
         tic = time.time()
+        graph_for_pairs = torch.from_numpy(graph_for_pairs).to(P_contr.device, dtype=eng.torch_int_dt)
+
+
         
         P_sub_from_contr = torch.zeros(len(block_indices)*len(block_indices),4,4, device = P_contr.device, dtype=eng.torch_dt)
         P_sub_from_contr = P_sub_from_contr.reshape(len(block_indices), len(block_indices), 4,4)
 
-        graph_for_pairs = torch.from_numpy(graph_for_pairs).to(P_contr.device, dtype=eng.torch_int_dt)
+        parts_mask = torch.isin(block_indices, torch.tensor(partsIndex, device=block_indices.device))
+        max_len = graph_for_pairs[partsIndex[0]][0]
+        P_sub_from_contr[:,parts_mask] = P_contr[:max_len, block_indices[parts_mask]]
 
-        for i in range(len(block_indices)): ### $$$ needs vecorization
-            if block_indices[i] in partsIndex:
-                
-                #P_sub_from_contr[i] = P_contr[block_indices[i]][:graph_for_pairs[block_indices[i]][0]]
-                #P_sub_from_contr[:,i] = P_contr[block_indices[i]][:graph_for_pairs[block_indices[i]][0]].transpose(1,2)
-                #P_sub_from_contr[:,i] = P_contr[block_indices[i]][:graph_for_pairs[block_indices[i]][0]]
 
-                P_sub_from_contr[:,i] = P_contr[:,block_indices[i]][:graph_for_pairs[block_indices[i]][0]]
-                # if block_indices[i] == 36:
-                #     print(block_indices[i], i)
-                #     print(P_contr[:,block_indices[i]])
-                # P_sub_from_contr[i] = P_contr[:,block_indices[i]][:graph_for_pairs[block_indices[i]][0]].transpose(1,2)
+        for i in range(len(parts_mask)): ### $$$ needs vecorization
+            if parts_mask[i]:
+                1
             else:
-                P_sub_from_contr[:,i][lookup_tensor[graph_for_pairs[block_indices[i]][1:graph_for_pairs[block_indices[i]][0]+1][torch.isin( graph_for_pairs[block_indices[i]][1:graph_for_pairs[block_indices[i]][0]+1] , block_indices)]]] = \
-                    P_contr[:,block_indices[i]][:graph_for_pairs[block_indices[i]][0]][[torch.isin( graph_for_pairs[block_indices[i]][1:graph_for_pairs[block_indices[i]][0]+1], block_indices)]]
+                tmp = graph_for_pairs[block_indices[i]][1:graph_for_pairs[block_indices[i]][0]+1]
+                pos = torch.searchsorted(block_indices, tmp)
+                # Ensure the indices are within bounds
+                pos = torch.clamp(pos, max=len(block_indices) - 1)
+                # Check if the positions are valid and match
+                mask_for_lookup = (pos < len(block_indices)) & (block_indices[pos] == tmp)
+                            
+                P_sub_from_contr[lookup_tensor[tmp[mask_for_lookup]],i] = \
+                    P_contr[:graph_for_pairs[block_indices[i]][0],block_indices[i]][mask_for_lookup]
+                
 
 
         if eng.reconstruct_dm:
@@ -339,6 +332,8 @@ def get_hamiltonian(eng, coords, types, symbols,
 
         P_sub_from_contr = P_sub_from_contr.reshape(len(block_indices)*len(block_indices), 4,4)
         P_diag_contr = P_contr.transpose(0,1).reshape(molSysData.molecule_whole.molsize*(len(graph_for_pairs[0])-1), 4,4)[graph_maskd]#.transpose(0,1)
+        print("P_sub_from_contr {:>7.3f} |".format(time.time() - tic), end=" ")
+        tic = time.time()
 
         #print('ERR',torch.sum(abs(P_sub_from_contr- P_sub[:])))
         # print(P_sub.reshape(1, molSub.molsize, molSub.molsize,4,4) \
@@ -402,7 +397,7 @@ def get_hamiltonian(eng, coords, types, symbols,
         #     mask_sub
         #     )
 
-        print("FulSubFock {:>7.3f} |".format(time.time() - tic), end=" ")
+        
 
 
         if eng.reconstruct_dm:
@@ -442,6 +437,7 @@ def get_hamiltonian(eng, coords, types, symbols,
         else:
             del iii, jjj, r_ij, x_ij
         torch.cuda.empty_cache()
+        print("FulSubFock {:>7.3f} |".format(time.time() - tic), end=" ")
 
         if doForces:
             
@@ -485,7 +481,7 @@ def get_hamiltonian(eng, coords, types, symbols,
             del  L
             print("Force {:>7.3f} |".format(time.time() - tic), end=" ")
             
-            return force, eElec_contr.detach().cpu()
+            return force, eElec_contr.detach().cpu().numpy()
         else:
             del M_sub, P_sub_from_contr, molSub
             #print_memory_usage(len(partsIndex), 99, "HAM memory usage")

@@ -51,9 +51,6 @@ def get_density_matrix_renorm(eng, Tel, mu0, dm, P_contr, graph_for_pairs,
             maxDif = None
             sumDif = None
 
-
-
-
     else:
         print("ERROR!!!: Interface type not recognized. Use any of the following: Module,File,Socket,MDI")
         exit()

@@ -12,7 +12,7 @@ from sedacs.forces import get_forces
 from sedacs.molSysData import get_molSysData
 from sedacs.fock import get_fock
 from sedacs.file_io import write_pdb_coordinates, write_xyz_coordinates
-from sedacs.graph import add_graphs, collect_graph_from_rho, print_graph
+from sedacs.graph import add_graphs, collect_graph_from_rho, print_graph, add_mult_graphs
 from sedacs.graph_partition import get_coreHaloIndices, graph_partition
 from sedacs.hamiltonian import get_hamiltonian
 from sedacs.mpi import collect_and_sum_matrices
@@ -26,7 +26,7 @@ import itertools
 import sys
 import psutil
 import pickle
-
+import socket
 
 from seqm.seqm_functions.pack import pack
 
@@ -78,25 +78,24 @@ def get_singlePoint(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hi
         subSy.symbols = sy.symbols
         subSy.coords, subSy.types = extract_subsystem(sy.coords, sy.types, sy.symbols, partsCoreHalo[partIndex])
         partFileName = "subSy" + str(rank) + "_" + str(partIndex) + ".pdb"
-        write_pdb_coordinates(partFileName, subSy.coords, subSy.types, subSy.symbols)
-        write_xyz_coordinates("subSy" + str(rank) + "_" + str(partIndex) + ".xyz", subSy.coords, subSy.types, subSy.symbols)
+        #write_pdb_coordinates(partFileName, subSy.coords, subSy.types, subSy.symbols)
+        #write_xyz_coordinates("subSy" + str(rank) + "_" + str(partIndex) + ".xyz", subSy.coords, subSy.types, subSy.symbols)
 
         subSyCore = System(len(parts[partIndex]))
         subSyCore.symbols = sy.symbols
         subSyCore.coords,subSyCore.types = extract_subsystem(sy.coords,sy.types,sy.symbols,parts[partIndex])
         partCoreFileName = "CoreSubSy"+str(rank)+"_"+str(partIndex)+".pdb"
-        write_pdb_coordinates(partCoreFileName,subSyCore.coords,subSyCore.types,subSyCore.symbols)
-        write_xyz_coordinates("CoreSubSy"+str(rank)+"_"+str(partIndex)+".xyz",subSyCore.coords,subSyCore.types,subSyCore.symbols)
+        #write_pdb_coordinates(partCoreFileName,subSyCore.coords,subSyCore.types,subSyCore.symbols)
+        #write_xyz_coordinates("CoreSubSy"+str(rank)+"_"+str(partIndex)+".xyz",subSyCore.coords,subSyCore.types,subSyCore.symbols)
 
         ham = get_hamiltonian(eng,subSy.coords,subSy.types,subSy.symbols, 
                               parts[partIndex], partsCoreHalo[partIndex], molSysData, P, P_contr, graph_for_pairs, graph_maskd, None,
                               verbose=False)
         print("TOT {:>8.3f} (s)".format(time.perf_counter() - tic))
 
+        tic = time.perf_counter()
         norbs = subSy.nats
         occ = int(float(norbs) / 2.0)  # Get the total occupied orbitals
-
-        tic = time.perf_counter()
         coreSize = len(parts[partIndex])
         eVals, dVals, Q, NH_Nh_Hs, I, I_halo, core_indices_in_sub_expanded = get_eVals(eng, sdc, sy, occ, ham, subSy.coords, subSy.symbols, subSy.types, Tel, mu0,
                         coreSize, subSy, subSyCore, parts[partIndex], partsCoreHalo[partIndex],
@@ -117,6 +116,7 @@ def get_singlePoint(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hi
 
         print("| t eVals/dVals {:>9.4f} (s)".format(time.perf_counter() - tic))
 
+    tic = time.perf_counter()
     full_dVals = None
     full_eVals = None
     eValOnRank_size = np.array(len(eValOnRank), dtype=int)
@@ -128,7 +128,7 @@ def get_singlePoint(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hi
             
         comm.Gather(eValOnRank_size, eValOnRank_SIZES, root=0)
 
-        comm.Barrier()
+        #comm.Barrier()
         if rank == 0:
             full_dVals = np.empty(np.sum(eValOnRank_SIZES), dtype=eValOnRank.dtype)
             full_eVals = np.empty(np.sum(eValOnRank_SIZES), dtype=eValOnRank.dtype)
@@ -143,7 +143,7 @@ def get_singlePoint(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hi
         Nocc_LIST = comm.gather(Nocc_list, root=0)
 
         if rank == 0:
-        #     # Flatten the nested list of lists into a single list of tensors
+            # Flatten the nested list of lists into a single list of tensors
             eVal_LIST = list(itertools.chain(*eVal_LIST))
             Q_LIST = list(itertools.chain(*Q_LIST))
             NH_Nh_Hs_LIST = list(itertools.chain(*NH_Nh_Hs_LIST))
@@ -164,17 +164,20 @@ def get_singlePoint(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hi
         Nocc_LIST = Nocc_list
 
 
-    
+    print("| t commLists {:>9.4f} (s)".format(time.perf_counter() - tic), rank)
     if rank == 0:
         mu0 = get_mu(mu0, full_dVals, full_eVals, Tel, sy.numel/2)
 
     return eVal_LIST, Q_LIST, NH_Nh_Hs_LIST, I_LIST, I_halo_LIST, core_indices_in_sub_expanded_LIST, Nocc_LIST, mu0
 
-def get_singlePointForces(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, forces, molSysData, P, P_contr, graph_for_pairs, graph_maskd):
+def get_singlePointForces(sdc, eng, partsPerGPU, partsPerNode, node_id, node_rank, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, forces, molSysData, P, P_contr, graph_for_pairs, graph_maskd):
     partsPerRank = int(sdc.nparts / numranks)
-    partIndex1 = rank * partsPerRank
-    partIndex2 = (rank + 1) * partsPerRank
-    EELEC = torch.tensor([0.0], dtype = eng.torch_dt)
+    # partIndex1 = rank * partsPerRank
+    # partIndex2 = (rank + 1) * partsPerRank
+    partIndex1 = (node_rank) * partsPerGPU + node_id*partsPerNode #+ node_id * num_nodes
+    partIndex2 = (node_rank + 1) * partsPerGPU + node_id*partsPerNode #+ node_id * num_nodes
+
+    EELEC = 0.0
     for partIndex in range(partIndex1, partIndex2):
         print("Rank, part", rank, partIndex)
         subSy = System(len(partsCoreHalo[partIndex]))
@@ -198,7 +201,7 @@ def get_singlePointForces(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, 
         print("EelecCH {:>7.3f} |".format(eElec.item()), end=" ")
         del eElec, subSy, f
         print("TOT", time.perf_counter() - tic, "(s)")
-    print("eElec_SUM: {:>10.7f}".format(EELEC[0]),)    
+    print("eElec_SUM: {:>10.7f}".format(EELEC),)    
     return EELEC
 
 def get_singlePointDM(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu0, dm, P_contr, graph_for_pairs,
@@ -216,50 +219,59 @@ def get_singlePointDM(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, 
     P_contr_sumDifTot = 0
 
     for partIndex in range(partIndex1,partIndex2):
-        #print(partIndex)
         tic = time.perf_counter()
         # this will calculate the DM in subsys and update the whole DM
         rho_ren, maxDif, sumDif = get_density_matrix_renorm(eng, Tel, mu0, dm, P_contr, graph_for_pairs,
                                             eValOnRank_list[partIndex], Q_list[partIndex], NH_Nh_Hs_list[partIndex], I_list[partIndex], core_indices_in_sub_expanded_list[partIndex], Nocc_list[partIndex])
-        
+
         indices_in_sub = np.linspace(0,len(partsCoreHalo[partIndex])-1, len(partsCoreHalo[partIndex]), dtype = eng.np_int_dt)
         core_indices_in_sub = indices_in_sub[np.isin(partsCoreHalo[partIndex], parts[partIndex])]
         
-        alpha = 0.6
+        alpha = 1.0
         P_contr_maxDif = []
         P_contr_sumDif = 0
-        for i in range(len(parts[partIndex])):
-            #print(P_contr[:,i][:graph_for_pairs[parts[partIndex][i]][0]].shape)
-            P_contr_maxDif.append(torch.max(torch.abs(P_contr[:,parts[partIndex][i]][:graph_for_pairs[parts[partIndex][i]][0]] - \
-                                rho_ren.reshape((1, NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1],4, NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1],4)) \
-                                .transpose(2,3).reshape((NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1]), (NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1]),4,4)[core_indices_in_sub[i]].transpose(1,2))).cpu().numpy()
-)
-            P_contr_sumDif += torch.sum(torch.abs(P_contr[:,parts[partIndex][i]][:graph_for_pairs[parts[partIndex][i]][0]] - \
-                                rho_ren.reshape((1, NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1],4, NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1],4)) \
-                                .transpose(2,3).reshape((NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1]), (NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1]),4,4)[core_indices_in_sub[i]].transpose(1,2))).cpu().numpy()
-            
-            P_contr[:,parts[partIndex][i]][:graph_for_pairs[parts[partIndex][i]][0]] = (1-alpha)*P_contr[:,parts[partIndex][i]][:graph_for_pairs[parts[partIndex][i]][0]] + \
-            alpha*rho_ren.reshape((1, NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1],4, NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1],4)) \
-                                .transpose(2,3).reshape((NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1]), (NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1]),4,4)[core_indices_in_sub[i]].transpose(1,2)
-            
+        
+        ### vectorized loop. Faster for larger cores.
+        # tic = time.perf_counter()
+        # P_contr_test = P_contr.clone()
+        # max_len = graph_for_pairs[parts[partIndex][0]][0]
+        # TMP1 = P_contr_test[:max_len,parts[partIndex]]#.clone()
+        # TMP2 = rho_ren.reshape((1, NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1],4, NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1],4)) \
+        #                         .transpose(2,3).reshape((NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1]), (NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1]),4,4).transpose(2,3).transpose(0,1)[:,core_indices_in_sub]#.clone()
+        # P_contr_test[:max_len,parts[partIndex]] = (1-alpha)*TMP1 + alpha * TMP2
+        # print("Vec {:>8.3f} (s)".format(time.perf_counter() - tic))
+        # tic = time.perf_counter()
 
+        for i in range(len(parts[partIndex])):
+            tmp1 = P_contr[:graph_for_pairs[parts[partIndex][i]][0],parts[partIndex][i]].clone()
+            tmp2 = rho_ren.reshape((1, NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1],4, NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1],4)) \
+                                .transpose(2,3).reshape((NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1]), (NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1]),4,4)[core_indices_in_sub[i]].transpose(1,2).clone()
+
+            P_contr_maxDif.append(torch.max(torch.abs(tmp1 - tmp2)).cpu().numpy())
+            P_contr_sumDif += torch.sum(torch.abs(tmp1 - tmp2)).cpu().numpy()
+            P_contr[:graph_for_pairs[parts[partIndex][i]][0],parts[partIndex][i]] = (1-alpha)*tmp1 + alpha*tmp2
+            del tmp1, tmp2
+            
         rho_ren = pack(rho_ren, NH_Nh_Hs_list[partIndex][0], NH_Nh_Hs_list[partIndex][1])
 
         P_contr_maxDif = max(P_contr_maxDif)
         P_contr_maxDifList.append(P_contr_maxDif)
         P_contr_sumDifTot += P_contr_sumDif
-        print(" MAX |\u0394DM_ij|: {:>10.7f}".format(P_contr_maxDif))
-        print(" \u03A3   |\u0394DM_ij|: {:>10.7f}".format(P_contr_sumDif))
+        print(" MAX |\u0394DM_ij|: {:>10.7f}".format(P_contr_maxDif), rank, partIndex)
+        print(" \u03A3   |\u0394DM_ij|: {:>10.7f}".format(P_contr_sumDif), rank, partIndex)
+
+        #tic = time.perf_counter()
 
         maxDifList.append(maxDif)
         try:
             sumDifTot += sumDif
         except:
             sumDifTot += 0
-        graphOnRank = collect_graph_from_rho(graphOnRank, rho_ren.cpu(), sdc.gthresh, sy.nats, sdc.maxDeg, partsCoreHalo[partIndex], hindex, verb=False)
+        graphOnRank = collect_graph_from_rho(graphOnRank, rho_ren, sdc.gthresh, sy.nats, sdc.maxDeg, partsCoreHalo[partIndex], hindex, verb=False)
         # graphOnRank = collect_graph_from_rho(graphOnRank,
         #                                      pack(dm[:,I_halo_list[partIndex][0], I_halo_list[partIndex][1]], NH_Nh_Hs_list[partIndex][0], NH_Nh_Hs_list[partIndex][1])[0],
         #                                      sdc.gthresh, sy.nats, sdc.maxDeg, partsCoreHalo[partIndex], hindex, verb=False)
+        #print(graphOnRank[168][:65])
         del rho_ren
         print("t DM {:>8.3f} (s)".format(time.perf_counter() - tic))
 
@@ -272,16 +284,7 @@ def get_singlePointDM(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, 
     print(" \u03A3   |\u0394DM_ij|: {:>10.7f}".format(P_contr_sumDifTot))
 
 
-
-    if is_mpi_available:
-        fullGraphRho = collect_and_sum_matrices(graphOnRank, rank, numranks, comm)
-        # dValsFull = collect_dValsFull(dValsOnRank) #MPI functions # Newton-Raphosn from graph paper???
-        # eValsFull = collect_eValsFull(dValsOnRank) #MPI functions # Newton-Raphosn from graph paper???
-        comm.Barrier()
-        return fullGraphRho
-    else:
-        #fullGraphRho = graphOnRank
-        return graphOnRank
+    return graphOnRank
 
 def print_memory_usage(rank, node_rank, message):
     process = psutil.Process()
@@ -317,15 +320,25 @@ class MyClass:
 
 
 def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
+    t_INIT = time.perf_counter()
+    tic = time.perf_counter()
     eng.use_pyseqm_lt = False
     sdc.use_pyseqm_lt = eng.use_pyseqm_lt
 
     eng.reconstruct_dm = False
     sdc.reconstruct_dm = eng.reconstruct_dm
 
-
     node_comm = comm.Split_type(MPI.COMM_TYPE_SHARED)
     node_rank = node_comm.Get_rank()  # Rank within the node
+    node_numranks = node_comm.Get_size()
+
+    node_name = socket.gethostname()
+    node_names = comm.allgather(node_name)
+
+    unique_nodes = list(set(node_names))
+    num_nodes = len(unique_nodes)         # Total number of unique nodes
+    node_id = int(rank/node_numranks)
+
 
     primary_rank = None
     if node_rank == 0:
@@ -335,15 +348,13 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     primary_ranks = comm.allgather(primary_rank)
     primary_ranks = [r for r in primary_ranks if r is not None]  # Filter out None values
 
-
     color = 0 if rank in primary_ranks else MPI.UNDEFINED
     primary_comm = comm.Split(color=color, key=rank)
-    comm.Barrier()
+    #comm.Barrier()
 
     device = 'cpu'
 
     if torch.get_default_dtype() == torch.float32:
-
         eng.torch_dt = torch.float32
         sdc.torch_dt = eng.torch_dt
 
@@ -369,334 +380,36 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         sdc.np_int_dt = eng.np_int_dt
 
     njumps = 1
+    print("Time comms {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
     tic = time.perf_counter()
     fullGraph = graphNL.copy()
 
     with torch.no_grad(): molSysData = get_molSysData(eng, sdc, sy.coords, sy.symbols, sy.types, do_large_tensors = sdc.use_pyseqm_lt, device=device) #object with whatever initial parameters and tensors
-    
-    # if rank == 0:
-
-    #     with torch.no_grad(): molSysData = get_molSysData(eng, sdc, sy.coords, sy.symbols, sy.types, device=device) #object with whatever initial parameters and tensors
-        
-    #     idxi_size = molSysData.molecule_whole.idxi.size()
-    #     idxi_nbytes = molSysData.molecule_whole.idxi.size().numel() * molSysData.molecule_whole.idxi.element_size()
-
-    #     idxj_size = idxi_size
-    #     idxj_nbytes = idxi_nbytes
-
-    #     rij_size = molSysData.molecule_whole.rij.size()
-    #     rij_nbytes = molSysData.molecule_whole.rij.size().numel() * molSysData.molecule_whole.rij.element_size()
-
-    #     xij_size = molSysData.molecule_whole.xij.size()
-    #     xij_nbytes = molSysData.molecule_whole.xij.size().numel() * molSysData.molecule_whole.xij.element_size()
-
-    #     ni_size = molSysData.molecule_whole.ni.size()
-    #     ni_nbytes = molSysData.molecule_whole.ni.size().numel() * molSysData.molecule_whole.ni.element_size()
-
-    #     nj_size = molSysData.molecule_whole.nj.size()
-    #     nj_nbytes = molSysData.molecule_whole.nj.size().numel() * molSysData.molecule_whole.nj.element_size()
-
-    #     mask_size = molSysData.molecule_whole.mask.size()
-    #     mask_nbytes = molSysData.molecule_whole.mask.size().numel() * molSysData.molecule_whole.mask.element_size()
-
-    #     mask_l_size = molSysData.molecule_whole.mask_l.size()
-    #     mask_l_nbytes = molSysData.molecule_whole.mask_l.size().numel() * molSysData.molecule_whole.mask_l.element_size()
-
-    #     pair_molid_size = molSysData.molecule_whole.pair_molid.size()
-    #     pair_molid_nbytes = molSysData.molecule_whole.pair_molid.size().numel() * molSysData.molecule_whole.pair_molid.element_size()
-
-    #     ###
-    #     w_ssss_size = molSysData.w_ssss.size()
-    #     w_ssss_nbytes = molSysData.w_ssss.size().numel() * molSysData.w_ssss.element_size()
-
-    #     rho0xi_whole_size = molSysData.rho0xi_whole.size()
-    #     rho0xi_whole_nbytes = molSysData.rho0xi_whole.size().numel() * molSysData.rho0xi_whole.element_size()
-
-    #     rho0xj_whole_size = molSysData.rho0xj_whole.size()
-    #     rho0xj_whole_nbytes = molSysData.rho0xj_whole.size().numel() * molSysData.rho0xj_whole.element_size()
-    # else:
-    #     molSysData = ParamContainer()
-
-    #     molSysData.molecule_whole = ParamContainer()
-
-    #     molSysData.molecule_whole.idxi = None
-    #     idxi_size = None
-    #     idxi_nbytes = 0
-
-    #     molSysData.molecule_whole.idxj = None
-    #     idxj_size = None
-    #     idxj_nbytes = 0
-
-    #     molSysData.molecule_whole.rij = None
-    #     rij_size = None
-    #     rij_nbytes = 0
-
-    #     molSysData.molecule_whole.xij = None
-    #     xij_size = None
-    #     xij_nbytes = 0
-
-    #     molSysData.molecule_whole.ni = None
-    #     ni_size = None
-    #     ni_nbytes = 0
-
-    #     molSysData.molecule_whole.nj = None
-    #     nj_size = None
-    #     nj_nbytes = 0
-
-    #     molSysData.molecule_whole.mask = None
-    #     mask_size = None
-    #     mask_nbytes = 0
-
-    #     molSysData.molecule_whole.mask_l = None
-    #     mask_l_size = None
-    #     mask_l_nbytes = 0
-
-    #     molSysData.molecule_whole.pair_molid = None
-    #     pair_molid_size = None
-    #     pair_molid_nbytes = 0
-
-    #     ###
-    #     molSysData.w_ssss = None
-    #     w_ssss_size = None
-    #     w_ssss_nbytes = 0
-
-    #     molSysData.rho0xi_whole = None
-    #     rho0xi_whole_size = None
-    #     rho0xi_whole_nbytes = 0
-
-    #     molSysData.rho0xj_whole = None
-    #     rho0xj_whole_size = None
-    #     rho0xj_whole_nbytes = 0
-
-    #     ###
-    #     molSysData.molecule_whole.const = None
-    #     molSysData.molecule_whole.Z = None
-    #     molSysData.molecule_whole.alp = None
-    #     molSysData.molecule_whole.chi = None
-    #     molSysData.molecule_whole.atom_molid = None
-    #     molSysData.molecule_whole.coordinates = None
-    #     molSysData.molecule_whole.species = None
-    #     molSysData.molecule_whole.maskd = None
-    #     molSysData.molecule_whole.mass = None
-    #     molSysData.molecule_whole.method = None
-    #     molSysData.molecule_whole.molsize = None
-    #     molSysData.molecule_whole.mult = None
-    #     molSysData.molecule_whole.nHeavy = None
-    #     molSysData.molecule_whole.nHydro = None
-    #     molSysData.molecule_whole.nSuperHeavy = None
-    #     molSysData.molecule_whole.nmol = None
-    #     molSysData.molecule_whole.nocc = None
-    #     molSysData.molecule_whole.parameters = None
-    #     molSysData.molecule_whole.seqm_parameters = None
-    #     molSysData.molecule_whole.tot_charge = None
-
-    # if mpiOnDebugFlag:
-    #     molSysData.molecule_whole.const= comm.bcast(molSysData.molecule_whole.const, root=0)
-    #     molSysData.molecule_whole.Z = comm.bcast(molSysData.molecule_whole.Z, root=0)
-    #     molSysData.molecule_whole.alp = comm.bcast(molSysData.molecule_whole.alp, root=0)
-    #     molSysData.molecule_whole.chi = comm.bcast(molSysData.molecule_whole.chi, root=0)
-    #     molSysData.molecule_whole.atom_molid = comm.bcast(molSysData.molecule_whole.atom_molid, root=0)
-    #     molSysData.molecule_whole.coordinates = comm.bcast(molSysData.molecule_whole.coordinates, root=0)
-    #     molSysData.molecule_whole.species = comm.bcast(molSysData.molecule_whole.species, root=0)
-    #     molSysData.molecule_whole.maskd = comm.bcast(molSysData.molecule_whole.maskd, root=0)
-    #     molSysData.molecule_whole.mass = comm.bcast(molSysData.molecule_whole.mass, root=0)
-    #     molSysData.molecule_whole.method = comm.bcast(molSysData.molecule_whole.method, root=0)
-    #     molSysData.molecule_whole.molsize = comm.bcast(molSysData.molecule_whole.molsize, root=0)
-    #     molSysData.molecule_whole.mult = comm.bcast(molSysData.molecule_whole.mult, root=0)
-    #     molSysData.molecule_whole.nHeavy = comm.bcast(molSysData.molecule_whole.nHeavy, root=0)
-    #     molSysData.molecule_whole.nHydro = comm.bcast(molSysData.molecule_whole.nHydro, root=0)
-    #     molSysData.molecule_whole.nSuperHeavy = comm.bcast(molSysData.molecule_whole.nSuperHeavy, root=0)
-    #     molSysData.molecule_whole.nmol = comm.bcast(molSysData.molecule_whole.nmol, root=0)
-    #     molSysData.molecule_whole.nocc = comm.bcast(molSysData.molecule_whole.nocc, root=0)
-    #     molSysData.molecule_whole.parameters = comm.bcast(molSysData.molecule_whole.parameters, root=0)
-    #     molSysData.molecule_whole.seqm_parameters = comm.bcast(molSysData.molecule_whole.seqm_parameters, root=0)
-    #     molSysData.molecule_whole.tot_charge = comm.bcast(molSysData.molecule_whole.tot_charge, root=0)
-
-
-    
-    #     comm.Barrier()
-    #     if rank in primary_ranks:
-    #         molSysData.molecule_whole.idxi = primary_comm.bcast(molSysData.molecule_whole.idxi, root=0)
-    #         molSysData.molecule_whole.idxj = primary_comm.bcast(molSysData.molecule_whole.idxj, root=0)
-    #         molSysData.molecule_whole.rij = primary_comm.bcast(molSysData.molecule_whole.rij, root=0)
-    #         molSysData.molecule_whole.xij = primary_comm.bcast(molSysData.molecule_whole.xij, root=0)
-    #         molSysData.molecule_whole.ni = primary_comm.bcast(molSysData.molecule_whole.ni, root=0)
-    #         molSysData.molecule_whole.nj = primary_comm.bcast(molSysData.molecule_whole.nj, root=0)
-    #         molSysData.molecule_whole.mask = primary_comm.bcast(molSysData.molecule_whole.mask, root=0)
-    #         molSysData.molecule_whole.mask_l = primary_comm.bcast(molSysData.molecule_whole.mask_l, root=0)
-    #         molSysData.molecule_whole.pair_molid = primary_comm.bcast(molSysData.molecule_whole.pair_molid, root=0)
-    #         ###
-    #         molSysData.w_ssss = primary_comm.bcast(molSysData.w_ssss, root=0)
-    #         molSysData.rho0xi_whole = primary_comm.bcast(molSysData.rho0xi_whole, root=0)
-    #         molSysData.rho0xj_whole = primary_comm.bcast(molSysData.rho0xj_whole, root=0)
-
-    #         idxi_nbytes = primary_comm.bcast(idxi_nbytes, root=0)
-    #         idxj_nbytes = primary_comm.bcast(idxj_nbytes, root=0)
-    #         rij_nbytes = primary_comm.bcast(rij_nbytes, root=0)
-    #         xij_nbytes = primary_comm.bcast(xij_nbytes, root=0)
-    #         ni_nbytes = primary_comm.bcast(ni_nbytes, root=0)
-    #         nj_nbytes = primary_comm.bcast(nj_nbytes, root=0)
-    #         mask_nbytes = primary_comm.bcast(mask_nbytes, root=0)
-    #         mask_l_nbytes = primary_comm.bcast(mask_l_nbytes, root=0)
-    #         pair_molid_nbytes = primary_comm.bcast(pair_molid_nbytes, root=0)
-    #         ###
-    #         w_ssss_nbytes = primary_comm.bcast(w_ssss_nbytes, root=0)
-    #         rho0xi_whole_nbytes = primary_comm.bcast(rho0xi_whole_nbytes, root=0)
-    #         rho0xj_whole_nbytes = primary_comm.bcast(rho0xj_whole_nbytes, root=0)
-
-    #     idxi_size = comm.bcast(idxi_size, root=0)
-    #     idxj_size = comm.bcast(idxj_size, root=0)
-    #     rij_size = comm.bcast(rij_size, root=0)
-    #     xij_size = comm.bcast(xij_size, root=0)
-    #     ni_size = comm.bcast(ni_size, root=0)
-    #     nj_size = comm.bcast(nj_size, root=0)
-    #     mask_size = comm.bcast(mask_size, root=0)
-    #     mask_l_size = comm.bcast(mask_l_size, root=0)
-    #     pair_molid_size = comm.bcast(pair_molid_size, root=0)
-    #     ###
-    #     w_ssss_size = comm.bcast(w_ssss_size, root=0)
-    #     rho0xi_whole_size = comm.bcast(rho0xi_whole_size, root=0)
-    #     rho0xj_whole_size = comm.bcast(rho0xj_whole_size, root=0)
-
-
-    #     idxi_win = MPI.Win.Allocate_shared(idxi_nbytes, torch.tensor(0, dtype=eng.torch_int_dt).element_size(), comm=node_comm) # 8 is the size of torch.float64
-    #     idxi_buf, idxi_itemsize = idxi_win.Shared_query(0) 
-    #     idxi_ary = np.ndarray(buffer=idxi_buf, dtype=eng.np_int_dt, shape=(idxi_size))
-    #     if rank == 0:
-    #         idxi_ary[:] = molSysData.molecule_whole.idxi.cpu().numpy()   
-    #     comm.Barrier()
-    #     del molSysData.molecule_whole.idxi
-    #     molSysData.molecule_whole.idxi = torch.from_numpy(idxi_ary).to(device)
-
-    #     idxj_win = MPI.Win.Allocate_shared(idxj_nbytes, torch.tensor(0, dtype=eng.torch_int_dt).element_size(), comm=node_comm) # 8 is the size of torch.float64
-    #     idxj_buf, idxj_itemsize = idxj_win.Shared_query(0) 
-    #     idxj_ary = np.ndarray(buffer=idxj_buf, dtype=eng.np_int_dt, shape=(idxj_size))
-    #     if rank == 0:
-    #         idxj_ary[:] = molSysData.molecule_whole.idxj.cpu().numpy()   
-    #     comm.Barrier()
-    #     del molSysData.molecule_whole.idxj
-    #     molSysData.molecule_whole.idxj = torch.from_numpy(idxj_ary).to(device)
-
-    #     rij_win = MPI.Win.Allocate_shared(rij_nbytes, torch.tensor(0, dtype=eng.torch_dt).element_size(), comm=node_comm) # 8 is the size of torch.float64
-    #     rij_buf, rij_itemsize = rij_win.Shared_query(0) 
-    #     rij_ary = np.ndarray(buffer=rij_buf, dtype=eng.np_dt, shape=(rij_size))
-    #     if rank == 0:
-    #         rij_ary[:] = molSysData.molecule_whole.rij.cpu().numpy()   
-    #     comm.Barrier()
-    #     del molSysData.molecule_whole.rij
-    #     molSysData.molecule_whole.rij = torch.from_numpy(rij_ary).to(device)
-
-    #     xij_win = MPI.Win.Allocate_shared(xij_nbytes, torch.tensor(0, dtype=eng.torch_dt).element_size(), comm=node_comm) # 8 is the size of torch.float64
-    #     xij_buf, xij_itemsize = xij_win.Shared_query(0) 
-    #     xij_ary = np.ndarray(buffer=xij_buf, dtype=eng.np_dt, shape=(xij_size))
-    #     if rank == 0:
-    #         xij_ary[:] = molSysData.molecule_whole.xij.cpu().numpy()   
-    #     comm.Barrier()
-    #     del molSysData.molecule_whole.xij
-    #     molSysData.molecule_whole.xij = torch.from_numpy(xij_ary).to(device)
-    #     #xij_win.Free()
-
-    #     ni_win = MPI.Win.Allocate_shared(ni_nbytes, torch.tensor(0, dtype=eng.torch_int_dt).element_size(), comm=node_comm) # 8 is the size of torch.float64
-    #     ni_buf, ni_itemsize = ni_win.Shared_query(0) 
-    #     ni_ary = np.ndarray(buffer=ni_buf, dtype=eng.np_int_dt, shape=(ni_size))
-    #     if rank == 0:
-    #         ni_ary[:] = molSysData.molecule_whole.ni.cpu().numpy()   
-    #     comm.Barrier()
-    #     del molSysData.molecule_whole.ni
-    #     molSysData.molecule_whole.ni = torch.from_numpy(ni_ary).to(device)
-
-    #     nj_win = MPI.Win.Allocate_shared(nj_nbytes, torch.tensor(0, dtype=eng.torch_int_dt).element_size(), comm=node_comm) # 8 is the size of torch.float64
-    #     nj_buf, nj_itemsize = nj_win.Shared_query(0) 
-    #     nj_ary = np.ndarray(buffer=nj_buf, dtype=eng.np_int_dt, shape=(nj_size))
-    #     if rank == 0:
-    #         nj_ary[:] = molSysData.molecule_whole.nj.cpu().numpy()   
-    #     comm.Barrier()
-    #     del molSysData.molecule_whole.nj
-    #     molSysData.molecule_whole.nj = torch.from_numpy(nj_ary).to(device)
-
-    #     mask_win = MPI.Win.Allocate_shared(mask_nbytes, torch.tensor(0, dtype=eng.torch_int_dt).element_size(), comm=node_comm) # 8 is the size of torch.float64
-    #     mask_buf, mask_itemsize = mask_win.Shared_query(0) 
-    #     mask_ary = np.ndarray(buffer=mask_buf, dtype=eng.np_int_dt, shape=(mask_size))
-    #     if rank == 0:
-    #         mask_ary[:] = molSysData.molecule_whole.mask.cpu().numpy()   
-    #     comm.Barrier()
-    #     del molSysData.molecule_whole.mask
-    #     molSysData.molecule_whole.mask = torch.from_numpy(mask_ary).to(device)
-
-    #     mask_l_win = MPI.Win.Allocate_shared(mask_l_nbytes, torch.tensor(0, dtype=eng.torch_int_dt).element_size(), comm=node_comm) # 8 is the size of torch.float64
-    #     mask_l_buf, mask_l_itemsize = mask_l_win.Shared_query(0) 
-    #     mask_l_ary = np.ndarray(buffer=mask_l_buf, dtype=eng.np_int_dt, shape=(mask_l_size))
-    #     if rank == 0:
-    #         mask_l_ary[:] = molSysData.molecule_whole.mask_l.cpu().numpy()   
-    #     comm.Barrier()
-    #     del molSysData.molecule_whole.mask_l
-    #     molSysData.molecule_whole.mask_l = torch.from_numpy(mask_l_ary).to(device)
-
-    #     pair_molid_win = MPI.Win.Allocate_shared(pair_molid_nbytes, torch.tensor(0, dtype=eng.torch_int_dt).element_size(), comm=node_comm) # 8 is the size of torch.float64
-    #     pair_molid_buf, pair_molid_itemsize = pair_molid_win.Shared_query(0) 
-    #     pair_molid_ary = np.ndarray(buffer=pair_molid_buf, dtype=eng.np_int_dt, shape=(pair_molid_size))
-    #     if rank == 0:
-    #         pair_molid_ary[:] = molSysData.molecule_whole.pair_molid.cpu().numpy()   
-    #     comm.Barrier()
-    #     del molSysData.molecule_whole.pair_molid
-    #     molSysData.molecule_whole.pair_molid = torch.from_numpy(pair_molid_ary).to(device)
-
-    #     w_ssss_win = MPI.Win.Allocate_shared(w_ssss_nbytes, torch.tensor(0, dtype=eng.torch_int_dt).element_size(), comm=node_comm) # 8 is the size of torch.float64
-    #     w_ssss_buf, w_ssss_itemsize = w_ssss_win.Shared_query(0) 
-    #     w_ssss_ary = np.ndarray(buffer=w_ssss_buf, dtype=eng.np_int_dt, shape=(w_ssss_size))
-    #     if rank == 0:
-    #         w_ssss_ary[:] = molSysData.w_ssss.cpu().numpy()   
-    #     comm.Barrier()
-    #     del molSysData.w_ssss
-    #     molSysData.w_ssss = torch.from_numpy(w_ssss_ary).to(device)
-
-    #     rho0xi_whole_win = MPI.Win.Allocate_shared(rho0xi_whole_nbytes, torch.tensor(0, dtype=eng.torch_dt).element_size(), comm=node_comm) # 8 is the size of torch.float64
-    #     rho0xi_whole_buf, rho0xi_whole_itemsize = rho0xi_whole_win.Shared_query(0) 
-    #     rho0xi_whole_ary = np.ndarray(buffer=rho0xi_whole_buf, dtype=eng.np_int_dt, shape=(rho0xi_whole_size))
-    #     if rank == 0:
-    #         rho0xi_whole_ary[:] = molSysData.rho0xi_whole.cpu().numpy()   
-    #     comm.Barrier()
-    #     del molSysData.rho0xi_whole
-    #     molSysData.rho0xi_whole = torch.from_numpy(rho0xi_whole_ary).to(device)
-
-    #     rho0xj_whole_win = MPI.Win.Allocate_shared(rho0xj_whole_nbytes, torch.tensor(0, dtype=eng.torch_dt).element_size(), comm=node_comm) # 8 is the size of torch.float64
-    #     rho0xj_whole_buf, rho0xj_whole_itemsize = rho0xj_whole_win.Shared_query(0) 
-    #     rho0xj_whole_ary = np.ndarray(buffer=rho0xj_whole_buf, dtype=eng.np_int_dt, shape=(rho0xj_whole_size))
-    #     if rank == 0:
-    #         rho0xj_whole_ary[:] = molSysData.rho0xj_whole.cpu().numpy()   
-    #     comm.Barrier()
-    #     del molSysData.rho0xj_whole
-    #     molSysData.rho0xj_whole = torch.from_numpy(rho0xj_whole_ary).to(device)
-
-    #     #del idxi_ary, idxj_ary, rij_ary, xij_ary, ni_ary, nj_ary, mask_ary, mask_l_ary, pair_molid_ary
-
-
-
-    # print(obj_size)
-    # print_attribute_sizes(molSysData)
-    print_attribute_sizes(molSysData.molecule_whole)
-    #exit()
+    #print_attribute_sizes(molSysData.molecule_whole)
+    print("Time to init molSysData {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
     if rank == 0:
+        tic = time.perf_counter()
         print('Computing cores.')
         parts = graph_partition(eng, fullGraph, sdc.partitionType, sdc.nparts, sy.coords, sdc.verb)
         sdc.nparts = len(parts)
         print('New nparts:', sdc.nparts)
-        print("Time to compute cores {:>7.2f} (s)".format(time.perf_counter() - tic))
-        num_elements = 0
+        print("Time to compute cores {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+        # num_elements = 0
 
-        for i in range(sdc.nparts):
-            subSyCore = System(len(parts[i]))
-            subSyCore.symbols = sy.symbols
-            subSyCore.coords,subSyCore.types = extract_subsystem(sy.coords,sy.types,sy.symbols,parts[i])
-            partCoreFileName = "CoreSubSy"+str(rank)+"_"+str(i)+".pdb"
-            write_pdb_coordinates(partCoreFileName,subSyCore.coords,subSyCore.types,subSyCore.symbols)
-            write_xyz_coordinates("CoreSubSy"+str(rank)+"_"+str(i)+".xyz",subSyCore.coords,subSyCore.types,subSyCore.symbols)
-            print('N atoms in core {:>6d} : {:>6d}'.format(i, len(parts[i])))
-            num_elements += len(parts[i])
-            del subSyCore
-        print('NUMBER OF ELEMENTS', num_elements)
+        tic = time.perf_counter()
+        # for i in range(sdc.nparts):
+            # subSyCore = System(len(parts[i]))
+            # subSyCore.symbols = sy.symbols
+            # subSyCore.coords,subSyCore.types = extract_subsystem(sy.coords,sy.types,sy.symbols,parts[i])
+            # partCoreFileName = "CoreSubSy"+str(rank)+"_"+str(i)+".pdb"
+            # write_pdb_coordinates(partCoreFileName,subSyCore.coords,subSyCore.types,subSyCore.symbols)
+            # write_xyz_coordinates("CoreSubSy"+str(rank)+"_"+str(i)+".xyz",subSyCore.coords,subSyCore.types,subSyCore.symbols)
+            # print('N atoms in core {:>6d} : {:>6d}'.format(i, len(parts[i])))
+            # num_elements += len(parts[i])
+            # del subSyCore
+        # print('NUMBER OF ELEMENTS', num_elements)
         print('Loading the molecule and parameters.')
         if eng.reconstruct_dm:
             dm = get_initDM(eng, sdc, sy.coords, sy.symbols, sy.types, molSysData)#.share_memory_()
@@ -711,25 +424,30 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             partsCoreHalo.append(coreHalo)
             if sdc.verb: print("coreHalo for part", i, "=", coreHalo)
             print('N atoms in core/coreHalo {:>6d} : {:>6d} {:>6d}'.format(i, len(parts[i]), len(coreHalo)), '\n')
+        
+        print("Time to compute halos {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
-        new_graph_for_pairs = fullGraph.copy()
+        tic = time.perf_counter()
+        new_graph_for_pairs = np.array(fullGraph.copy())
         for i in range(sy.nats):
-            for sublist_idx in range(len(parts)):
+            for sublist_idx in range(sdc.nparts):
                 if i in parts[sublist_idx]:
-                    new_graph_for_pairs[i][0] = len(partsCoreHalo[sublist_idx])
-                    new_graph_for_pairs[i][1:new_graph_for_pairs[i][0]+1] = partsCoreHalo[sublist_idx]
+                    new_graph_for_pairs[i, 0] = len(partsCoreHalo[sublist_idx])
+                    new_graph_for_pairs[i, 1:new_graph_for_pairs[i][0]+1] = partsCoreHalo[sublist_idx]
+                    break
+
         graph_for_pairs = new_graph_for_pairs
         graph_maskd = []
         counter = 0
-        for j in range(len(graph_for_pairs)):
-            sub_counter = 0
+        for j in range(sy.nats):
             for i in graph_for_pairs[j][1:graph_for_pairs[j][0]+1]: 
                 if i==j:
                     graph_maskd.append(counter)
                 counter +=1
-                sub_counter += 1 
             counter += int(sdc.maxDeg - graph_for_pairs[j][0])
+        print("Time to init mod graphs {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
+        tic = time.perf_counter()
         P_contr = torch.zeros(sy.nats*sdc.maxDeg,4,4, dtype=eng.torch_dt, device=device)  # density matrix
         P_contr[graph_maskd] = get_diag_guess_pyseqm(molSysData.molecule_whole, sy)
         P_contr = P_contr.reshape(sy.nats, sdc.maxDeg, 4,4).transpose(0,1)
@@ -737,11 +455,10 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         P_contr_size = P_contr.size()
         P_contr_nbytes = P_contr.numel() * P_contr.element_size()
         
+        print("Time to init DM {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
-        # print('collect_graph_from_rho S.')
         # graphNL = collect_graph_from_rho(None, sdc.overlap_whole,
         #                                   sdc.gthreshinit, sy.nats, sdc.maxDeg, [i for i in range(0,sy.nats)],hindex)
-        # del sdc.overlap_whole
         # print('collect_graph_from_rho dm.')
         # graphNL_dm = collect_graph_from_rho(None, pack(dm, molSysData.molecule_whole.nHeavy, molSysData.molecule_whole.nHydro)[0],
         #                               sdc.gthresh, sy.nats, sdc.maxDeg, [i for i in range(0,sy.nats)],hindex)
@@ -768,15 +485,22 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         P_contr_size = None
         P_contr_nbytes = 0
     
+    #tic = time.perf_counter()
     if mpiOnDebugFlag:
-        comm.Barrier()
+        #comm.Barrier()
+        tic = time.perf_counter()
         parts = comm.bcast(parts, root=0)
         sdc.nparts = comm.bcast(sdc.nparts, root=0)
-        if rank in primary_ranks and rank != 0:
-            P_contr = primary_comm.bcast(P_contr, root=0)
+        #if rank in primary_ranks and len(primary_ranks) > 1:
+        if rank in primary_ranks:
+            print('prim rank', rank)
+            #P_contr = primary_comm.bcast(P_contr, root=0)
+            #primary_comm.Bcast([P_contr.cpu().numpy(), MPI.DOUBLE], root=0)
             P_contr_nbytes = primary_comm.bcast(P_contr_nbytes, root=0)
+        print("BCST1 {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
 
+        tic = time.perf_counter()
         if eng.reconstruct_dm:
             dm_size = comm.bcast(dm_size, root=0)
             win = MPI.Win.Allocate_shared(nbytes, torch.tensor(0, dtype=eng.torch_dt).element_size(), comm=comm) # 8 is the size of torch.float64
@@ -785,7 +509,6 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             ary = np.ndarray(buffer=buf, dtype=eng.np_dt, shape=(dm_size))
             if rank == 0:
                 ary[:] = dm.numpy()   
-            comm.Barrier()
             del dm
             dm = torch.from_numpy(ary)
             print(ary.shape)
@@ -796,48 +519,67 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         P_contr_buf, P_contr_itemsize = P_contr_win.Shared_query(0) 
         #assert P_contr_itemsize == MPI.DOUBLE.Get_size() 
         P_contr_ary = np.ndarray(buffer=P_contr_buf, dtype=eng.np_dt, shape=(P_contr_size))
-        #if rank == 0:
-        if rank == 0:
+        if node_rank == 0:
             P_contr_ary[:] = P_contr.cpu().numpy()   
         comm.Barrier()
+
         del P_contr
         P_contr = torch.from_numpy(P_contr_ary).to(device)
+        if rank in primary_ranks:
+            primary_comm.Bcast([P_contr.cpu().numpy(), MPI.DOUBLE], root=0)
+        print("BCST2 {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
+        tic = time.perf_counter()
         fullGraph = comm.bcast(fullGraph, root=0)
-
         coreHalo = comm.bcast(coreHalo, root=0)
         partsCoreHalo = comm.bcast(partsCoreHalo, root=0)
         new_graph_for_pairs = comm.bcast(new_graph_for_pairs, root=0)
         graph_maskd = comm.bcast(graph_maskd, root=0)
         graph_for_pairs = comm.bcast(graph_for_pairs, root=0)
+        print("BCST3 {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+    
+    print("Time to init bcast and share DM {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+
+    if rank == 0:
+        print("Time INIT {:>7.2f} (s)".format(time.perf_counter() - t_INIT))
 
 
     dmOld = None
     mu0 = -5.5
     for gsc in range(sdc.numAdaptIter):
-        print_memory_usage(rank, node_rank, "Memory usage")
+        if rank == 0: print('\n\n|||| Adaptive iter:', gsc, '||||')
+        #print_memory_usage(rank, node_rank, "Memory usage")
         TIC_iter = time.perf_counter()
         # Partition the graph
         tic = time.perf_counter()
         if gsc > 0:
-            if rank == 0:
-                print('\n\n|||| Adaptive iter:', gsc, '||||')
+            tic = time.perf_counter()
+            if node_rank == 0:
+                primary_comm.Bcast([P_contr.cpu().numpy(), MPI.DOUBLE], root=0)
+            print("Time to  bcast DM_cpu_np {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+
+            if node_rank == 0:
+                tic = time.perf_counter()
                 partsCoreHalo = []
                 print("\nCore and halos indices for every part:")
                 #print(fullGraph[parts[0]])
                 for i in range(sdc.nparts):
                     coreHalo, nc = get_coreHaloIndices(eng, parts[i], fullGraph, njumps, sdc, sy)
                     partsCoreHalo.append(coreHalo)
-                    if sdc.verb: print("coreHalo for part", i, "=", coreHalo)
-                    print('N atoms in core/coreHalo {:>6d} : {:>6d} {:>6d}'.format(i, len(parts[i]), len(coreHalo)), '\n')
-                print("Time to compute halos {:>7.2f} (s)".format(time.perf_counter() - tic))
+                    if sdc.verb and rank == 0: print("coreHalo for part", i, "=", coreHalo)
+                    if rank == 0: print('N atoms in core/coreHalo {:>6d} : {:>6d} {:>6d}'.format(i, len(parts[i]), len(coreHalo)), '\n')
+                    
+                if rank == 0: print("Time to compute halos {:>7.2f} (s)".format(time.perf_counter() - tic))
 
-                new_graph_for_pairs = fullGraph.copy()
+                tic = time.perf_counter()
+                new_graph_for_pairs = np.array(fullGraph.copy())
                 for i in range(sy.nats):
-                    for sublist_idx in range(len(parts)):
+                    for sublist_idx in range(sdc.nparts):
                         if i in parts[sublist_idx]:
-                            new_graph_for_pairs[i][0] = len(partsCoreHalo[sublist_idx])
-                            new_graph_for_pairs[i][1:new_graph_for_pairs[i][0]+1] = partsCoreHalo[sublist_idx]
+                            new_graph_for_pairs[i, 0] = len(partsCoreHalo[sublist_idx])
+                            new_graph_for_pairs[i, 1:new_graph_for_pairs[i][0]+1] = partsCoreHalo[sublist_idx]
+                            break
+
                 #### THIS IS BAD. NEEDS TO BE FIXEd $$$
                 P_contr_new = torch.zeros_like(P_contr, device=device)
                 for i in range(len(new_graph_for_pairs)):
@@ -849,15 +591,15 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                 graph_for_pairs = new_graph_for_pairs
                 graph_maskd = []
                 counter = 0
-                for j in range(len(graph_for_pairs)):
-                    sub_counter = 0
+                for j in range(sy.nats):
                     for i in graph_for_pairs[j][1:graph_for_pairs[j][0]+1]: 
                         if i==j:
                             graph_maskd.append(counter)
                         counter +=1
-                        sub_counter += 1 
                     counter += int(sdc.maxDeg - graph_for_pairs[j][0])
                 graph_maskd = np.array(graph_maskd)
+
+                if rank == 0: print("Time to updt DM and mod graphs {:>7.2f} (s)".format(time.perf_counter() - tic))
             else:
                 coreHalo = None
                 partsCoreHalo = None
@@ -866,13 +608,16 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                 graph_maskd = None
 
 
+            tic = time.perf_counter()
             if mpiOnDebugFlag:
-                coreHalo = comm.bcast(coreHalo, root=0)
-                partsCoreHalo = comm.bcast(partsCoreHalo, root=0)
-                graph_for_pairs = comm.bcast(graph_for_pairs, root=0)
-                new_graph_for_pairs = comm.bcast(new_graph_for_pairs, root=0)
-                graph_maskd = comm.bcast(graph_maskd, root=0)
+                coreHalo = node_comm.bcast(coreHalo, root=0)
+                partsCoreHalo = node_comm.bcast(partsCoreHalo, root=0)
+                graph_for_pairs = node_comm.bcast(graph_for_pairs, root=0)
+                new_graph_for_pairs = node_comm.bcast(new_graph_for_pairs, root=0)
+                graph_maskd = node_comm.bcast(graph_maskd, root=0)
+            print("Time to bcast DM and mod graphs {:>7.2f} (s)".format(time.perf_counter() - tic))
             
+        tic = time.perf_counter()
         # for efficiency, the PySEQM dm needs to be reshaped in 4x4 blocks.
         if eng.interface == "PySEQM":
             with torch.no_grad():
@@ -891,82 +636,113 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             eValOnRank_list, Q_list, NH_Nh_Hs_list, I_list, core_indices_in_sub_expanded_list, Nocc_list, mu0 = \
                 get_singlePoint(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu0, molSysData, dm)
 
-        if rank ==0:
+        if rank == 0: print("Time to get_singlePoint {:>7.2f} (s)".format(time.perf_counter() - tic))
+        
+        #if rank == 0:
+        if rank < node_numranks:
+            tic = time.perf_counter()
+            eValOnRank_list = node_comm.bcast(eValOnRank_list, root=0)
+            Q_list = node_comm.bcast(Q_list, root=0)
+            NH_Nh_Hs_list = node_comm.bcast(NH_Nh_Hs_list, root=0)
+            I_list = node_comm.bcast(I_list, root=0)
+            I_halo_list = node_comm.bcast(I_halo_list, root=0)
+            core_indices_in_sub_expanded_list = node_comm.bcast(core_indices_in_sub_expanded_list, root=0)
+            Nocc_list = node_comm.bcast(Nocc_list, root=0)
+            mu0 = node_comm.bcast(mu0, root=0)
+
             with torch.no_grad():
                 if eng.reconstruct_dm:
                     fullGraphRho = get_singlePointDM(sdc, eng, rank, 1, comm, parts, partsCoreHalo, sy, hindex, mu0, dm, P_contr, graph_for_pairs,
                                          eValOnRank_list, Q_list, NH_Nh_Hs_list, I_list, I_halo_list, core_indices_in_sub_expanded_list, Nocc_list)
                 else:
-                    fullGraphRho = get_singlePointDM(sdc, eng, rank, 1, comm, parts, partsCoreHalo, sy, hindex, mu0, None, P_contr, graph_for_pairs,
+                    fullGraphRho = get_singlePointDM(sdc, eng, rank, node_numranks, node_comm, parts, partsCoreHalo, sy, hindex, mu0, None, P_contr, graph_for_pairs,
                                          eValOnRank_list, Q_list, NH_Nh_Hs_list, I_list, I_halo_list, core_indices_in_sub_expanded_list, Nocc_list)
-            fullGraph = add_graphs(fullGraph, fullGraphRho, )
+            
+            ########### GATHER fullGraphRho ###########
+
+            node_comm.Barrier()
+            print("Time to updt DM {:>7.2f} (s)".format(time.perf_counter() - tic))
+            
+            tic = time.perf_counter()
+            fullGraphRho_LIST = comm.gather(fullGraphRho, root=0)
+            if rank == 0:
+                #print(fullGraphRho_LIST)
+                fullGraphRho_LIST.append(fullGraph)
+                fullGraph = add_mult_graphs(fullGraphRho_LIST)
+            #np.save('A.np', fullGraph)
+            #np.save('B.np', fullGraphRho)
+            #np.save(f'B_{rank}.np', fullGraphRho)
+            #fullGraph = add_graphs(fullGraph, fullGraphRho, )
+            #np.save('C.np', fullGraph)
+            #np.save('C2.np', fullGraph)
+            #exit()
+
+            print("Time to add graphs {:>7.2f} (s)".format(time.perf_counter() - tic))
+            
+            tic = time.perf_counter()
             del fullGraphRho
             if eng.reconstruct_dm:
                 trace = get_dmTrace(eng, dm)
                 print("DM TRACE: {:>10.7f}".format(trace))
             trace = torch.sum(P_contr.transpose(0,1).reshape(molSysData.molecule_whole.molsize*(len(graph_for_pairs[0])-1), 4,4)[graph_maskd].diagonal(dim1=-2, dim2=-1))
             print("DM TRACE: {:>10.7f}".format(trace))
+            print("Time to get trace {:>7.2f} (s)".format(time.perf_counter() - tic))
 
         else:
             fullGraph = None
             
         if mpiOnDebugFlag:
-            comm.Barrier()
+            tic = time.perf_counter()
+            #comm.Barrier()
             fullGraph = comm.bcast(fullGraph, root=0)
+            print("Time to bcast fullGraph {:>7.2f} (s)".format(time.perf_counter() - tic))
 
         del eValOnRank_list, Q_list, NH_Nh_Hs_list, I_list, I_halo_list, Nocc_list
         torch.cuda.empty_cache()
-        #torch.save(dm, 'gs_solvated_cell_dm.pt')
-        #torch.save(dm, 'gs_10k_dm_128.pt')
-        #torch.save(dm, 'w32_4_dm.pt')
-        #torch.save(dm, 'nanostar_dm.pt')        
-        #torch.save(dm, 'w_4_dm.pt')  
 
         # Function to calculate tensor size in megabytes (MB)
-        if rank == 0:
-            # Sort tensors by size and print them
-            tensors = list(get_tensors())
-            tensors.sort(key=lambda x: tensor_size(x), reverse=True)
-            print("Top memory-consuming tensors:")
-            for tensor in tensors:
-                if tensor_size(tensor) > 0.1:
-                    print(f"Tensor size: {tensor_size(tensor):.2f} MB | Shape: {tensor.shape} | Dtype: {tensor.dtype}")
+        # if rank == 0:
+            # # Sort tensors by size and print them
+            # tensors = list(get_tensors())
+            # tensors.sort(key=lambda x: tensor_size(x), reverse=True)
+            # print("Top memory-consuming tensors:")
+            # for tensor in tensors:
+                # if tensor_size(tensor) > 0.1:
+                    # print(f"Tensor size: {tensor_size(tensor):.2f} MB | Shape: {tensor.shape} | Dtype: {tensor.dtype}")
 
         print("t Iter {:>8.2f} (s)".format(time.perf_counter() - TIC_iter))
 
 
     ### forces calculation
     num_gpus = torch.cuda.device_count()
-    color = 0 if rank < num_gpus else 1
+    color = 0 if node_rank < num_gpus else MPI.UNDEFINED
     gpu_comm = comm.Split(color=color, key=rank)
 
+    partsPerGPU = int(sdc.nparts / (num_gpus*num_nodes))
+    partsPerNode = int(sdc.nparts / num_nodes)
     
-    if rank < num_gpus:
-        device = 'cuda:{}'.format(rank)
-        del molSysData
-        molSysData = get_molSysData(eng, sdc, sy.coords, sy.symbols, sy.types, device=device) #object with whatever initial parameters and tensors
-        P_contr = P_contr.to(device)
-        if rank == 0:
+    if node_rank < num_gpus:
+        if node_rank == 0:
+            primary_comm.Bcast([P_contr.cpu().numpy(), MPI.DOUBLE], root=0)
+        
+        if node_rank == 0:
             forces = np.zeros((sy.coords.shape))
-            #f_size = [sy.nats,3]
-            #f_nbytes = sy.nats*3 * np.float64(0).nbytes
-
-            tic = time.perf_counter()
-
             partsCoreHalo = []
             print("\nCore and halos indices for every part:")
             for i in range(sdc.nparts):
                 coreHalo, nc = get_coreHaloIndices(eng, parts[i], fullGraph, njumps, sdc, sy)
                 partsCoreHalo.append(coreHalo)
                 if sdc.verb: print("coreHalo for part", i, "=", coreHalo)
-                print('N atoms in core/coreHalo {:>6d} : {:>6d} {:>6d}'.format(i, len(parts[i]), len(coreHalo)), '\n')
+                if rank == 0: print('N atoms in core/coreHalo {:>6d} : {:>6d} {:>6d}'.format(i, len(parts[i]), len(coreHalo)), '\n')
 
-            new_graph_for_pairs = fullGraph.copy()
+            new_graph_for_pairs = np.array(fullGraph.copy())
             for i in range(sy.nats):
-                for sublist_idx in range(len(parts)):
+                for sublist_idx in range(sdc.nparts):
                     if i in parts[sublist_idx]:
-                        new_graph_for_pairs[i][0] = len(partsCoreHalo[sublist_idx])
-                        new_graph_for_pairs[i][1:new_graph_for_pairs[i][0]+1] = partsCoreHalo[sublist_idx]
+                        new_graph_for_pairs[i, 0] = len(partsCoreHalo[sublist_idx])
+                        new_graph_for_pairs[i, 1:new_graph_for_pairs[i][0]+1] = partsCoreHalo[sublist_idx]
+                        break
+
 
             #### THIS IS BAD. NEEDS TO BE FIXEd $$$
             P_contr_new = torch.zeros_like(P_contr, device=device)
@@ -997,13 +773,20 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             graph_maskd = None
 
         
+        device = 'cuda:{}'.format(node_rank)
+        #P_contr = P_contr.to(device)
+        del molSysData
+        molSysData = get_molSysData(eng, sdc, sy.coords, sy.symbols, sy.types, do_large_tensors = sdc.use_pyseqm_lt, device=device) #object with whatever initial parameters and tensors
+        molSysData.molecule_whole.coordinates.requires_grad_(True)
+        
+
         if mpiOnDebugFlag:
             #f_size = comm.bcast(f_size, root=0)
             #f_nbytes = comm.bcast(f_nbytes, root=0)
             forces = gpu_comm.bcast(forces, root=0)
+            
             print('HERE1')
             partsCoreHalo = gpu_comm.bcast(partsCoreHalo, root=0)
-            print('BARR')
             gpu_comm.Barrier()
         
             #f_win = MPI.Win.Allocate_shared(f_nbytes, torch.tensor(0, dtype=eng.torch_dt).element_size(), comm=comm) # 8 is the size of torch.float64
@@ -1020,31 +803,47 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             gpu_comm.Barrier()
         else:
             forces = np.zeros((sy.coords.shape))
-        print('rank', rank)
+        
+        tic = time.perf_counter()
         if eng.interface == "PySEQM":
             if eng.reconstruct_dm:
                 print()
-                eElec = get_singlePointForces(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, forces, molSysData,
+                eElec = get_singlePointForces(sdc, eng, partsPerGPU, partsPerNode, node_id, node_rank, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, forces, molSysData,
                                 dm.reshape((molSysData.molecule_whole.nmol, molSysData.molecule_whole.molsize,4, molSysData.molecule_whole.molsize,4)) \
                                 .transpose(2,3).reshape(molSysData.molecule_whole.nmol*molSysData.molecule_whole.molsize*molSysData.molecule_whole.molsize,4,4),P_contr, graph_for_pairs, graph_maskd)
             else:
-                eElec = get_singlePointForces(sdc, eng, rank, num_gpus, gpu_comm, parts, partsCoreHalo, sy, hindex, forces, molSysData,
-                                None, P_contr, graph_for_pairs, graph_maskd)
+                eElec = get_singlePointForces(sdc, eng, partsPerGPU, partsPerNode, node_id, node_rank, rank, num_gpus, gpu_comm, parts, partsCoreHalo, sy, hindex, forces, molSysData,
+                                None, P_contr.to(device), graph_for_pairs, graph_maskd)
 
             if mpiOnDebugFlag:
+                global_Eelec = np.zeros(1, dtype=np.float64)
+
                 gpu_comm.Barrier()
+                
                 gpu_comm.Allreduce(MPI.IN_PLACE, forces, op=MPI.SUM)
 
-                eElec_LIST = gpu_comm.gather(eElec, root=0)
+                #eElec_LIST = gpu_comm.gather(eElec, root=0)
+                #comm.Allreduce(eElec, global_Eelec, op=MPI.SUM)
+                gpu_comm.Allreduce(eElec, global_Eelec, op=MPI.SUM) #primary_comm
+                
+                print('global_sum', global_Eelec)
+                #print('eElec_LIST', eElec_LIST)
             else:
                 eElec_LIST = eElec
         else:
             get_singlePointForces(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, forces, molSysData, dm)
         print("Time to get electron forces", time.perf_counter() - tic,"(s)")
         
+        # if node_rank == 0:
+            
+            # eElec_LIST_LIST = primary_comm.gather(eElec_LIST, root=0)
+            # print(eElec_LIST_LIST)
         if rank == 0:
+            del molSysData
+            molSysData = get_molSysData(eng, sdc, sy.coords, sy.symbols, sy.types, do_large_tensors = True, device=device) #object with whatever initial parameters and tensors
+
             if mpiOnDebugFlag:
-                print("eElec:   {:>10.7f}".format(sum(eElec_LIST)[0]),)
+                print("eElec:   {:>10.7f}".format(global_Eelec[0]),)
             else:
                 print("eElec:   {:>10.7f}".format(eElec[0]),)
             
