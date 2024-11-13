@@ -89,7 +89,8 @@ def get_hamiltonian(eng, coords, types, symbols,
         else:
             with torch.no_grad():
                 molSub = get_molecule_pyseqm(eng, molSysData.molecule_whole.coordinates[:,partsCoreHaloIndex], symbols, types, device=P_contr.device)[0]#.to(P_contr.device)
-        M_sub, _, _, _ = hcore(molSub, doTETCI=False) # non-diagonal h1elec
+        M_sub, _, __, ___ = hcore(molSub, doTETCI=False) # non-diagonal h1elec
+        del _, __, ___
 
         #print('  Time to compute hcore', time.time() - tic)
         print("t: h1elNonDi {:>7.3f} |".format(time.time() - tic), end=" ")
@@ -181,7 +182,7 @@ def get_hamiltonian(eng, coords, types, symbols,
             # Concatenate all the lists to form the final iii and jjj tensors
             iii = torch.cat(iii_list) if iii_list else torch.tensor([], dtype=dtypeTEST)
             jjj = torch.cat(jjj_list) if jjj_list else torch.tensor([], dtype=dtypeTEST)
-            del iii_list, jjj_list, pos, mask_atom_index_in_block_indices
+            del iii_list, jjj_list, pos, mask_atom_index_in_block_indices, atom_index
 
             paircoord = molSysData.molecule_whole.coordinates[0,iii] - molSysData.molecule_whole.coordinates[0,jjj]
             pairdist = torch.sqrt(torch.square(paircoord).sum(dim=1))
@@ -284,7 +285,7 @@ def get_hamiltonian(eng, coords, types, symbols,
             tic = time.time()
             M_sub.index_add_(0,molSub.maskd[new_iii], e1b[torch.isin(iii, block_indices)])
             M_sub.index_add_(0,molSub.maskd[new_jjj], e2a[torch.isin(jjj, block_indices)])
-            del repeats, new_iii, new_jjj_list, new_jjj, top_row
+            del repeats, new_iii, new_jjj_list, new_jjj, top_row, start_indices
             print("h1elDiUpd {:>7.3f} |".format(time.time() - tic), end=" ")
             
         del e1b, e2a, _
@@ -292,8 +293,6 @@ def get_hamiltonian(eng, coords, types, symbols,
         
         tic = time.time()
         graph_for_pairs = torch.from_numpy(graph_for_pairs).to(P_contr.device, dtype=eng.torch_int_dt)
-
-
         
         P_sub_from_contr = torch.zeros(len(block_indices)*len(block_indices),4,4, device = P_contr.device, dtype=eng.torch_dt)
         P_sub_from_contr = P_sub_from_contr.reshape(len(block_indices), len(block_indices), 4,4)
@@ -316,8 +315,9 @@ def get_hamiltonian(eng, coords, types, symbols,
                             
                 P_sub_from_contr[lookup_tensor[tmp[mask_for_lookup]],i] = \
                     P_contr[:graph_for_pairs[block_indices[i]][0],block_indices[i]][mask_for_lookup]
-                del pos
+                del pos, tmp, mask_for_lookup
                 
+        del parts_mask
 
 
         if eng.reconstruct_dm:
@@ -435,9 +435,9 @@ def get_hamiltonian(eng, coords, types, symbols,
             diag_err = torch.sum(abs(P_diag_contr-P_diag))
             print('diag_err', diag_err)
 
-        del coulInts_test, P_diag_contr, maskd_sub, mask_sub, lookup_tensor, max_key
+        del coulInts_test, P_diag_contr, maskd_sub, mask_sub, lookup_tensor, max_key, idx_to_idx_mapping
         if eng.use_pyseqm_lt:
-            del subIndsUnion, idx_to_idx_mapping, new_idxi, new_idxj, in_block_mask
+            del subIndsUnion, new_idxi, new_idxj, in_block_mask
         else:
             del iii, jjj, r_ij, x_ij
         torch.cuda.empty_cache()
