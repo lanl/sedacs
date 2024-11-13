@@ -661,7 +661,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             ########### GATHER fullGraphRho ###########
 
             node_comm.Barrier()
-            print("Time to updt DM {:>7.2f} (s)".format(time.perf_counter() - tic))
+            if rank == 0: print("Time to updt DM {:>7.2f} (s)".format(time.perf_counter() - tic))
             
             tic = time.perf_counter()
             fullGraphRho_LIST = node_comm.gather(fullGraphRho, root=0)
@@ -676,27 +676,28 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             #np.save('C.np', fullGraph)
             #np.save('C2.np', fullGraph)
             #exit()
-
+            del fullGraphRho
             print("Time to add graphs {:>7.2f} (s)".format(time.perf_counter() - tic))
             
-            tic = time.perf_counter()
-            del fullGraphRho
+            
+            
             if eng.reconstruct_dm:
                 trace = get_dmTrace(eng, dm)
                 print("DM TRACE: {:>10.7f}".format(trace))
-            trace = torch.sum(P_contr.transpose(0,1).reshape(molSysData.molecule_whole.molsize*(len(graph_for_pairs[0])-1), 4,4)[graph_maskd].diagonal(dim1=-2, dim2=-1))
-            print("DM TRACE: {:>10.7f}".format(trace))
-            print("Time to get trace {:>7.2f} (s)".format(time.perf_counter() - tic))
+            if rank == 0:
+                tic = time.perf_counter()
+                trace = torch.sum(P_contr.transpose(0,1).reshape(molSysData.molecule_whole.molsize*(len(graph_for_pairs[0])-1), 4,4)[graph_maskd].diagonal(dim1=-2, dim2=-1))
+                print("DM TRACE: {:>10.7f}".format(trace))
+                print("Time to get trace {:>7.2f} (s)".format(time.perf_counter() - tic))
 
         else:
             fullGraph = None
             
-        comm.Barrier()
         if mpiOnDebugFlag:
             tic = time.perf_counter()
             #comm.Barrier()
             fullGraph = comm.bcast(fullGraph, root=0)
-            print("Time to bcast fullGraph {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+            if rank == 0: print("Time to bcast fullGraph {:>7.2f} (s)".format(time.perf_counter() - tic))
 
         del eValOnRank_list, Q_list, NH_Nh_Hs_list, I_list, I_halo_list, Nocc_list
         torch.cuda.empty_cache()
