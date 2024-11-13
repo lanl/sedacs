@@ -77,14 +77,14 @@ def get_singlePoint(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hi
         subSy = System(len(partsCoreHalo[partIndex]))
         subSy.symbols = sy.symbols
         subSy.coords, subSy.types = extract_subsystem(sy.coords, sy.types, sy.symbols, partsCoreHalo[partIndex])
-        partFileName = "subSy" + str(rank) + "_" + str(partIndex) + ".pdb"
+        #partFileName = "subSy" + str(rank) + "_" + str(partIndex) + ".pdb"
         #write_pdb_coordinates(partFileName, subSy.coords, subSy.types, subSy.symbols)
         #write_xyz_coordinates("subSy" + str(rank) + "_" + str(partIndex) + ".xyz", subSy.coords, subSy.types, subSy.symbols)
 
         subSyCore = System(len(parts[partIndex]))
         subSyCore.symbols = sy.symbols
         subSyCore.coords,subSyCore.types = extract_subsystem(sy.coords,sy.types,sy.symbols,parts[partIndex])
-        partCoreFileName = "CoreSubSy"+str(rank)+"_"+str(partIndex)+".pdb"
+        #partCoreFileName = "CoreSubSy"+str(rank)+"_"+str(partIndex)+".pdb"
         #write_pdb_coordinates(partCoreFileName,subSyCore.coords,subSyCore.types,subSyCore.symbols)
         #write_xyz_coordinates("CoreSubSy"+str(rank)+"_"+str(partIndex)+".xyz",subSyCore.coords,subSyCore.types,subSyCore.symbols)
 
@@ -695,7 +695,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             tic = time.perf_counter()
             #comm.Barrier()
             fullGraph = comm.bcast(fullGraph, root=0)
-            print("Time to bcast fullGraph {:>7.2f} (s)".format(time.perf_counter() - tic))
+            print("Time to bcast fullGraph {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
         del eValOnRank_list, Q_list, NH_Nh_Hs_list, I_list, I_halo_list, Nocc_list
         torch.cuda.empty_cache()
@@ -710,7 +710,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                 # if tensor_size(tensor) > 0.1:
                     # print(f"Tensor size: {tensor_size(tensor):.2f} MB | Shape: {tensor.shape} | Dtype: {tensor.dtype}")
 
-        print("t Iter {:>8.2f} (s)".format(time.perf_counter() - TIC_iter))
+        if rank == 0: print("t Iter {:>8.2f} (s)".format(time.perf_counter() - TIC_iter))
 
 
     ### forces calculation
@@ -805,7 +805,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         else:
             forces = np.zeros((sy.coords.shape))
         
-        print("Time init forces {:>8.2f} (s)".format(time.perf_counter() - tic))
+        if rank == 0: print("Time init forces {:>8.2f} (s)".format(time.perf_counter() - tic))
 
         tic = time.perf_counter()
         if eng.interface == "PySEQM":
@@ -835,7 +835,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                 eElec_LIST = eElec
         else:
             get_singlePointForces(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, forces, molSysData, dm)
-        print("Time to get electron forces {:>8.2f} (s)".format(time.perf_counter() - tic))
+        if rank == 0: print("Time to get electron forces {:>8.2f} (s)".format(time.perf_counter() - tic))
         
         # if node_rank == 0:
             

@@ -617,7 +617,7 @@ def get_coreHaloIndices(eng, core,graph,njumps, *args):
                 num_el += args[0].valency[args[1].symbols[args[1].types[coreHalo][II]]]
             #print('NumAt:', len(coreHalo), 'NumEl:', num_el)
             if num_el%2 != 0:
-                print('Odd NumEl:', num_el, '. Looking for an extra atom.')
+                #print('Odd NumEl:', num_el, '. Looking for an extra atom.')
                 jumps_done_but_looking_for_odd = True
                 jump -= 1
                 
