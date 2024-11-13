@@ -282,10 +282,18 @@ def get_hamiltonian(eng, coords, types, symbols,
             new_jjj = torch.cat(new_jjj_list)
             print("diIndsExp {:>7.3f} |".format(time.time() - tic), end=" ")
             ### $$$ index_add_ is very slow!
+
             tic = time.time()
-            M_sub.index_add_(0,molSub.maskd[new_iii], e1b[torch.isin(iii, block_indices)])
+            pos = torch.searchsorted(block_indices, iii)
+            # Ensure the indices are within bounds
+            pos = torch.clamp(pos, max=len(block_indices) - 1)
+            # Check if the positions are valid and match
+            idxi_sub_ovrlp_with_rest = (pos < len(block_indices)) & (block_indices[pos] == iii)
+
+            #M_sub.index_add_(0,molSub.maskd[new_iii], e1b[torch.isin(iii, block_indices)])
+            M_sub.index_add_(0,molSub.maskd[new_iii], e1b[idxi_sub_ovrlp_with_rest])
             M_sub.index_add_(0,molSub.maskd[new_jjj], e2a[torch.isin(jjj, block_indices)])
-            del repeats, new_iii, new_jjj_list, new_jjj, top_row, start_indices
+            del repeats, new_iii, new_jjj_list, new_jjj, top_row, start_indices, pos, idxi_sub_ovrlp_with_rest
             print("h1elDiUpd {:>7.3f} |".format(time.time() - tic), end=" ")
             
         del e1b, e2a, _

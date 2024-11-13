@@ -615,7 +615,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                 graph_for_pairs = node_comm.bcast(graph_for_pairs, root=0)
                 new_graph_for_pairs = node_comm.bcast(new_graph_for_pairs, root=0)
                 graph_maskd = node_comm.bcast(graph_maskd, root=0)
-            print("Time to bcast DM and mod graphs {:>7.2f} (s)".format(time.perf_counter() - tic))
+            print("Time to bcast DM and mod graphs {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
             
         tic = time.perf_counter()
         # for efficiency, the PySEQM dm needs to be reshaped in 4x4 blocks.
