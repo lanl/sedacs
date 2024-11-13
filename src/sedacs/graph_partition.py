@@ -583,7 +583,6 @@ def get_coreHaloIndices(eng, core,graph,njumps, *args):
         nc1 = nch 
         for k in range(nc1):
             i = coreHalo[k]
-            degI = len(graph[i,:])
             for kk in range(1, graph[i,0]+1):
                                       # $$$ also this cycles needs to be interrupted when reaching -1 ???
                 j = graph[i,kk]

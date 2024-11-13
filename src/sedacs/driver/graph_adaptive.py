@@ -556,7 +556,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             tic = time.perf_counter()
             if node_rank == 0:
                 primary_comm.Bcast([P_contr.cpu().numpy(), MPI.DOUBLE], root=0)
-            print("Time to  bcast DM_cpu_np {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+            if rank == 0:print("Time to  bcast DM_cpu_np {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
             if node_rank == 0:
                 tic = time.perf_counter()
@@ -713,6 +713,11 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     ### forces calculation
     tic = time.perf_counter()
     num_gpus = torch.cuda.device_count()
+    print('num_gpus', num_gpus)
+
+    if num_gpus > node_numranks:
+        num_gpus = node_numranks
+
     color = 0 if node_rank < num_gpus else MPI.UNDEFINED
     gpu_comm = comm.Split(color=color, key=rank)
 
