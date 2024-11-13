@@ -691,6 +691,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         else:
             fullGraph = None
             
+        comm.Barrier()
         if mpiOnDebugFlag:
             tic = time.perf_counter()
             #comm.Barrier()
