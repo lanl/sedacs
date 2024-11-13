@@ -487,7 +487,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     
     #tic = time.perf_counter()
     if mpiOnDebugFlag:
-        #comm.Barrier()
+        comm.Barrier()
         tic = time.perf_counter()
         parts = comm.bcast(parts, root=0)
         sdc.nparts = comm.bcast(sdc.nparts, root=0)
@@ -500,6 +500,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         print("BCST1 {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
 
+        comm.Barrier()
         tic = time.perf_counter()
         if eng.reconstruct_dm:
             dm_size = comm.bcast(dm_size, root=0)
@@ -529,6 +530,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             primary_comm.Bcast([P_contr.cpu().numpy(), MPI.DOUBLE], root=0)
         print("BCST2 {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
+        comm.Barrier()
         tic = time.perf_counter()
         fullGraph = comm.bcast(fullGraph, root=0)
         coreHalo = comm.bcast(coreHalo, root=0)

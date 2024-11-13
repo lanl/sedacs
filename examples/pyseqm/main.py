@@ -29,6 +29,8 @@ np.set_printoptions(precision=4, linewidth=300)
 
 # Initialize sdc parameters
 sdc, eng, comm, rank, numranks, sy, hindex, graphNL, nl, nlTrX, nlTrY, nlTrZ = init(args)
+print("INITIALIZATION TIME {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+
 
 #sdc.verb = True
 #print("!!!", graphNL[0], graphNL.shape)
@@ -36,6 +38,6 @@ sdc, eng, comm, rank, numranks, sy, hindex, graphNL, nl, nlTrX, nlTrY, nlTrZ = i
 # Perform a graph-adaptive calculation of the density matrix
 
 get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL)
-print("TOTAL TIME", time.perf_counter() - tic,"(s)")
+print("TOTAL TIME {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
 
