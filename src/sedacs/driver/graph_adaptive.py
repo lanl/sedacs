@@ -494,7 +494,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         #if rank in primary_ranks and len(primary_ranks) > 1:
         if rank in primary_ranks:
             print('prim rank', rank)
-            #P_contr = primary_comm.bcast(P_contr, root=0)
+            P_contr = primary_comm.bcast(P_contr, root=0)
             #primary_comm.Bcast([P_contr.cpu().numpy(), MPI.DOUBLE], root=0)
             P_contr_nbytes = primary_comm.bcast(P_contr_nbytes, root=0)
         print("BCST1 {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
@@ -664,7 +664,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             print("Time to updt DM {:>7.2f} (s)".format(time.perf_counter() - tic))
             
             tic = time.perf_counter()
-            fullGraphRho_LIST = comm.gather(fullGraphRho, root=0)
+            fullGraphRho_LIST = node_comm.gather(fullGraphRho, root=0)
             if rank == 0:
                 #print(fullGraphRho_LIST)
                 fullGraphRho_LIST.append(fullGraph)
