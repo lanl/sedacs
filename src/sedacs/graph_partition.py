@@ -604,10 +604,8 @@ def get_coreHaloIndices(eng, core,graph,njumps, *args):
                         graph[core[0]][graph[core[0]][0]+1] = j
                         graph[core[0]][0] += 1
                         graph[core[0]][1:graph[core[0]][0]+1] = sorted(graph[core[0]][1:graph[core[0]][0]+1])
-                        print(graph[core[0]][0])
-                        #coreHalo.append(36)
-                        #print(j)
-                        print('APPENDED EXTRA', j)
+                        #print(graph[core[0]][0])
+                        #print('APPENDED EXTRA', j)
                         nx[j] = True
                         if(eng.interface == "PySEQM"): coreHalo = sorted(coreHalo)
                         return coreHalo, nc

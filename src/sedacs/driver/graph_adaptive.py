@@ -380,14 +380,14 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         sdc.np_int_dt = eng.np_int_dt
 
     njumps = 1
-    print("Time comms {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+    #print("Time comms {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
     tic = time.perf_counter()
     fullGraph = graphNL.copy()
 
     with torch.no_grad(): molSysData = get_molSysData(eng, sdc, sy.coords, sy.symbols, sy.types, do_large_tensors = sdc.use_pyseqm_lt, device=device) #object with whatever initial parameters and tensors
     #print_attribute_sizes(molSysData.molecule_whole)
-    print("Time to init molSysData {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+    if rank == 0: print("Time to init molSysData {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
     if rank == 0:
         tic = time.perf_counter()
@@ -669,9 +669,10 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             if rank == 0:
                 fullGraphRho_LIST.append(fullGraph)
                 fullGraph = add_mult_graphs(fullGraphRho_LIST)
+                print("Time to add graphs {:>7.2f} (s)".format(time.perf_counter() - tic))
             #fullGraph = add_graphs(fullGraph, fullGraphRho, )
             del fullGraphRho
-            print("Time to add graphs {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+            
             
             
             
