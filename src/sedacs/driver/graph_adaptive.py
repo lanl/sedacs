@@ -713,7 +713,6 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     ### forces calculation
     tic = time.perf_counter()
     num_gpus = torch.cuda.device_count()
-    print('num_gpus', num_gpus)
 
     if num_gpus > node_numranks:
         num_gpus = node_numranks
