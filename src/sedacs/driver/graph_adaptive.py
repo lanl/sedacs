@@ -487,7 +487,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     
     #tic = time.perf_counter()
     if mpiOnDebugFlag:
-        comm.Barrier()
+        #comm.Barrier()
         tic = time.perf_counter()
         parts = comm.bcast(parts, root=0)
         sdc.nparts = comm.bcast(sdc.nparts, root=0)
@@ -497,10 +497,9 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             P_contr = primary_comm.bcast(P_contr, root=0)
             #primary_comm.Bcast([P_contr.cpu().numpy(), MPI.DOUBLE], root=0)
             P_contr_nbytes = primary_comm.bcast(P_contr_nbytes, root=0)
-        print("BCST1 {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+        if rank == 0: print("BCST1 {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
 
-        comm.Barrier()
         tic = time.perf_counter()
         if eng.reconstruct_dm:
             dm_size = comm.bcast(dm_size, root=0)
@@ -528,9 +527,8 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         P_contr = torch.from_numpy(P_contr_ary).to(device)
         if rank in primary_ranks:
             primary_comm.Bcast([P_contr.cpu().numpy(), MPI.DOUBLE], root=0)
-        print("BCST2 {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+        if rank == 0: print("BCST2 {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
-        comm.Barrier()
         tic = time.perf_counter()
         fullGraph = comm.bcast(fullGraph, root=0)
         coreHalo = comm.bcast(coreHalo, root=0)
@@ -538,7 +536,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         new_graph_for_pairs = comm.bcast(new_graph_for_pairs, root=0)
         graph_maskd = comm.bcast(graph_maskd, root=0)
         graph_for_pairs = comm.bcast(graph_for_pairs, root=0)
-        print("BCST3 {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+        if rank == 0: print("BCST3 {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
     
     print("Time to init bcast and share DM {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
