@@ -660,24 +660,18 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             
             ########### GATHER fullGraphRho ###########
 
-            node_comm.Barrier()
             if rank == 0: print("Time to updt DM {:>7.2f} (s)".format(time.perf_counter() - tic))
             
+            node_comm.Barrier()
+
             tic = time.perf_counter()
             fullGraphRho_LIST = node_comm.gather(fullGraphRho, root=0)
             if rank == 0:
-                #print(fullGraphRho_LIST)
                 fullGraphRho_LIST.append(fullGraph)
                 fullGraph = add_mult_graphs(fullGraphRho_LIST)
-            #np.save('A.np', fullGraph)
-            #np.save('B.np', fullGraphRho)
-            #np.save(f'B_{rank}.np', fullGraphRho)
             #fullGraph = add_graphs(fullGraph, fullGraphRho, )
-            #np.save('C.np', fullGraph)
-            #np.save('C2.np', fullGraph)
-            #exit()
             del fullGraphRho
-            print("Time to add graphs {:>7.2f} (s)".format(time.perf_counter() - tic))
+            print("Time to add graphs {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
             
             
             
