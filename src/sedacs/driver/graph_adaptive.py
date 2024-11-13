@@ -201,7 +201,7 @@ def get_singlePointForces(sdc, eng, partsPerGPU, partsPerNode, node_id, node_ran
         print("EelecCH {:>7.3f} |".format(eElec.item()), end=" ")
         del eElec, subSy, f
         print("TOT", time.perf_counter() - tic, "(s)")
-    print("eElec_SUM: {:>10.7f}".format(EELEC),)    
+    #print("eElec_SUM: {:>10.7f}".format(EELEC),)    
     return EELEC
 
 def get_singlePointDM(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu0, dm, P_contr, graph_for_pairs,
@@ -826,7 +826,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                 #comm.Allreduce(eElec, global_Eelec, op=MPI.SUM)
                 gpu_comm.Allreduce(eElec, global_Eelec, op=MPI.SUM) #primary_comm
                 
-                print('global_sum', global_Eelec)
+                #print('global_sum', global_Eelec)
                 #print('eElec_LIST', eElec_LIST)
             else:
                 eElec_LIST = eElec
