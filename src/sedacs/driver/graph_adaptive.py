@@ -257,8 +257,8 @@ def get_singlePointDM(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, 
         P_contr_maxDif = max(P_contr_maxDif)
         P_contr_maxDifList.append(P_contr_maxDif)
         P_contr_sumDifTot += P_contr_sumDif
-        print(" MAX |\u0394DM_ij|: {:>10.7f}".format(P_contr_maxDif), rank, partIndex)
-        print(" \u03A3   |\u0394DM_ij|: {:>10.7f}".format(P_contr_sumDif), rank, partIndex)
+        #print(" MAX |\u0394DM_ij|: {:>10.7f}".format(P_contr_maxDif), rank, partIndex)
+        #print(" \u03A3   |\u0394DM_ij|: {:>10.7f}".format(P_contr_sumDif), rank, partIndex)
 
         #tic = time.perf_counter()
 
