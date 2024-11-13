@@ -227,7 +227,7 @@ def get_singlePointDM(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, 
         indices_in_sub = np.linspace(0,len(partsCoreHalo[partIndex])-1, len(partsCoreHalo[partIndex]), dtype = eng.np_int_dt)
         core_indices_in_sub = indices_in_sub[np.isin(partsCoreHalo[partIndex], parts[partIndex])]
         
-        alpha = 1.0
+        alpha = 0.2
         P_contr_maxDif = []
         P_contr_sumDif = 0
         
