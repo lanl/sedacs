@@ -714,6 +714,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
 
 
     ### forces calculation
+    tic = time.perf_counter()
     num_gpus = torch.cuda.device_count()
     color = 0 if node_rank < num_gpus else MPI.UNDEFINED
     gpu_comm = comm.Split(color=color, key=rank)
@@ -804,6 +805,8 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         else:
             forces = np.zeros((sy.coords.shape))
         
+        print("Time init forces {:>8.2f} (s)".format(time.perf_counter() - tic))
+
         tic = time.perf_counter()
         if eng.interface == "PySEQM":
             if eng.reconstruct_dm:
@@ -832,7 +835,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                 eElec_LIST = eElec
         else:
             get_singlePointForces(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, forces, molSysData, dm)
-        print("Time to get electron forces", time.perf_counter() - tic,"(s)")
+        print("Time to get electron forces {:>8.2f} (s)".format(time.perf_counter() - tic))
         
         # if node_rank == 0:
             
@@ -855,7 +858,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             L.backward()
             forceNuc = -molSysData.molecule_whole.coordinates.grad.detach()
             molSysData.molecule_whole.coordinates.grad.zero_()
-            print("Time to get nuclear forces", time.perf_counter() - tic,"(s)")
+            print("Time to get nuclear forces {:>8.2f} (s)".format(time.perf_counter() - tic))
             #print(forceNuc)
             np.save('forces_test.np', (forces+forceNuc.cpu().numpy()[0]), )
             #np.save('forces_test.np', (forces), )
