@@ -36,6 +36,8 @@ class Input:
         self.nparts = self.get_an_int("NumParts=", 1, keyVals, validKeys, verb)
         ## Radius cutoff
         self.rcut = self.get_a_real("Rcut=", 5.0, keyVals, validKeys, verb)
+        ## Alpha for DM mixing. DM_new = (1-alpha)*DM_old + alpha*DM_new
+        self.alpha = self.get_a_real("Alpha=", 0.2, keyVals, validKeys, verb)
         ## A threshold read from input
         self.thresh = self.get_a_real("Threshold=", 0.0, keyVals, validKeys, verb)
         ## A threshold for the graph
