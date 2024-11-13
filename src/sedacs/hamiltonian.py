@@ -176,16 +176,19 @@ def get_hamiltonian(eng, coords, types, symbols,
                     # Append only the values where jj is in block_indices
                     iii_list.append(ii[mask_atom_index_in_block_indices[i+1:]][mask_j_in_block])
                     jjj_list.append(valid_jj[mask_j_in_block])
-
+                    del valid_idx_in_block, valid_jj, mask_j_in_block
+                del ii, jj
             # Concatenate all the lists to form the final iii and jjj tensors
             iii = torch.cat(iii_list) if iii_list else torch.tensor([], dtype=dtypeTEST)
             jjj = torch.cat(jjj_list) if jjj_list else torch.tensor([], dtype=dtypeTEST)
+            del iii_list, jjj_list, pos, mask_atom_index_in_block_indices
 
             paircoord = molSysData.molecule_whole.coordinates[0,iii] - molSysData.molecule_whole.coordinates[0,jjj]
             pairdist = torch.sqrt(torch.square(paircoord).sum(dim=1))
 
             r_ij = pairdist * molSysData.molecule_whole.const.length_conversion_factor
             x_ij = -paircoord / pairdist.unsqueeze(1)
+            del paircoord, pairdist
             
             print("idxi&idxj {:>7.3f} |".format(time.time() - tic), end=" ")
 
@@ -313,6 +316,7 @@ def get_hamiltonian(eng, coords, types, symbols,
                             
                 P_sub_from_contr[lookup_tensor[tmp[mask_for_lookup]],i] = \
                     P_contr[:graph_for_pairs[block_indices[i]][0],block_indices[i]][mask_for_lookup]
+                del pos
                 
 
 
