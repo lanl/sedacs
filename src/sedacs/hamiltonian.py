@@ -309,11 +309,8 @@ def get_hamiltonian(eng, coords, types, symbols,
         max_len = graph_for_pairs[partsIndex[0]][0]
         P_sub_from_contr[:,parts_mask] = P_contr[:max_len, block_indices[parts_mask]]
 
-
         for i in range(len(parts_mask)): ### $$$ needs vecorization
-            if parts_mask[i]:
-                1
-            else:
+            if not parts_mask[i]:
                 tmp = graph_for_pairs[block_indices[i]][1:graph_for_pairs[block_indices[i]][0]+1]
                 pos = torch.searchsorted(block_indices, tmp)
                 # Ensure the indices are within bounds
@@ -324,9 +321,7 @@ def get_hamiltonian(eng, coords, types, symbols,
                 P_sub_from_contr[lookup_tensor[tmp[mask_for_lookup]],i] = \
                     P_contr[:graph_for_pairs[block_indices[i]][0],block_indices[i]][mask_for_lookup]
                 del pos, tmp, mask_for_lookup
-                
         del parts_mask
-
 
         if eng.reconstruct_dm:
             sub_inds = torch.isin(molSysData.molecule_whole.idxi, block_indices) * torch.isin(molSysData.molecule_whole.idxj, block_indices)
@@ -448,7 +443,7 @@ def get_hamiltonian(eng, coords, types, symbols,
             del subIndsUnion, new_idxi, new_idxj, in_block_mask
         else:
             del iii, jjj, r_ij, x_ij
-        torch.cuda.empty_cache()
+        #torch.cuda.empty_cache()
         print("FulSubFock {:>7.3f} |".format(time.time() - tic), end=" ")
 
         if doForces:

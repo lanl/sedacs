@@ -116,6 +116,7 @@ def get_singlePoint(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hi
 
         print("| t eVals/dVals {:>9.4f} (s)".format(time.perf_counter() - tic))
 
+    comm.Barrier()
     tic = time.perf_counter()
     full_dVals = None
     full_eVals = None
@@ -582,21 +583,44 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
 
                 #### THIS IS BAD. NEEDS TO BE FIXEd $$$
                 P_contr_new = torch.zeros_like(P_contr, device=device)
-                for i in range(len(new_graph_for_pairs)):
-                    P_contr_new[:,i][  :new_graph_for_pairs[i][0]  ][   np.isin(new_graph_for_pairs[i][1:new_graph_for_pairs[i][0]+1], graph_for_pairs[i][1:graph_for_pairs[i][0]+1])   ] = \
-                        P_contr[:,i][:graph_for_pairs[i][0]][   np.isin(graph_for_pairs[i][1:graph_for_pairs[i][0]+1], new_graph_for_pairs[i][1:new_graph_for_pairs[i][0]+1])   ] 
+                for i in range(sy.nats):
+                    tmp1 = graph_for_pairs[i][1:graph_for_pairs[i][0]+1]
+                    tmp2 = new_graph_for_pairs[i][1:new_graph_for_pairs[i][0]+1]
+                    pos = np.searchsorted(tmp1, tmp2)
+                    # Ensure the indices are within bounds
+                    pos = np.clip(pos, a_min=0, a_max=len(tmp1) - 1)
+                    # Check if the positions are valid and match
+                    mask_isin_n_in_o = (pos < len(tmp1)) & (tmp1[pos] == tmp2)
+                    #print('isin',(np.isin(tmp2, tmp1) == mask_isin_n_in_o).all())
+
+                    pos = np.searchsorted(tmp2, tmp1)
+                    # Ensure the indices are within bounds
+                    #pos = np.clip(pos, max=len(tmp2) - 1)
+                    # Check if the positions are valid and match
+                    mask_isin_o_in_n = (pos < len(tmp2)) & (tmp2[pos] == tmp1)
+                    #print('PC', (np.isin(tmp1, tmp2) == mask_isin_o_in_n).all())
+
+                    P_contr_new[:,i][  :new_graph_for_pairs[i][0]  ][   mask_isin_n_in_o   ] = \
+                        P_contr[:,i][:graph_for_pairs[i][0]][   mask_isin_o_in_n   ] 
                 P_contr[:] = P_contr_new[:]
                 del P_contr_new
-            
+
+
                 graph_for_pairs = new_graph_for_pairs
+                # Initialize an array to hold graph_maskd values
                 graph_maskd = []
+                # Track the position counter across rows in a vectorized way
                 counter = 0
                 for j in range(sy.nats):
-                    for i in graph_for_pairs[j][1:graph_for_pairs[j][0]+1]: 
-                        if i==j:
-                            graph_maskd.append(counter)
-                        counter +=1
-                    counter += int(sdc.maxDeg - graph_for_pairs[j][0])
+                    # Get neighbors for node j from graph_for_pairs
+                    neighbors = graph_for_pairs[j][1:graph_for_pairs[j][0] + 1]
+                    # Find positions where `i == j` (self-loops) in the neighbors list
+                    mask = np.where(neighbors == j)[0]
+                    # Calculate the absolute position for masked values and store them
+                    graph_maskd.extend(counter + mask)
+                    # Update the counter for the next row, adding the degree difference
+                    counter += len(neighbors) + int(sdc.maxDeg - graph_for_pairs[j][0])
+                # Convert graph_maskd to a NumPy array
                 graph_maskd = np.array(graph_maskd)
 
                 if rank == 0: print("Time to updt DM and mod graphs {:>7.2f} (s)".format(time.perf_counter() - tic))
