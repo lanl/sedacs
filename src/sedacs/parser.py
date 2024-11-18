@@ -50,9 +50,10 @@ class Input:
         self.orbs = self.get_a_dict("Orbitals=", {"Bl": 1}, keyVals, validKeys, verb)
         ## Valency per atom type
         self.valency = self.get_a_dict("Valency=",{"Bl":1},keyVals,validKeys,verb)
-                ## Electronic temperature 
+        ## Electronic temperature 
         self.Tel = self.get_a_real("Tel=",0.0,keyVals,validKeys,verb)
-
+        ## Flag to do forces calculation 
+        self.doForces = self.get_a_bool("doForces=", False, keyVals, validKeys, verb=False)
         ## Number of adaptive graph iterations
         self.numAdaptIter = self.get_an_int("NumAdaptiveIter=", 1, keyVals, validKeys, verb)
         ## Engine interface type

@@ -191,7 +191,8 @@ def get_singlePointForces(sdc, eng, partsPerGPU, partsPerNode, node_id, node_ran
 
         tic = time.perf_counter()        
         tmp_molSysData = copy.deepcopy(molSysData)
-        tmp_molSysData.molecule_whole.coordinates.requires_grad_(True)
+        if sdc.doForces:
+            tmp_molSysData.molecule_whole.coordinates.requires_grad_(True)
 
         # get_force
         # get_hamiltonian
@@ -533,8 +534,6 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
 
         del P_contr
         P_contr = torch.from_numpy(P_contr_ary).to(device)
-        if rank in primary_ranks:
-            primary_comm.Bcast([P_contr.cpu().numpy(), MPI.DOUBLE], root=0)
         if rank == 0: print("BCST2 {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
         tic = time.perf_counter()
@@ -558,13 +557,13 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         if rank == 0: print('\n\n|||| Adaptive iter:', gsc, '||||')
         #print_memory_usage(rank, node_rank, "Memory usage")
         TIC_iter = time.perf_counter()
+        tic = time.perf_counter()
+        if node_rank == 0:
+            primary_comm.Bcast([P_contr.cpu().numpy(), MPI.DOUBLE], root=0)
+        if rank == 0:print("Time to  bcast DM_cpu_np {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
         # Partition the graph
         tic = time.perf_counter()
         if gsc > 0:
-            tic = time.perf_counter()
-            if node_rank == 0:
-                primary_comm.Bcast([P_contr.cpu().numpy(), MPI.DOUBLE], root=0)
-            if rank == 0:print("Time to  bcast DM_cpu_np {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
             if node_rank == 0:
                 tic = time.perf_counter()
@@ -612,7 +611,6 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                 P_contr[:] = P_contr_new[:]
                 del P_contr_new
 
-
                 graph_for_pairs = new_graph_for_pairs
                 # Initialize an array to hold graph_maskd values
                 graph_maskd = []
@@ -637,7 +635,6 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                 graph_for_pairs = None
                 new_graph_for_pairs = None
                 graph_maskd = None
-
 
             tic = time.perf_counter()
             if mpiOnDebugFlag:
@@ -705,8 +702,6 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             del fullGraphRho
             
             
-            
-            
             if eng.reconstruct_dm:
                 trace = get_dmTrace(eng, dm)
                 print("DM TRACE: {:>10.7f}".format(trace))
@@ -740,25 +735,20 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
 
         if rank == 0: print("t Iter {:>8.2f} (s)".format(time.perf_counter() - TIC_iter))
 
-
     ### forces calculation
     tic = time.perf_counter()
     num_gpus = torch.cuda.device_count()
-
     if num_gpus > node_numranks:
         num_gpus = node_numranks
 
     color = 0 if node_rank < num_gpus else MPI.UNDEFINED
     gpu_comm = comm.Split(color=color, key=rank)
-
     partsPerGPU = int(sdc.nparts / (num_gpus*num_nodes))
     partsPerNode = int(sdc.nparts / num_nodes)
     
     if node_rank < num_gpus:
         if node_rank == 0:
             primary_comm.Bcast([P_contr.cpu().numpy(), MPI.DOUBLE], root=0)
-        
-        if node_rank == 0:
             forces = np.zeros((sy.coords.shape))
             partsCoreHalo = []
             print("\nCore and halos indices for every part:")
@@ -775,7 +765,6 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                         new_graph_for_pairs[i, 0] = len(partsCoreHalo[sublist_idx])
                         new_graph_for_pairs[i, 1:new_graph_for_pairs[i][0]+1] = partsCoreHalo[sublist_idx]
                         break
-
 
             #### THIS IS BAD. NEEDS TO BE FIXEd $$$
             P_contr_new = torch.zeros_like(P_contr, device=device)
@@ -798,35 +787,22 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                 counter += int(sdc.maxDeg - graph_for_pairs[j][0])
         else:
             forces = None
-            #f_size = None
-            #f_nbytes = 0
             partsCoreHalo = None
             new_graph_for_pairs = None
             graph_for_pairs = None
             graph_maskd = None
 
-        
         device = 'cuda:{}'.format(node_rank)
         #P_contr = P_contr.to(device)
         del molSysData
         molSysData = get_molSysData(eng, sdc, sy.coords, sy.symbols, sy.types, do_large_tensors = sdc.use_pyseqm_lt, device=device) #object with whatever initial parameters and tensors
         #molSysData.molecule_whole.coordinates.requires_grad_(True)
         
-
         if mpiOnDebugFlag:
-            #f_size = comm.bcast(f_size, root=0)
-            #f_nbytes = comm.bcast(f_nbytes, root=0)
             forces = gpu_comm.bcast(forces, root=0)
-            
             print('HERE1')
             partsCoreHalo = gpu_comm.bcast(partsCoreHalo, root=0)
             gpu_comm.Barrier()
-        
-            #f_win = MPI.Win.Allocate_shared(f_nbytes, torch.tensor(0, dtype=eng.torch_dt).element_size(), comm=comm) # 8 is the size of torch.float64
-            #f_buf, f_itemsize = f_win.Shared_query(0) 
-            #assert f_itemsize == MPI.DOUBLE.Get_size() 
-            #forces = np.ndarray(buffer=f_buf, dtype='d', shape=(f_size))
-
             graph_for_pairs = gpu_comm.bcast(graph_for_pairs, root=0)
             new_graph_for_pairs = gpu_comm.bcast(new_graph_for_pairs, root=0)
             graph_maskd = gpu_comm.bcast(graph_maskd, root=0)
@@ -842,37 +818,31 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         tic = time.perf_counter()
         if eng.interface == "PySEQM":
             if eng.reconstruct_dm:
-                print()
                 eElec = get_singlePointForces(sdc, eng, partsPerGPU, partsPerNode, node_id, node_rank, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, forces, molSysData,
                                 dm.reshape((molSysData.molecule_whole.nmol, molSysData.molecule_whole.molsize,4, molSysData.molecule_whole.molsize,4)) \
                                 .transpose(2,3).reshape(molSysData.molecule_whole.nmol*molSysData.molecule_whole.molsize*molSysData.molecule_whole.molsize,4,4),P_contr, graph_for_pairs, graph_maskd)
             else:
-                eElec = get_singlePointForces(sdc, eng, partsPerGPU, partsPerNode, node_id, node_rank, rank, num_gpus, gpu_comm, parts, partsCoreHalo, sy, hindex, forces, molSysData,
+                if sdc.doForces:
+                    eElec = get_singlePointForces(sdc, eng, partsPerGPU, partsPerNode, node_id, node_rank, rank, num_gpus, gpu_comm, parts, partsCoreHalo, sy, hindex, forces, molSysData,
+                                None, P_contr.to(device), graph_for_pairs, graph_maskd)
+                else:
+                    with torch.no_grad():
+                        eElec = get_singlePointForces(sdc, eng, partsPerGPU, partsPerNode, node_id, node_rank, rank, num_gpus, gpu_comm, parts, partsCoreHalo, sy, hindex, forces, molSysData,
                                 None, P_contr.to(device), graph_for_pairs, graph_maskd)
 
             if mpiOnDebugFlag:
                 global_Eelec = np.zeros(1, dtype=np.float64)
-
                 gpu_comm.Barrier()
-                
                 gpu_comm.Allreduce(MPI.IN_PLACE, forces, op=MPI.SUM)
-
                 #eElec_LIST = gpu_comm.gather(eElec, root=0)
                 #comm.Allreduce(eElec, global_Eelec, op=MPI.SUM)
                 gpu_comm.Allreduce(eElec, global_Eelec, op=MPI.SUM) #primary_comm
-                
-                #print('global_sum', global_Eelec)
-                #print('eElec_LIST', eElec_LIST)
             else:
                 eElec_LIST = eElec
         else:
             get_singlePointForces(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, forces, molSysData, dm)
         if rank == 0: print("Time to get electron forces {:>8.2f} (s)".format(time.perf_counter() - tic))
         
-        # if node_rank == 0:
-            
-            # eElec_LIST_LIST = primary_comm.gather(eElec_LIST, root=0)
-            # print(eElec_LIST_LIST)
         if rank == 0:
             del molSysData
             molSysData = get_molSysData(eng, sdc, sy.coords, sy.symbols, sy.types, do_large_tensors = True, device=device) #object with whatever initial parameters and tensors
@@ -895,55 +865,3 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             np.save('forces_test.np', (forces+forceNuc.cpu().numpy()[0]), )
             #np.save('forces_test.np', (forces), )
             #np.save('forces_test.np', (forceNuc.cpu().numpy()[0]), )
-
-
-    # fockFull = get_fock(eng, molSysData)
-    # Hcore_whole = molSysData.M_whole.reshape(molSysData.molecule_whole.nmol, molSysData.molecule_whole.molsize, molSysData.molecule_whole.molsize,4,4) \
-    #              .transpose(2,3) \
-    #              .reshape(molSysData.molecule_whole.nmol, 4*molSysData.molecule_whole.molsize, 4*molSysData.molecule_whole.molsize)
-    # eElec = get_eElec(eng, dm, fockFull, Hcore_whole, doTriu=True)
-    # print("Eelec: {:>10.7f}".format(eElec[0]),)
-    # tic = time.perf_counter()
-    # L = eElec.sum()
-    # L.backward(
-    #     retain_graph=True
-    # )
-    # force = -molSysData.molecule_whole.coordinates.grad.detach()
-    # molSysData.molecule_whole.coordinates.grad.zero_()
-    # print("Time to get forces", time.perf_counter() - tic,"(s)")
-
-    # eElec_reconstr = get_eElec(eng, dm, molSysData.h2elec_test, molSysData.h1elec_test, doTriu=False)
-    # print("Eelec_Reconstr: {:>10.7f}".format(eElec_reconstr[0]),)
-    # tic = time.perf_counter()
-    # L_reconstr = eElec_reconstr.sum()
-    # L_reconstr.backward(
-    #     retain_graph=True
-    #     )
-    # force_reconstr = -molSysData.molecule_whole.coordinates.grad.detach()
-    # molSysData.molecule_whole.coordinates.grad.zero_()
-    # print("Time to get forces", time.perf_counter() - tic,"(s)")
-
-    # maxDif = torch.max(torch.abs(Hcore_whole - molSysData.h1elec_test)).detach().numpy()
-    # sumDif = torch.sum(torch.abs(Hcore_whole - molSysData.h1elec_test)).detach().numpy()
-    # print(maxDif, sumDif)
-    # print(((torch.abs(Hcore_whole - molSysData.h1elec_test))[0]==torch.max((torch.abs(Hcore_whole - molSysData.h1elec_test))[0])).nonzero())
-
-
-    # h = molSysData.h1elec_test#.triu()+molSysData.h1elec_test.triu(1).transpose(1,2)
-
-
-    
-    # print('whole\n', (force+forceNuc)[0])
-    # print('reconstr\n', (force_reconstr+forceNuc)[0])
-
-    
-    # print("Etot:  {:>10.7f}".format(eTot),)
-
-    # forces = get_forces(eng, molSysData, eTot)
-
-    AtToPrint = 0
-    #print("graphNL", graphNL[AtToPrint])
-    #print("fullGraphRho:", fullGraphRho[AtToPrint])
-
-    # print(graphNL)
-    # Get the neighbors of atom 1234 (by the graph)

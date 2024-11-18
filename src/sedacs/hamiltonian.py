@@ -424,9 +424,12 @@ def get_hamiltonian(eng, coords, types, symbols,
             #del dm_contr, P_sub_from_contr, h1elec_sub, ham_contr, molSub
             torch.cuda.empty_cache()
             #L.backward(retain_graph=True)
-            L.backward()
-            force = -molSysData.molecule_whole.coordinates.grad.detach()[0].cpu().numpy()
-            molSysData.molecule_whole.coordinates.grad.zero_()
+            if molSysData.molecule_whole.coordinates.requires_grad:
+                L.backward()
+                force = -molSysData.molecule_whole.coordinates.grad.detach()[0].cpu().numpy()
+                molSysData.molecule_whole.coordinates.grad.zero_()
+            else:
+                force = molSysData.molecule_whole.coordinates[0].cpu().numpy() * 0.0
 
             
             if eng.reconstruct_dm:
