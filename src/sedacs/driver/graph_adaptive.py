@@ -14,7 +14,7 @@ from sedacs.fock import get_fock
 from sedacs.file_io import write_pdb_coordinates, write_xyz_coordinates
 from sedacs.graph import add_graphs, collect_graph_from_rho, print_graph, add_mult_graphs
 from sedacs.graph_partition import get_coreHaloIndices, graph_partition
-from sedacs.hamiltonian import get_hamiltonian
+from sedacs.hamiltonian import get_hamiltonian, get_force
 from sedacs.mpi import collect_and_sum_matrices
 from sedacs.system import System, extract_subsystem
 from sedacs.evals import get_eVals
@@ -27,6 +27,7 @@ import sys
 import psutil
 import pickle
 import socket
+import copy
 
 from seqm.seqm_functions.pack import pack
 
@@ -189,9 +190,15 @@ def get_singlePointForces(sdc, eng, partsPerGPU, partsPerNode, node_id, node_ran
             get_coreHalo_ham_inds(parts[partIndex], partsCoreHalo[partIndex], sdc, sy, subSy)
 
         tic = time.perf_counter()        
+        tmp_molSysData = copy.deepcopy(molSysData)
+        tmp_molSysData.molecule_whole.coordinates.requires_grad_(True)
+
+        # get_force
+        # get_hamiltonian
         f, eElec = get_hamiltonian(eng,subSy.coords,subSy.types,subSy.symbols, 
-                              parts[partIndex], partsCoreHalo[partIndex], molSysData, P, P_contr, graph_for_pairs, graph_maskd, core_indices_in_sub_expanded, doForces = True,
+                              parts[partIndex], partsCoreHalo[partIndex], tmp_molSysData, P, P_contr, graph_for_pairs, graph_maskd, core_indices_in_sub_expanded, doForces = True,
                               verbose=False)
+        del tmp_molSysData
         # if mpiOnDebugFlag:
         #     comm.Allreduce(f, forces, op=MPI.SUM)
         # else:
@@ -803,7 +810,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         #P_contr = P_contr.to(device)
         del molSysData
         molSysData = get_molSysData(eng, sdc, sy.coords, sy.symbols, sy.types, do_large_tensors = sdc.use_pyseqm_lt, device=device) #object with whatever initial parameters and tensors
-        molSysData.molecule_whole.coordinates.requires_grad_(True)
+        #molSysData.molecule_whole.coordinates.requires_grad_(True)
         
 
         if mpiOnDebugFlag:
