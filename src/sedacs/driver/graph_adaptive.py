@@ -105,10 +105,10 @@ def get_singlePoint(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hi
         del ham
         
         dValOnRank = np.append(dValOnRank, dVals)
-        eValOnRank = np.append(eValOnRank, eVals.detach().cpu().numpy())
+        eValOnRank = np.append(eValOnRank, eVals.cpu().numpy())
 
-        eValOnRank_list.append(eVals)
-        Q_list.append(Q)
+        eValOnRank_list.append()
+        Q_list.append()
         I_list.append(I)
         I_halo_list.append(I_halo)
         core_indices_in_sub_expanded_list.append(core_indices_in_sub_expanded)
@@ -348,7 +348,6 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     num_nodes = len(unique_nodes)         # Total number of unique nodes
     node_id = int(rank/node_numranks)
 
-
     primary_rank = None
     if node_rank == 0:
         primary_rank = rank  # Global rank of the primary rank on each node
@@ -359,10 +358,9 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
 
     color = 0 if rank in primary_ranks else MPI.UNDEFINED
     primary_comm = comm.Split(color=color, key=rank)
-    #comm.Barrier()
 
-    #device = 'cuda'
-    device = 'cuda:{}'.format(node_rank)
+    device = 'cuda'
+    #device = 'cuda:{}'.format(node_rank)
 
     if torch.get_default_dtype() == torch.float32:
         eng.torch_dt = torch.float32
@@ -390,7 +388,6 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         sdc.np_int_dt = eng.np_int_dt
 
     njumps = 1
-    #print("Time comms {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
     tic = time.perf_counter()
     fullGraph = graphNL.copy()
@@ -406,7 +403,6 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         sdc.nparts = len(parts)
         print('New nparts:', sdc.nparts)
         print("Time to compute cores {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
-        # num_elements = 0
 
         tic = time.perf_counter()
         # for i in range(sdc.nparts):
