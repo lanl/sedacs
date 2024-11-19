@@ -361,7 +361,8 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     primary_comm = comm.Split(color=color, key=rank)
     #comm.Barrier()
 
-    device = 'cuda'
+    #device = 'cuda'
+    device = 'cuda:{}'.format(node_rank)
 
     if torch.get_default_dtype() == torch.float32:
         eng.torch_dt = torch.float32
