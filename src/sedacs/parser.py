@@ -52,8 +52,14 @@ class Input:
         self.valency = self.get_a_dict("Valency=",{"Bl":1},keyVals,validKeys,verb)
         ## Electronic temperature 
         self.Tel = self.get_a_real("Tel=",0.0,keyVals,validKeys,verb)
+        ## do scf on cpu or gpu 
+        self.scfDevice = self.get_a_string("scfDevice=", "cpu", keyVals, validKeys, verb)
+        ## do forces on cpu or gpu
+        self.fDevice = self.get_a_string("fDevice=", "cuda", keyVals, validKeys, verb)
         ## Flag to do forces calculation 
         self.doForces = self.get_a_bool("doForces=", False, keyVals, validKeys, verb=False)
+        ## calculate i-j pairs via vectorization (fast but memory consuming) or via loop
+        self.ijMethod = self.get_a_string("ijMethod=", "Vec", keyVals, validKeys, verb)
         ## Number of adaptive graph iterations
         self.numAdaptIter = self.get_an_int("NumAdaptiveIter=", 1, keyVals, validKeys, verb)
         ## Engine interface type

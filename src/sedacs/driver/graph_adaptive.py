@@ -89,7 +89,7 @@ def get_singlePoint(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hi
         #write_pdb_coordinates(partCoreFileName,subSyCore.coords,subSyCore.types,subSyCore.symbols)
         #write_xyz_coordinates("CoreSubSy"+str(rank)+"_"+str(partIndex)+".xyz",subSyCore.coords,subSyCore.types,subSyCore.symbols)
 
-        ham = get_hamiltonian(eng,subSy.coords,subSy.types,subSy.symbols, 
+        ham = get_hamiltonian(sdc, eng,subSy.coords,subSy.types,subSy.symbols, 
                               parts[partIndex], partsCoreHalo[partIndex], molSysData, P, P_contr, graph_for_pairs, graph_maskd, None,
                               verbose=False)
         print("TOT {:>8.3f} (s)".format(time.perf_counter() - tic))
@@ -196,7 +196,7 @@ def get_singlePointForces(sdc, eng, partsPerGPU, partsPerNode, node_id, node_ran
 
         # get_force
         # get_hamiltonian
-        f, eElec = get_hamiltonian(eng,subSy.coords,subSy.types,subSy.symbols, 
+        f, eElec = get_hamiltonian(sdc, eng,subSy.coords,subSy.types,subSy.symbols, 
                               parts[partIndex], partsCoreHalo[partIndex], tmp_molSysData, P, P_contr, graph_for_pairs, graph_maskd, core_indices_in_sub_expanded, doForces = True,
                               verbose=False)
         del tmp_molSysData
@@ -361,7 +361,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     primary_comm = comm.Split(color=color, key=rank)
     #comm.Barrier()
 
-    device = 'cpu'
+    device = 'cuda'
 
     if torch.get_default_dtype() == torch.float32:
         eng.torch_dt = torch.float32

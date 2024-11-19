@@ -175,7 +175,7 @@ def collect_graph_from_rho(graph,rho,thresh,nnodes,maxDeg,indices,hindex=None,ve
     ki = 0
     ki_ = 0
     if type(rho) is not np.ndarray:
-        rho = rho.detach().numpy()
+        rho = rho.detach().cpu().numpy()
     for i in range(nats):
         ii = indices[i]
         #Recovering the connections we already have

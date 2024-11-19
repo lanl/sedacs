@@ -48,7 +48,7 @@ def print_memory_usage(rank, node_rank, message):
     mem_info = process.memory_info()
     print(f"{message} | Rank: {rank}, Node Rank: {node_rank}, Memory Usage: {mem_info.rss / (1024 ** 2):.2f} MB")
 
-def get_hamiltonian(eng, coords, types, symbols,
+def get_hamiltonian(sdc, eng, coords, types, symbols,
                     partsIndex, partsCoreHaloIndex, molSysData, P, P_contr, graph_for_pairs, graph_maskd, core_indices_in_sub_expanded, doForces = False,
                     verbose=False):
     # Call the proper interface
@@ -143,36 +143,50 @@ def get_hamiltonian(eng, coords, types, symbols,
             iii_list = []
             jjj_list = []
             pos = torch.searchsorted(block_indices, atom_index)
-            pos = torch.clamp(pos, max=len(block_indices) - 1)
-            mask_atom_index_in_block_indices = (pos < len(block_indices)) & (block_indices[pos] == atom_index)
+            pos = torch.clamp(pos, max=len_block_indices - 1)
+            mask_atom_index_in_block_indices = (pos < len_block_indices) & (block_indices[pos] == atom_index)
 
+            if sdc.ijMethod == 'Vec':
+                # Create pairwise indices using broadcasting
+                ii_matrix = atom_index.unsqueeze(1).expand(-1, atom_index.size(0))  # Rows represent i
+                jj_matrix = atom_index.unsqueeze(0).expand(atom_index.size(0), -1)  # Columns represent j
 
-            # Loop over atom_index and handle vectorized operations within each iteration
-            for i in range(len(mask_atom_index_in_block_indices)): ### $$$ needs vectorization
-                jj = atom_index[i+1:]
-                ii = torch.full_like(jj, i)  # Create a tensor of `i` repeated for each `j`
-                # If `i` is in block_indices, add all pairs (i, jj)
-                if mask_atom_index_in_block_indices[i]:
-                    iii_list.append(ii)
-                    jjj_list.append(jj)
-                else:
-                    # If `i` is not in block_indices, use binary search for checking presence in sorted `block_indices`
-                    # Ensure indices are within bounds of block_indices
-                    valid_idx_in_block = pos[i+1:][mask_atom_index_in_block_indices[i+1:]]
-                    valid_jj = jj[mask_atom_index_in_block_indices[i+1:]]
+                # Mask for valid pairs
+                mask_upper_triangle = jj_matrix > ii_matrix  # Enforce jj > ii
+                mask_valid_i = mask_atom_index_in_block_indices.unsqueeze(1)  # Valid i in block_indices
+                mask_valid_j = mask_atom_index_in_block_indices.unsqueeze(0)  # Valid j in block_indices
+                mask_pairs = mask_upper_triangle * (mask_valid_i + mask_valid_j)  # Combine all conditions
 
-                    # Now check if the values at valid indices match the elements in jj
-                    mask_j_in_block = block_indices[valid_idx_in_block] == valid_jj
+                # Flatten the indices of valid pairs
+                iii = ii_matrix[mask_pairs]
+                jjj = jj_matrix[mask_pairs]
+            else:
+                # Loop over atom_index and handle vectorized operations within each iteration
+                for i in range(len(mask_atom_index_in_block_indices)): ### $$$ needs vectorization
+                    jj = atom_index[i+1:]
+                    ii = torch.full_like(jj, i)  # Create a tensor of `i` repeated for each `j`
+                    # If `i` is in block_indices, add all pairs (i, jj)
+                    if mask_atom_index_in_block_indices[i]:
+                        iii_list.append(ii)
+                        jjj_list.append(jj)
+                    else:
+                        # If `i` is not in block_indices, use binary search for checking presence in sorted `block_indices`
+                        # Ensure indices are within bounds of block_indices
+                        valid_idx_in_block = pos[i+1:][mask_atom_index_in_block_indices[i+1:]]
+                        valid_jj = jj[mask_atom_index_in_block_indices[i+1:]]
 
-                    # Append only the values where jj is in block_indices
-                    iii_list.append(ii[mask_atom_index_in_block_indices[i+1:]][mask_j_in_block])
-                    jjj_list.append(valid_jj[mask_j_in_block])
-                    del valid_idx_in_block, valid_jj, mask_j_in_block
-                del ii, jj
-            # Concatenate all the lists to form the final iii and jjj tensors
-            iii = torch.cat(iii_list) if iii_list else torch.tensor([], dtype=dtypeTEST)
-            jjj = torch.cat(jjj_list) if jjj_list else torch.tensor([], dtype=dtypeTEST)
-            del iii_list, jjj_list, pos, mask_atom_index_in_block_indices, atom_index
+                        # Now check if the values at valid indices match the elements in jj
+                        mask_j_in_block = block_indices[valid_idx_in_block] == valid_jj
+
+                        # Append only the values where jj is in block_indices
+                        iii_list.append(ii[mask_atom_index_in_block_indices[i+1:]][mask_j_in_block])
+                        jjj_list.append(valid_jj[mask_j_in_block])
+                        del valid_idx_in_block, valid_jj, mask_j_in_block
+                    del ii, jj
+                # Concatenate all the lists to form the final iii and jjj tensors
+                iii = torch.cat(iii_list) if iii_list else torch.tensor([], dtype=dtypeTEST)
+                jjj = torch.cat(jjj_list) if jjj_list else torch.tensor([], dtype=dtypeTEST)
+                del iii_list, jjj_list, pos, mask_atom_index_in_block_indices, atom_index
 
             paircoord = molSysData.molecule_whole.coordinates[0,iii] - molSysData.molecule_whole.coordinates[0,jjj]
             pairdist = torch.sqrt(torch.square(paircoord).sum(dim=1))
