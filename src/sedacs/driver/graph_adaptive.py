@@ -91,7 +91,7 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
 
         if sdc.scfDevice == 'cuda':
             device = 'cuda:{}'.format(node_rank)
-            tmp_molecule_whole = get_molecule_pyseqm(sdc, sy.coords, sy.symbols, sy.types, do_large_tensors = sdc.use_pyseqm_lt, device=device)[0]#.to('cuda')
+            tmp_molecule_whole = get_molecule_pyseqm(sdc, sy.coords, sy.symbols, sy.types, do_large_tensors = sdc.use_pyseqm_lt, device=device)[0]
             ham = get_hamiltonian(sdc, eng,subSy.coords,subSy.types,subSy.symbols, 
                               parts[partIndex], partsCoreHalo[partIndex], tmp_molecule_whole, P, P_contr.to(device), graph_for_pairs, graph_maskd, None,
                               verbose=False)
@@ -101,7 +101,6 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
             ham = get_hamiltonian(sdc, eng,subSy.coords,subSy.types,subSy.symbols, 
                               parts[partIndex], partsCoreHalo[partIndex], molecule_whole, P, P_contr, graph_for_pairs, graph_maskd, None,
                               verbose=False)
-        #molecule_whole = molecule_whole.to(device)
         print("TOT {:>8.3f} (s)".format(time.perf_counter() - tic))
 
         tic = time.perf_counter()
@@ -202,7 +201,7 @@ def get_singlePointForces(sdc, eng, partsPerGPU, partsPerNode, node_id, node_ran
         tic = time.perf_counter()        
         tmp_molecule_whole = copy.deepcopy(molSysData.molecule_whole)
         if sdc.doForces:
-            tmp_molecule_whole.molecule_whole.coordinates.requires_grad_(True)
+            tmp_molecule_whole.coordinates.requires_grad_(True)
 
         # get_force
         # get_hamiltonian
@@ -403,7 +402,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     fullGraph = graphNL.copy()
 
     with torch.no_grad():
-        molecule_whole = get_molecule_pyseqm(sdc, sy.coords, sy.symbols, sy.types, do_large_tensors = sdc.use_pyseqm_lt, device=device)[0]#.to('cuda')
+        molecule_whole = get_molecule_pyseqm(sdc, sy.coords, sy.symbols, sy.types, do_large_tensors = sdc.use_pyseqm_lt, device=device)[0]
                                              
     #print_attribute_sizes(molSysData.molecule_whole)
     if rank == 0: print("Time to init molSysData {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
@@ -511,7 +510,6 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         if rank in primary_ranks:
             print('prim rank', rank)
             P_contr = primary_comm.bcast(P_contr, root=0)
-            #primary_comm.Bcast([P_contr.cpu().numpy(), MPI.DOUBLE], root=0)
             P_contr_nbytes = primary_comm.bcast(P_contr_nbytes, root=0)
         if rank == 0: print("BCST1 {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
@@ -748,7 +746,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         num_gpus = torch.cuda.device_count()
     else:
         num_gpus = node_numranks
-        
+
     if num_gpus > node_numranks:
         num_gpus = node_numranks
 
@@ -808,7 +806,6 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         else:
             device = 'cpu'
 
-        #P_contr = P_contr.to(device)
         molSysData = pyseqmObjects(sdc, sy.coords, sy.symbols, sy.types, do_large_tensors = sdc.use_pyseqm_lt, device=device) #object with whatever initial parameters and tensors
         #molSysData.molecule_whole.coordinates.requires_grad_(True)
         
@@ -878,4 +875,3 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             #print(forceNuc)
             np.save('forces_test.np', (forces+forceNuc.cpu().numpy()[0]), )
             #np.save('forces_test.np', (forces), )
-            #np.save('forces_test.np', (forceNuc.cpu().numpy()[0]), )
