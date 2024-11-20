@@ -742,9 +742,13 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
 
         if rank == 0: print("t Iter {:>8.2f} (s)".format(time.perf_counter() - TIC_iter))
 
-    ### forces calculation
+    ### forces calculation ###
     tic = time.perf_counter()
-    num_gpus = torch.cuda.device_count()
+    if sdc.fDevice == 'cuda':
+        num_gpus = torch.cuda.device_count()
+    else:
+        num_gpus = node_numranks
+        
     if num_gpus > node_numranks:
         num_gpus = node_numranks
 
@@ -799,7 +803,11 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             graph_for_pairs = None
             graph_maskd = None
 
-        device = 'cuda:{}'.format(node_rank)
+        if sdc.fDevice == 'cuda':
+            device = 'cuda:{}'.format(node_rank)
+        else:
+            device = 'cpu'
+
         #P_contr = P_contr.to(device)
         molSysData = pyseqmObjects(sdc, sy.coords, sy.symbols, sy.types, do_large_tensors = sdc.use_pyseqm_lt, device=device) #object with whatever initial parameters and tensors
         #molSysData.molecule_whole.coordinates.requires_grad_(True)
