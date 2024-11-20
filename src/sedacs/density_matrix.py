@@ -48,7 +48,7 @@ def get_density_matrix(eng, nocc, ham, coords, symbols, types, Tel, verbose):
         exit()
     return rho
 
-def get_initDM(eng, sdc, coords, symbols, types, molSysData):
+def get_initDM(eng, sdc, coords, symbols, types, molecule_whole):
     if eng.interface == "None":
         print("ERROR!!! - Write your own dmInit")
         exit()
@@ -61,7 +61,7 @@ def get_initDM(eng, sdc, coords, symbols, types, molSysData):
         if(PYSEQM == False):
             print("ERROR: No PySEQM installed")
             exit()
-        dm = make_dm_guess(molSysData.molecule_whole, molSysData.molecule_whole.seqm_parameters, mix_homo_lumo=False, mix_coeff=0.3, overwrite_existing_dm=True, assignDM = False)[0];
+        dm = make_dm_guess(molecule_whole, molecule_whole.seqm_parameters, mix_homo_lumo=False, mix_coeff=0.3, overwrite_existing_dm=True, assignDM = False)[0];
         #dm = torch.load("/home/maxim/Projects/SEDACS_1/sedacs/examples/pyseqm/w_4_dm.pt", weights_only=True)
         #dm = torch.load("/home/maxim/Projects/SEDACS_1/sedacs/examples/pyseqm/nanostar_dm.pt", weights_only=True)
         #molSysData.molecule_whole.dm = torch.load("/home/maxim/Projects/SEDACS_1/sedacs/examples/pyseqm/gs_solvated_cell_dm.pt", weights_only=True)

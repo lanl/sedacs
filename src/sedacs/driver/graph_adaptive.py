@@ -21,7 +21,7 @@ from sedacs.evals import get_eVals
 from sedacs.chemical_potential import get_mu
 from sedacs.graph import get_initial_graph
 from sedacs.overlap import get_overlap
-from sedacs.interface_pyseqm import get_coreHalo_ham_inds, get_diag_guess_pyseqm, ParamContainer
+from sedacs.interface_pyseqm import get_coreHalo_ham_inds, get_diag_guess_pyseqm, ParamContainer, pyseqmObjects, get_molecule_pyseqm
 import itertools
 import sys
 import psutil
@@ -53,8 +53,8 @@ __all__ = ["get_singlePoint", "get_adaptiveDM"]
 # @brief Construct a connectivity graph based on constructing density matrices
 # of parts of the system.
 #
-def get_singlePoint(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu0,
-                    molSysData, P, P_contr, graph_for_pairs, graph_maskd):
+def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu0,
+                    molecule_whole, P, P_contr, graph_for_pairs, graph_maskd):
     # computing DM for core+halo part
     partsPerRank = int(sdc.nparts / numranks)
     partIndex1 = rank * partsPerRank
@@ -89,8 +89,11 @@ def get_singlePoint(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hi
         #write_pdb_coordinates(partCoreFileName,subSyCore.coords,subSyCore.types,subSyCore.symbols)
         #write_xyz_coordinates("CoreSubSy"+str(rank)+"_"+str(partIndex)+".xyz",subSyCore.coords,subSyCore.types,subSyCore.symbols)
 
+        device = 'cuda:{}'.format(node_rank)
+        #molecule_whole = molecule_whole.to(device)
+        tmp_molecule_whole = get_molecule_pyseqm(sdc, sy.coords, sy.symbols, sy.types, do_large_tensors = sdc.use_pyseqm_lt, device=device)[0]#.to('cuda')
         ham = get_hamiltonian(sdc, eng,subSy.coords,subSy.types,subSy.symbols, 
-                              parts[partIndex], partsCoreHalo[partIndex], molSysData, P, P_contr, graph_for_pairs, graph_maskd, None,
+                              parts[partIndex], partsCoreHalo[partIndex], tmp_molecule_whole, P, P_contr.to(device), graph_for_pairs, graph_maskd, None,
                               verbose=False)
         print("TOT {:>8.3f} (s)".format(time.perf_counter() - tic))
 
@@ -107,8 +110,8 @@ def get_singlePoint(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hi
         dValOnRank = np.append(dValOnRank, dVals)
         eValOnRank = np.append(eValOnRank, eVals.cpu().numpy())
 
-        eValOnRank_list.append()
-        Q_list.append()
+        eValOnRank_list.append(eVals.cpu())
+        Q_list.append(Q.cpu())
         I_list.append(I)
         I_halo_list.append(I_halo)
         core_indices_in_sub_expanded_list.append(core_indices_in_sub_expanded)
@@ -252,9 +255,9 @@ def get_singlePointDM(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, 
         # tic = time.perf_counter()
 
         for i in range(len(parts[partIndex])):
-            tmp1 = P_contr[:graph_for_pairs[parts[partIndex][i]][0],parts[partIndex][i]].clone()
+            tmp1 = P_contr[:graph_for_pairs[parts[partIndex][i]][0],parts[partIndex][i]]
             tmp2 = rho_ren.reshape((1, NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1],4, NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1],4)) \
-                                .transpose(2,3).reshape((NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1]), (NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1]),4,4)[core_indices_in_sub[i]].transpose(1,2).clone()
+                                .transpose(2,3).reshape((NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1]), (NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1]),4,4)[core_indices_in_sub[i]].transpose(1,2)
 
             P_contr_maxDif.append(torch.max(torch.abs(tmp1 - tmp2)).cpu().numpy())
             P_contr_sumDif += torch.sum(torch.abs(tmp1 - tmp2)).cpu().numpy()
@@ -359,7 +362,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     color = 0 if rank in primary_ranks else MPI.UNDEFINED
     primary_comm = comm.Split(color=color, key=rank)
 
-    device = 'cuda'
+    device = 'cpu'
     #device = 'cuda:{}'.format(node_rank)
 
     if torch.get_default_dtype() == torch.float32:
@@ -392,7 +395,9 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     tic = time.perf_counter()
     fullGraph = graphNL.copy()
 
-    with torch.no_grad(): molSysData = get_molSysData(eng, sdc, sy.coords, sy.symbols, sy.types, do_large_tensors = sdc.use_pyseqm_lt, device=device) #object with whatever initial parameters and tensors
+    with torch.no_grad():
+        molecule_whole = get_molecule_pyseqm(sdc, sy.coords, sy.symbols, sy.types, do_large_tensors = sdc.use_pyseqm_lt, device=device)[0]#.to('cuda')
+                                             
     #print_attribute_sizes(molSysData.molecule_whole)
     if rank == 0: print("Time to init molSysData {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
@@ -418,7 +423,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         # print('NUMBER OF ELEMENTS', num_elements)
         print('Loading the molecule and parameters.')
         if eng.reconstruct_dm:
-            dm = get_initDM(eng, sdc, sy.coords, sy.symbols, sy.types, molSysData)#.share_memory_()
+            dm = get_initDM(eng, sdc, sy.coords, sy.symbols, sy.types, molecule_whole)#.share_memory_()
             dm_size = dm.size()
             nbytes = dm.numel() * dm.element_size()
         
@@ -455,7 +460,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
 
         tic = time.perf_counter()
         P_contr = torch.zeros(sy.nats*sdc.maxDeg,4,4, dtype=eng.torch_dt, device=device)  # density matrix
-        P_contr[graph_maskd] = get_diag_guess_pyseqm(molSysData.molecule_whole, sy)
+        P_contr[graph_maskd] = get_diag_guess_pyseqm(molecule_whole, sy)
         P_contr = P_contr.reshape(sy.nats, sdc.maxDeg, 4,4).transpose(0,1)
         graph_maskd = np.array(graph_maskd)
         P_contr_size = P_contr.size()
@@ -466,8 +471,6 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         # graphNL = collect_graph_from_rho(None, sdc.overlap_whole,
         #                                   sdc.gthreshinit, sy.nats, sdc.maxDeg, [i for i in range(0,sy.nats)],hindex)
         # print('collect_graph_from_rho dm.')
-        # graphNL_dm = collect_graph_from_rho(None, pack(dm, molSysData.molecule_whole.nHeavy, molSysData.molecule_whole.nHydro)[0],
-        #                               sdc.gthresh, sy.nats, sdc.maxDeg, [i for i in range(0,sy.nats)],hindex)
         # fullGraph = add_graphs(graphNL, graphNL_dm )
         #fullGraph = graphNL_dm
         del graphNL
@@ -648,18 +651,18 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             with torch.no_grad():
                 if eng.reconstruct_dm:
                     eValOnRank_list, Q_list, NH_Nh_Hs_list, I_list, I_halo_list, core_indices_in_sub_expanded_list, Nocc_list, mu0 = \
-                    get_singlePoint(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu0, molSysData,
-                                    dm.reshape((molSysData.molecule_whole.nmol, molSysData.molecule_whole.molsize,4, molSysData.molecule_whole.molsize,4)) \
-                                    .transpose(2,3).reshape(molSysData.molecule_whole.nmol*molSysData.molecule_whole.molsize*molSysData.molecule_whole.molsize,4,4), P_contr, graph_for_pairs, graph_maskd)
+                    get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu0, molecule_whole,
+                                    dm.reshape((molecule_whole.nmol, molecule_whole.molsize,4, molecule_whole.molsize,4)) \
+                                    .transpose(2,3).reshape(molecule_whole.nmol*molecule_whole.molsize*molecule_whole.molsize,4,4), P_contr, graph_for_pairs, graph_maskd)
                 else:
                     eValOnRank_list, Q_list, NH_Nh_Hs_list, I_list, I_halo_list, core_indices_in_sub_expanded_list, Nocc_list, mu0 = \
-                    get_singlePoint(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu0, molSysData,
+                    get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu0, molecule_whole,
                                     None, P_contr, graph_for_pairs, graph_maskd)
 
             if mpiOnDebugFlag: comm.Barrier()
         else:
             eValOnRank_list, Q_list, NH_Nh_Hs_list, I_list, core_indices_in_sub_expanded_list, Nocc_list, mu0 = \
-                get_singlePoint(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu0, molSysData, dm)
+                get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu0, molecule_whole, dm)
 
         if rank == 0: print("Time to get_singlePoint {:>7.2f} (s)".format(time.perf_counter() - tic))
         
@@ -704,7 +707,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                 print("DM TRACE: {:>10.7f}".format(trace))
             if rank == 0:
                 tic = time.perf_counter()
-                trace = torch.sum(P_contr.transpose(0,1).reshape(molSysData.molecule_whole.molsize*(len(graph_for_pairs[0])-1), 4,4)[graph_maskd].diagonal(dim1=-2, dim2=-1))
+                trace = torch.sum(P_contr.transpose(0,1).reshape(molecule_whole.molsize*(len(graph_for_pairs[0])-1), 4,4)[graph_maskd].diagonal(dim1=-2, dim2=-1))
                 print("DM TRACE: {:>10.7f}".format(trace))
                 print("Time to get trace {:>7.2f} (s)".format(time.perf_counter() - tic))
 
@@ -791,8 +794,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
 
         device = 'cuda:{}'.format(node_rank)
         #P_contr = P_contr.to(device)
-        del molSysData
-        molSysData = get_molSysData(eng, sdc, sy.coords, sy.symbols, sy.types, do_large_tensors = sdc.use_pyseqm_lt, device=device) #object with whatever initial parameters and tensors
+        molSysData = pyseqmObjects(sdc, sy.coords, sy.symbols, sy.types, do_large_tensors = sdc.use_pyseqm_lt, device=device) #object with whatever initial parameters and tensors
         #molSysData.molecule_whole.coordinates.requires_grad_(True)
         
         if mpiOnDebugFlag:
@@ -842,7 +844,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         
         if rank == 0:
             del molSysData
-            molSysData = get_molSysData(eng, sdc, sy.coords, sy.symbols, sy.types, do_large_tensors = True, device=device) #object with whatever initial parameters and tensors
+            molSysData = pyseqmObjects(sdc, sy.coords, sy.symbols, sy.types, do_large_tensors = True, device=device) #object with whatever initial parameters and tensors
 
             if mpiOnDebugFlag:
                 print("eElec:   {:>10.7f}".format(global_Eelec[0]),)
