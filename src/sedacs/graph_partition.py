@@ -581,41 +581,15 @@ def get_coreHaloIndices(eng, core,graph,njumps, *args):
         for k in range(nc1):
             i = coreHalo[k]
 
-            # nxFalseMask = (nx[graph[i,1:graph[i,0]+1]] == False)
-            # if jumps_done_but_looking_for_odd == False:
-            #     nch += np.sum(nxFalseMask)
-            #     coreHalo = np.append(coreHalo, graph[i,1:graph[i,0]+1][nxFalseMask])
-            #     nx[graph[i,1:graph[i,0]+1]] = True
-            # else:
-            #     for kk in range(1, graph[i,0]+1):
-            #         j = graph[i,kk]
-            #         if (nx[j] == False) and (args[0].valency[args[1].symbols[args[1].types[j]]] ) % 2 == 1:
-            #             nch = nch + 1
-            #             coreHalo = np.append(coreHalo, int(j))
-            #             extraAtoms.append(int(j))
-            #             graph[core[0]][graph[core[0]][0]+1] = j
-            #             graph[core[0]][0] += 1
-            #             graph[core[0]][1:graph[core[0]][0]+1] = sorted(graph[core[0]][1:graph[core[0]][0]+1])
-            #             #print('APPENDED EXTRA', j)
-            #             nx[j] = True
-            #             if(eng.interface == "PySEQM"): coreHalo = sorted(coreHalo)
-            #             return coreHalo, nc
-
-
-            for kk in range(1, graph[i,0]+1):
-                j = graph[i,kk]
-                if   (nx[j] == False) and  jumps_done_but_looking_for_odd == False:
-                    #### $$$ remove later ####
-                    # if len(coreHalo) >= 1700:
-                    #     break
-                    ######
-                    nch += 1
-
-                    coreHalo = np.append(coreHalo, int(j))
-                    nx[j] = True
-                elif (nx[j] == False) and  jumps_done_but_looking_for_odd:
-                    if (args[0].valency[args[1].symbols[args[1].types[j]]] ) % 2 == 1:
-
+            nxFalseMask = (nx[graph[i,1:graph[i,0]+1]] == False)
+            if jumps_done_but_looking_for_odd == False:
+                nch += np.sum(nxFalseMask)
+                coreHalo = np.append(coreHalo, graph[i,1:graph[i,0]+1][nxFalseMask])
+                nx[graph[i,1:graph[i,0]+1]] = True
+            else:
+                for kk in range(1, graph[i,0]+1):
+                    j = graph[i,kk]
+                    if (nx[j] == False) and (args[0].valency[args[1].symbols[args[1].types[j]]] ) % 2 == 1:
                         nch = nch + 1
                         coreHalo = np.append(coreHalo, int(j))
                         extraAtoms.append(int(j))
@@ -626,6 +600,32 @@ def get_coreHaloIndices(eng, core,graph,njumps, *args):
                         nx[j] = True
                         if(eng.interface == "PySEQM"): coreHalo = sorted(coreHalo)
                         return coreHalo, nc
+
+
+            # for kk in range(1, graph[i,0]+1):
+            #     j = graph[i,kk]
+            #     if   (nx[j] == False) and  jumps_done_but_looking_for_odd == False:
+            #         #### $$$ remove later ####
+            #         # if len(coreHalo) >= 1700:
+            #         #     break
+            #         ######
+            #         nch += 1
+
+            #         coreHalo = np.append(coreHalo, int(j))
+            #         nx[j] = True
+            #     elif (nx[j] == False) and  jumps_done_but_looking_for_odd:
+            #         if (args[0].valency[args[1].symbols[args[1].types[j]]] ) % 2 == 1:
+
+            #             nch = nch + 1
+            #             coreHalo = np.append(coreHalo, int(j))
+            #             extraAtoms.append(int(j))
+            #             graph[core[0]][graph[core[0]][0]+1] = j
+            #             graph[core[0]][0] += 1
+            #             graph[core[0]][1:graph[core[0]][0]+1] = sorted(graph[core[0]][1:graph[core[0]][0]+1])
+            #             #print('APPENDED EXTRA', j)
+            #             nx[j] = True
+            #             if(eng.interface == "PySEQM"): coreHalo = sorted(coreHalo)
+            #             return coreHalo, nc
                     
         if jump == njumps - 1 and args:
             num_el = 0
