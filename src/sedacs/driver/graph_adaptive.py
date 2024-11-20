@@ -89,12 +89,19 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
         #write_pdb_coordinates(partCoreFileName,subSyCore.coords,subSyCore.types,subSyCore.symbols)
         #write_xyz_coordinates("CoreSubSy"+str(rank)+"_"+str(partIndex)+".xyz",subSyCore.coords,subSyCore.types,subSyCore.symbols)
 
-        device = 'cuda:{}'.format(node_rank)
-        #molecule_whole = molecule_whole.to(device)
-        tmp_molecule_whole = get_molecule_pyseqm(sdc, sy.coords, sy.symbols, sy.types, do_large_tensors = sdc.use_pyseqm_lt, device=device)[0]#.to('cuda')
-        ham = get_hamiltonian(sdc, eng,subSy.coords,subSy.types,subSy.symbols, 
+        if sdc.scfDevice == 'cuda':
+            device = 'cuda:{}'.format(node_rank)
+            tmp_molecule_whole = get_molecule_pyseqm(sdc, sy.coords, sy.symbols, sy.types, do_large_tensors = sdc.use_pyseqm_lt, device=device)[0]#.to('cuda')
+            ham = get_hamiltonian(sdc, eng,subSy.coords,subSy.types,subSy.symbols, 
                               parts[partIndex], partsCoreHalo[partIndex], tmp_molecule_whole, P, P_contr.to(device), graph_for_pairs, graph_maskd, None,
                               verbose=False)
+            del tmp_molecule_whole
+        else:
+            device = 'cpu'
+            ham = get_hamiltonian(sdc, eng,subSy.coords,subSy.types,subSy.symbols, 
+                              parts[partIndex], partsCoreHalo[partIndex], molecule_whole, P, P_contr, graph_for_pairs, graph_maskd, None,
+                              verbose=False)
+        #molecule_whole = molecule_whole.to(device)
         print("TOT {:>8.3f} (s)".format(time.perf_counter() - tic))
 
         tic = time.perf_counter()
@@ -193,16 +200,16 @@ def get_singlePointForces(sdc, eng, partsPerGPU, partsPerNode, node_id, node_ran
             get_coreHalo_ham_inds(parts[partIndex], partsCoreHalo[partIndex], sdc, sy, subSy)
 
         tic = time.perf_counter()        
-        tmp_molSysData = copy.deepcopy(molSysData)
+        tmp_molecule_whole = copy.deepcopy(molSysData.molecule_whole)
         if sdc.doForces:
-            tmp_molSysData.molecule_whole.coordinates.requires_grad_(True)
+            tmp_molecule_whole.molecule_whole.coordinates.requires_grad_(True)
 
         # get_force
         # get_hamiltonian
         f, eElec = get_hamiltonian(sdc, eng,subSy.coords,subSy.types,subSy.symbols, 
-                              parts[partIndex], partsCoreHalo[partIndex], tmp_molSysData, P, P_contr, graph_for_pairs, graph_maskd, core_indices_in_sub_expanded, doForces = True,
+                              parts[partIndex], partsCoreHalo[partIndex], tmp_molecule_whole, P, P_contr, graph_for_pairs, graph_maskd, core_indices_in_sub_expanded, doForces = True,
                               verbose=False)
-        del tmp_molSysData
+        del tmp_molecule_whole
         # if mpiOnDebugFlag:
         #     comm.Allreduce(f, forces, op=MPI.SUM)
         # else:
