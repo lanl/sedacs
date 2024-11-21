@@ -175,7 +175,7 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
         Nocc_LIST = Nocc_list
 
 
-    print("| t commLists {:>9.4f} (s)".format(time.perf_counter() - tic), rank)
+    if node_rank == 0: print("| t commLists {:>9.4f} (s)".format(time.perf_counter() - tic), rank)
     if rank == 0:
         mu0 = get_mu(mu0, full_dVals, full_eVals, Tel, sy.numel/2)
 
@@ -572,8 +572,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             if node_rank == 0:
                 tic = time.perf_counter()
                 partsCoreHalo = []
-                print("\nCore and halos indices for every part:")
-                #print(fullGraph[parts[0]])
+                if rank == 0:print("\nCore and halos indices for every part:")
                 for i in range(sdc.nparts):
                     coreHalo, nc = get_coreHaloIndices(eng, parts[i], fullGraph, njumps, sdc, sy)
                     partsCoreHalo.append(coreHalo)
@@ -591,6 +590,8 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                             new_graph_for_pairs[i, 1:new_graph_for_pairs[i][0]+1] = partsCoreHalo[sublist_idx]
                             break
 
+                if rank == 0: print("Time to updt DM and mod graphs {:>7.2f} (s)".format(time.perf_counter() - tic))
+                tic = time.perf_counter()
                 #### THIS IS BAD. NEEDS TO BE FIXEd $$$
                 P_contr_new = torch.zeros_like(P_contr, device=device)
                 for i in range(sy.nats):
@@ -615,6 +616,8 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                 P_contr[:] = P_contr_new[:]
                 del P_contr_new
 
+                if rank == 0: print("Time to updt DM and mod graphs {:>7.2f} (s)".format(time.perf_counter() - tic))
+                tic = time.perf_counter()
                 graph_for_pairs = new_graph_for_pairs
                 # Initialize an array to hold graph_maskd values
                 graph_maskd = []
@@ -647,7 +650,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                 graph_for_pairs = node_comm.bcast(graph_for_pairs, root=0)
                 new_graph_for_pairs = node_comm.bcast(new_graph_for_pairs, root=0)
                 graph_maskd = node_comm.bcast(graph_maskd, root=0)
-            print("Time to bcast DM and mod graphs {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+            if node_rank == 0: print("Time to bcast DM and mod graphs {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
             
         tic = time.perf_counter()
         # for efficiency, the PySEQM dm needs to be reshaped in 4x4 blocks.
@@ -759,7 +762,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             primary_comm.Bcast([P_contr.cpu().numpy(), MPI.DOUBLE], root=0)
             forces = np.zeros((sy.coords.shape))
             partsCoreHalo = []
-            print("\nCore and halos indices for every part:")
+            if rank == 0: print("\nCore and halos indices for every part:")
             for i in range(sdc.nparts):
                 coreHalo, nc = get_coreHaloIndices(eng, parts[i], fullGraph, njumps, sdc, sy)
                 partsCoreHalo.append(coreHalo)
