@@ -51,7 +51,7 @@ def get_eVals(eng, sdc, sy, nocc, ham, coords, symbols, types, Tel, mu0,
             4 ,4 ,4 ,4 ,4 ,4 ,4 , 4,  \
 
 
-        molecule_sub, occ = get_molecule_pyseqm(sdc, coords, symbols, types)
+        molecule_sub, occ = get_molecule_pyseqm(sdc, coords, symbols, types, do_large_tensors=False)
 
         symbol_to_index = {symbol: idx for idx, symbol in enumerate(symbols_internal)}
         # Translate `symbols` to `symbols_internal` indices

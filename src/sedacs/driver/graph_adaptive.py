@@ -258,7 +258,7 @@ def get_singlePointDM(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, 
         #                         .transpose(2,3).reshape((NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1]), (NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1]),4,4).transpose(2,3).transpose(0,1)[:,core_indices_in_sub]#.clone()
         # P_contr_test[:max_len,parts[partIndex]] = (1-alpha)*TMP1 + alpha * TMP2
         # print("Vec {:>8.3f} (s)".format(time.perf_counter() - tic))
-        # tic = time.perf_counter()
+        tic = time.perf_counter()
 
         for i in range(len(parts[partIndex])):
             tmp1 = P_contr[:graph_for_pairs[parts[partIndex][i]][0],parts[partIndex][i]]
@@ -289,7 +289,6 @@ def get_singlePointDM(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, 
         # graphOnRank = collect_graph_from_rho(graphOnRank,
         #                                      pack(dm[:,I_halo_list[partIndex][0], I_halo_list[partIndex][1]], NH_Nh_Hs_list[partIndex][0], NH_Nh_Hs_list[partIndex][1])[0],
         #                                      sdc.gthresh, sy.nats, sdc.maxDeg, partsCoreHalo[partIndex], hindex, verb=False)
-        #print(graphOnRank[168][:65])
         del rho_ren
         print("t DM {:>8.3f} (s)".format(time.perf_counter() - tic))
 

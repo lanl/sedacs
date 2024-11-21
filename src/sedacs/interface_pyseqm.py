@@ -440,8 +440,6 @@ def get_molecule_pyseqm(sdc, coords, symbols, atomTypes, do_large_tensors=True, 
 
 def get_eVals_pyseqm(H, Nocc, Tel, mu0, coreSize, core_ham_dim, molecule=None, verb=False, calcD=False):
 
-  from seqm.seqm_functions.diag import sym_eig_trunc
-
   kB = 8.61739e-5 # eV/K, kB = 6.33366256e-6 Ry/K, kB = 3.166811429e-6 Ha/K, #kB = 3.166811429e-6 #Ha/K
   if(verb): print("Computing the renormalized Density matrix")
 
@@ -452,7 +450,7 @@ def get_eVals_pyseqm(H, Nocc, Tel, mu0, coreSize, core_ham_dim, molecule=None, v
 
   homoIndex = Nocc - 1
   lumoIndex = Nocc
-  mu_test = 0.5*(E_val[homoIndex] + E_val[lumoIndex]) #don't need it 
+  #mu_test = 0.5*(E_val[homoIndex] + E_val[lumoIndex]) #don't need it 
   print(' SubSys HOMO/LUMO:', np.round(E_val[homoIndex].item(),4), np.round(E_val[lumoIndex].item(),4), end=" ")
 
   # rho = Q@f_vector@Q.T
@@ -463,7 +461,7 @@ def get_eVals_pyseqm(H, Nocc, Tel, mu0, coreSize, core_ham_dim, molecule=None, v
   for i in range(N):
     dVals = torch.cat((dVals, torch.inner(Q[core_ham_dim,i],Q[core_ham_dim, i]).unsqueeze(0)) )
 
-  return E_val, dVals.detach().cpu().numpy(), Q, [molecule.nHeavy, molecule.nHydro, H.shape[-1]]
+  return E_val, dVals.cpu().numpy(), Q, [molecule.nHeavy, molecule.nHydro, H.shape[-1]]
 
 
 def get_densityMatrix_renormalized_pyseqm(E_val, Q, Tel, mu0, NH_Nh_Hs, Nocc):
