@@ -406,7 +406,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     #print_attribute_sizes(molSysData.molecule_whole)
     if rank == 0: print("Time to init molSysData {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
-    if rank == 0:
+    if node_rank == 0:
         tic = time.perf_counter()
         print('Computing cores.')
         parts = graph_partition(eng, fullGraph, sdc.partitionType, sdc.nparts, sy.coords, sdc.verb)
@@ -473,11 +473,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         
         print("Time to init DM {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
-        # graphNL = collect_graph_from_rho(None, sdc.overlap_whole,
-        #                                   sdc.gthreshinit, sy.nats, sdc.maxDeg, [i for i in range(0,sy.nats)],hindex)
-        # print('collect_graph_from_rho dm.')
-        # fullGraph = add_graphs(graphNL, graphNL_dm )
-        #fullGraph = graphNL_dm
+        # graphNL = collect_graph_from_rho(None, sdc.overlap_whole, sdc.gthreshinit, sy.nats, sdc.maxDeg, [i for i in range(0,sy.nats)],hindex)
         del graphNL
     else:
         parts = None
@@ -499,17 +495,15 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         P_contr_size = None
         P_contr_nbytes = 0
     
-    #tic = time.perf_counter()
     if mpiOnDebugFlag:
-        #comm.Barrier()
         tic = time.perf_counter()
-        parts = comm.bcast(parts, root=0)
-        sdc.nparts = comm.bcast(sdc.nparts, root=0)
-        #if rank in primary_ranks and len(primary_ranks) > 1:
-        if rank in primary_ranks:
-            print('prim rank', rank)
-            P_contr = primary_comm.bcast(P_contr, root=0)
-            P_contr_nbytes = primary_comm.bcast(P_contr_nbytes, root=0)
+        parts = node_comm.bcast(parts, root=0)
+        sdc.nparts = node_comm.bcast(sdc.nparts, root=0)
+        # if rank in primary_ranks:
+        #     print('prim rank', rank)
+        #     P_contr = primary_comm.bcast(P_contr, root=0)
+        #     P_contr_nbytes = primary_comm.bcast(P_contr_nbytes, root=0)
+
         if rank == 0: print("BCST1 {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
 
@@ -527,7 +521,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             print(ary.shape)
             print(dm.shape)
 
-        P_contr_size = comm.bcast(P_contr_size, root=0)
+        P_contr_size = node_comm.bcast(P_contr_size, root=0)
         P_contr_win = MPI.Win.Allocate_shared(P_contr_nbytes, torch.tensor(0, dtype=eng.torch_dt).element_size(), comm=node_comm) # 8 is the size of torch.float64
         P_contr_buf, P_contr_itemsize = P_contr_win.Shared_query(0) 
         #assert P_contr_itemsize == MPI.DOUBLE.Get_size() 
@@ -541,12 +535,12 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         if rank == 0: print("BCST2 {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
         tic = time.perf_counter()
-        fullGraph = comm.bcast(fullGraph, root=0)
-        coreHalo = comm.bcast(coreHalo, root=0)
-        partsCoreHalo = comm.bcast(partsCoreHalo, root=0)
-        new_graph_for_pairs = comm.bcast(new_graph_for_pairs, root=0)
-        graph_maskd = comm.bcast(graph_maskd, root=0)
-        graph_for_pairs = comm.bcast(graph_for_pairs, root=0)
+        fullGraph = node_comm.bcast(fullGraph, root=0)
+        coreHalo = node_comm.bcast(coreHalo, root=0)
+        partsCoreHalo = node_comm.bcast(partsCoreHalo, root=0)
+        new_graph_for_pairs = node_comm.bcast(new_graph_for_pairs, root=0)
+        graph_maskd = node_comm.bcast(graph_maskd, root=0)
+        graph_for_pairs = node_comm.bcast(graph_for_pairs, root=0)
         if rank == 0: print("BCST3 {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
     
     print("Time to init bcast and share DM {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
