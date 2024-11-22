@@ -126,6 +126,8 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
 
         print("| t eVals/dVals {:>9.4f} (s)".format(time.perf_counter() - tic))
 
+    Q_list_np = [tensor.cpu().numpy() for tensor in Q_list]
+
     comm.Barrier()
     tic = time.perf_counter()
     full_dVals = None
@@ -146,7 +148,8 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
         comm.Gatherv(dValOnRank, [full_dVals, eValOnRank_SIZES], root=0)
         comm.Gatherv(eValOnRank, [full_eVals, eValOnRank_SIZES], root=0)
         eVal_LIST = comm.gather(eValOnRank_list, root=0)
-        Q_LIST = comm.gather(Q_list, root=0)
+        #Q_LIST = comm.gather(Q_list, root=0)
+        Q_LIST = comm.gather(Q_list_np, root=0)
         NH_Nh_Hs_LIST = comm.gather(NH_Nh_Hs_list, root=0)
         I_LIST = comm.gather(I_list, root=0)
         I_halo_LIST = comm.gather(I_halo_list, root=0)
@@ -157,6 +160,7 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
             # Flatten the nested list of lists into a single list of tensors
             eVal_LIST = list(itertools.chain(*eVal_LIST))
             Q_LIST = list(itertools.chain(*Q_LIST))
+            Q_LIST_torch = [torch.from_numpy(arr) for arr in Q_LIST]
             NH_Nh_Hs_LIST = list(itertools.chain(*NH_Nh_Hs_LIST))
             I_LIST = list(itertools.chain(*I_LIST))
             I_halo_LIST = list(itertools.chain(*I_halo_LIST))
