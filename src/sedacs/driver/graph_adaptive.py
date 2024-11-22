@@ -290,7 +290,7 @@ def get_singlePointDM(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, 
         #                                      pack(dm[:,I_halo_list[partIndex][0], I_halo_list[partIndex][1]], NH_Nh_Hs_list[partIndex][0], NH_Nh_Hs_list[partIndex][1])[0],
         #                                      sdc.gthresh, sy.nats, sdc.maxDeg, partsCoreHalo[partIndex], hindex, verb=False)
         del rho_ren
-        print("t DM {:>8.3f} (s)".format(time.perf_counter() - tic))
+        #print("t DM {:>8.3f} (s)".format(time.perf_counter() - tic))
 
     print('HERE_DM_1')
     if eng.reconstruct_dm:
