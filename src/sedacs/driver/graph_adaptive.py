@@ -395,7 +395,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         eng.np_int_dt = np.int64
         sdc.np_int_dt = eng.np_int_dt
 
-    njumps = sdc.numJumps
+    njumps = 1
 
     tic = time.perf_counter()
     fullGraph = graphNL.copy()
@@ -551,6 +551,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
 
     dmOld = None
     mu0 = -5.5
+    njumps = sdc.numJumps
     for gsc in range(sdc.numAdaptIter):
         if rank == 0: print('\n\n|||| Adaptive iter:', gsc, '||||')
         #print_memory_usage(rank, node_rank, "Memory usage")
