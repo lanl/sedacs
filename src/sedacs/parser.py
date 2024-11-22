@@ -60,6 +60,8 @@ class Input:
         self.doForces = self.get_a_bool("doForces=", False, keyVals, validKeys, verb=False)
         ## calculate i-j pairs via vectorization (fast but memory consuming) or via loop
         self.ijMethod = self.get_a_string("ijMethod=", "Vec", keyVals, validKeys, verb)
+        ## Number of graph jumps
+        self.numJumps = self.get_an_int("numJumps=", 1, keyVals, validKeys, verb)
         ## Number of adaptive graph iterations
         self.numAdaptIter = self.get_an_int("NumAdaptiveIter=", 1, keyVals, validKeys, verb)
         ## Engine interface type

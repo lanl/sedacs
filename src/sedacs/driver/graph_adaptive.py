@@ -395,7 +395,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         eng.np_int_dt = np.int64
         sdc.np_int_dt = eng.np_int_dt
 
-    njumps = 1
+    njumps = sdc.numJumps
 
     tic = time.perf_counter()
     fullGraph = graphNL.copy()
