@@ -160,7 +160,7 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
             # Flatten the nested list of lists into a single list of tensors
             eVal_LIST = list(itertools.chain(*eVal_LIST))
             Q_LIST = list(itertools.chain(*Q_LIST))
-            Q_LIST_torch = [torch.from_numpy(arr) for arr in Q_LIST]
+            Q_LIST = [torch.from_numpy(arr) for arr in Q_LIST]
             NH_Nh_Hs_LIST = list(itertools.chain(*NH_Nh_Hs_LIST))
             I_LIST = list(itertools.chain(*I_LIST))
             I_halo_LIST = list(itertools.chain(*I_halo_LIST))
