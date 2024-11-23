@@ -431,7 +431,12 @@ def get_molecule_pyseqm(sdc, coords, symbols, atomTypes, do_large_tensors=True, 
                     }
 
   
-  molecule = Molecule(const, seqm_parameters, coordinates, species, do_large_tensors=do_large_tensors).to(device)
+  if torch.sum(species)%2 == 0:
+     charges = 0
+  else:
+     charges = -1
+     
+  molecule = Molecule(const, seqm_parameters, coordinates, species, charges=charges, do_large_tensors=do_large_tensors).to(device)
 
   ### Create electronic structure driver:
   
