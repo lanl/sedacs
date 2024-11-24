@@ -127,6 +127,8 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
         print("| t eVals/dVals {:>9.4f} (s)".format(time.perf_counter() - tic))
 
     Q_list_np = [tensor.cpu().numpy() for tensor in Q_list]
+    Q_list_np = [arr.astype(np.float32) for arr in Q_list_np]
+
 
     comm.Barrier()
     tic = time.perf_counter()
@@ -859,14 +861,14 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             molSysData = pyseqmObjects(sdc, sy.coords, sy.symbols, sy.types, do_large_tensors = True, device=device) #object with whatever initial parameters and tensors
 
             if mpiOnDebugFlag:
-                print("eElec:   {:>10.7f}".format(global_Eelec[0]),)
+                print("eElec:   {:>10.12f}".format(global_Eelec[0]),)
             else:
-                print("eElec:   {:>10.7f}".format(eElec[0]),)
+                print("eElec:   {:>10.12f}".format(eElec[0]),)
             
             tic = time.perf_counter()
             eNucAB = get_eNuc(eng, molSysData)
             eTot, eNuc = get_eTot(eng, molSysData, eNucAB, 0)
-            print("Enuc:   {:>10.7f}".format(eNuc),)
+            print("Enuc:   {:>10.12f}".format(eNuc),)
             L = eNuc.sum()
             L.backward()
             forceNuc = -molSysData.molecule_whole.coordinates.grad.detach()

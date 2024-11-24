@@ -95,7 +95,7 @@ def init(args):
         numranks = 1
 
     # Initialize the code by reading the input file
-    sdc = Input(args.input_file, verb=False)
+    sdc = Input(args.input_file, verb=True)
 
     # Initialize the engine (quantum chemistry code)
     eng = Engine(rank)
