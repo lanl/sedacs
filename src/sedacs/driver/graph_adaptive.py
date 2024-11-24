@@ -127,7 +127,7 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
         print("| t eVals/dVals {:>9.4f} (s)".format(time.perf_counter() - tic))
 
     Q_list_np = [tensor.cpu().numpy() for tensor in Q_list]
-    Q_list_np = [arr.astype(np.float32) for arr in Q_list_np]
+    #Q_list_np = [arr.astype(np.float32) for arr in Q_list_np]
 
 
     comm.Barrier()
@@ -135,8 +135,11 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
     full_dVals = None
     full_eVals = None
     eValOnRank_size = np.array(len(eValOnRank), dtype=int)
-
     eValOnRank_SIZES = None
+
+    buf_size = 2**31  # 2 GB buffer (adjust as needed)
+    MPI.Attach_buffer(bytearray(buf_size))
+
     if mpiOnDebugFlag:
         if rank == 0:
             eValOnRank_SIZES = np.empty(comm.Get_size(), dtype=int)
@@ -180,6 +183,7 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
         core_indices_in_sub_expanded_LIST = core_indices_in_sub_expanded_list
         Nocc_LIST = Nocc_list
 
+    MPI.Detach_buffer()
 
     if node_rank == 0: print("| t commLists {:>9.4f} (s)".format(time.perf_counter() - tic), rank)
     if rank == 0:
