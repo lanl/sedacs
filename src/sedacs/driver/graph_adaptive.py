@@ -126,8 +126,8 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
 
         print("| t eVals/dVals {:>9.4f} (s)".format(time.perf_counter() - tic))
 
-    Q_list_np = [tensor.cpu().numpy() for tensor in Q_list]
-    Q_list_np = [arr.astype(np.float32) for arr in Q_list_np]
+    #Q_list_np = [tensor.cpu().numpy() for tensor in Q_list]
+    #Q_list_np = [arr.astype(np.float32) for arr in Q_list_np]
 
 
     comm.Barrier()
@@ -137,6 +137,8 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
     eValOnRank_size = np.array(len(eValOnRank), dtype=int)
     eValOnRank_SIZES = None
 
+
+
     # buf_size = 2**31  # 2 GB buffer (adjust as needed)
     # MPI.Attach_buffer(bytearray(buf_size))
 
@@ -145,16 +147,15 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
             eValOnRank_SIZES = np.empty(comm.Get_size(), dtype=int)
             
         comm.Gather(eValOnRank_size, eValOnRank_SIZES, root=0)
-
-        #comm.Barrier()
         if rank == 0:
             full_dVals = np.empty(np.sum(eValOnRank_SIZES), dtype=eValOnRank.dtype)
             full_eVals = np.empty(np.sum(eValOnRank_SIZES), dtype=eValOnRank.dtype)
+
         comm.Gatherv(dValOnRank, [full_dVals, eValOnRank_SIZES], root=0)
         comm.Gatherv(eValOnRank, [full_eVals, eValOnRank_SIZES], root=0)
         eVal_LIST = comm.gather(eValOnRank_list, root=0)
-        #Q_LIST = comm.gather(Q_list, root=0)
-        Q_LIST = comm.gather(Q_list_np, root=0)
+        Q_LIST = comm.gather(Q_list, root=0)
+        #Q_LIST = comm.gather(Q_list_np, root=0)
         NH_Nh_Hs_LIST = comm.gather(NH_Nh_Hs_list, root=0)
         I_LIST = comm.gather(I_list, root=0)
         I_halo_LIST = comm.gather(I_halo_list, root=0)
@@ -165,7 +166,7 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
             # Flatten the nested list of lists into a single list of tensors
             eVal_LIST = list(itertools.chain(*eVal_LIST))
             Q_LIST = list(itertools.chain(*Q_LIST))
-            Q_LIST = [torch.from_numpy(arr).to(dtype=torch.float64) for arr in Q_LIST]
+            #Q_LIST = [torch.from_numpy(arr).to(dtype=torch.float64) for arr in Q_LIST]
             NH_Nh_Hs_LIST = list(itertools.chain(*NH_Nh_Hs_LIST))
             I_LIST = list(itertools.chain(*I_LIST))
             I_halo_LIST = list(itertools.chain(*I_halo_LIST))
