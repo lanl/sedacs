@@ -126,6 +126,11 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
 
         print("| t eVals/dVals {:>9.4f} (s)".format(time.perf_counter() - tic))
 
+    
+    tic = time.perf_counter()
+    torch.save(Q_list, 'Q_list_{}.pt'.format(rank))
+    print("Time to save Q_list {:>9.4f} (s)".format(time.perf_counter() - tic))
+
     #Q_list_np = [tensor.cpu().numpy() for tensor in Q_list]
     #Q_list_np = [arr.astype(np.float32) for arr in Q_list_np]
 
@@ -154,8 +159,7 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
         comm.Gatherv(dValOnRank, [full_dVals, eValOnRank_SIZES], root=0)
         comm.Gatherv(eValOnRank, [full_eVals, eValOnRank_SIZES], root=0)
         eVal_LIST = comm.gather(eValOnRank_list, root=0)
-        Q_LIST = comm.gather(Q_list, root=0)
-        #Q_LIST = comm.gather(Q_list_np, root=0)
+        #Q_LIST = comm.gather(Q_list, root=0)
         NH_Nh_Hs_LIST = comm.gather(NH_Nh_Hs_list, root=0)
         I_LIST = comm.gather(I_list, root=0)
         I_halo_LIST = comm.gather(I_halo_list, root=0)
@@ -163,6 +167,12 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
         Nocc_LIST = comm.gather(Nocc_list, root=0)
 
         if rank == 0:
+
+            Q_LIST = []
+            for i in range(numranks):
+                Q_LIST.append(torch.load('Q_list_{}.pt'.format(i)))
+
+
             # Flatten the nested list of lists into a single list of tensors
             eVal_LIST = list(itertools.chain(*eVal_LIST))
             Q_LIST = list(itertools.chain(*Q_LIST))
@@ -172,6 +182,8 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
             I_halo_LIST = list(itertools.chain(*I_halo_LIST))
             core_indices_in_sub_expanded_LIST = list(itertools.chain(*core_indices_in_sub_expanded_LIST))
             Nocc_LIST = list(itertools.chain(*Nocc_LIST))
+        else:
+            Q_LIST = None
 
     else:
         full_dVals = dValOnRank
