@@ -135,7 +135,7 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
     #Q_list_np = [arr.astype(np.float32) for arr in Q_list_np]
 
 
-    comm.Barrier()
+    #comm.Barrier()
     tic = time.perf_counter()
     full_dVals = None
     full_eVals = None
@@ -456,9 +456,10 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             dm_size = dm.size()
             nbytes = dm.numel() * dm.element_size()
         
-        print('\n\n|||| Adaptive iter:', 0, '||||')
         partsCoreHalo = []
-        print("\nCore and halos indices for every part:")
+        if rank == 0:
+            print('\n\n|||| Adaptive iter:', 0, '||||')
+            print("\nCore and halos indices for every part:")
         for i in range(sdc.nparts):
             coreHalo, nc = get_coreHaloIndices(eng, parts[i], fullGraph, njumps, sdc, sy)
             partsCoreHalo.append(coreHalo)

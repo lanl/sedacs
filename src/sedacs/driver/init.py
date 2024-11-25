@@ -93,26 +93,34 @@ def init(args):
         comm = None
         rank = 0
         numranks = 1
+    if rank == 0:
+        # Initialize the code by reading the input file
+        sdc = Input(args.input_file, verb=True)
 
-    # Initialize the code by reading the input file
-    sdc = Input(args.input_file, verb=True)
+        # Initialize the engine (quantum chemistry code)
+        eng = Engine(rank)
+        eng.name = sdc.engine["Name"]
+        eng.path = sdc.engine["Path"]
+        eng.run = sdc.engine["Executable"]
+        eng.interface = sdc.engine["InterfaceType"]
 
-    # Initialize the engine (quantum chemistry code)
-    eng = Engine(rank)
-    eng.name = sdc.engine["Name"]
-    eng.path = sdc.engine["Path"]
-    eng.run = sdc.engine["Executable"]
-    eng.interface = sdc.engine["InterfaceType"]
+        # Read the coordinates
+        sy = System(1)
+        sy.latticeVectors, sy.symbols, sy.types, sy.coords = read_coords_file(sdc.coordsFileName, lib="None", verb=True)
+        sy.nats = len(sy.coords[:, 0])
+        sy.vels = np.zeros((sy.nats, 3))
 
-    # Read the coordinates
-    sy = System(1)
-    sy.latticeVectors, sy.symbols, sy.types, sy.coords = read_coords_file(sdc.coordsFileName, lib="None", verb=True)
-    sy.nats = len(sy.coords[:, 0])
-    sy.vels = np.zeros((sy.nats, 3))
-
-    # Get hindex (the orbital index for each atom in the system)
-    sy.norbs, sy.orbs, hindex, sy.numel = get_hindex(sdc.orbs, sdc.valency, sy.symbols, sy.types)
-    
+        # Get hindex (the orbital index for each atom in the system)
+        sy.norbs, sy.orbs, hindex, sy.numel = get_hindex(sdc.orbs, sdc.valency, sy.symbols, sy.types)
+    else:
+        sdc = None
+        eng = None
+        sy = None
+        hindex = None
+    sdc = comm.bcast(sdc, root=0)    
+    eng = comm.bcast(eng, root=0)
+    sy = comm.bcast(sy, root=0)
+    hindex = comm.bcast(hindex, root=0)
 
     tic = time.perf_counter()
     if(sy.nats > 100): 
@@ -185,7 +193,7 @@ def init(args):
     else:
         graphNL = None
     
-    comm.Barrier()
+    #comm.Barrier()
     graphNL = comm.bcast(graphNL, root=0)
     fullGraph = np.zeros((sy.nats, sdc.maxDeg + 1), dtype=int)
     fullGraph[:, :] = graphNL[:, :]

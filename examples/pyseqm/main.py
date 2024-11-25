@@ -16,6 +16,10 @@ from sedacs.driver.graph_adaptive import get_adaptiveDM
 from sedacs.driver.init import get_args, init
 import os
 
+# from mpi4py import MPI
+# comm = MPI.COMM_WORLD
+# rank = comm.Get_rank()
+
 torch.cuda.empty_cache()
 
 directory_path = "graphs"
