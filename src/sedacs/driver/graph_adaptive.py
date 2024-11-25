@@ -269,10 +269,12 @@ def get_singlePointDM(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, 
         indices_in_sub = np.linspace(0,len(partsCoreHalo[partIndex])-1, len(partsCoreHalo[partIndex]), dtype = eng.np_int_dt)
         core_indices_in_sub = indices_in_sub[np.isin(partsCoreHalo[partIndex], parts[partIndex])]
         
+        print("t DM1 {:>8.3f} (s)".format(time.perf_counter() - tic))
         alpha = sdc.alpha
         P_contr_maxDif = []
         P_contr_sumDif = 0
-        
+
+        tic = time.perf_counter()
         ### vectorized loop. Faster for larger cores.
         max_len = graph_for_pairs[parts[partIndex][0]][0]
         TMP1 = P_contr[:max_len,parts[partIndex]]#.clone()
@@ -294,6 +296,10 @@ def get_singlePointDM(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, 
             
         rho_ren = pack(rho_ren, NH_Nh_Hs_list[partIndex][0], NH_Nh_Hs_list[partIndex][1])
 
+        print("t DM2 {:>8.3f} (s)".format(time.perf_counter() - tic))
+
+        tic = time.perf_counter()
+
         P_contr_maxDif = max(P_contr_maxDif)
         P_contr_maxDifList.append(P_contr_maxDif)
         P_contr_sumDifTot += P_contr_sumDif
@@ -308,7 +314,7 @@ def get_singlePointDM(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, 
         #                                      pack(dm[:,I_halo_list[partIndex][0], I_halo_list[partIndex][1]], NH_Nh_Hs_list[partIndex][0], NH_Nh_Hs_list[partIndex][1])[0],
         #                                      sdc.gthresh, sy.nats, sdc.maxDeg, partsCoreHalo[partIndex], hindex, verb=False)
         del rho_ren
-        #print("t DM {:>8.3f} (s)".format(time.perf_counter() - tic))
+        print("t D3 {:>8.3f} (s)".format(time.perf_counter() - tic))
 
     print('HERE_DM_1')
     if eng.reconstruct_dm:

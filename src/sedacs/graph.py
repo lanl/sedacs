@@ -175,7 +175,18 @@ def collect_graph_from_rho(graph,rho,thresh,nnodes,maxDeg,indices,hindex=None,ve
     ki = 0
     ki_ = 0
     if type(rho) is not np.ndarray:
-        rho = rho.detach().cpu().numpy()
+        rho = rho.numpy().astype(np.float32)
+    print(hindex.dtype)
+    # Precompute the slice lengths for all j
+    slice_lengths = hindex[np.array(indices) + 1] - hindex[indices]
+    # Vectorize the extraction of slices from rho
+    cumsum_lengths = np.cumsum(np.r_[0, slice_lengths[:-1]])
+    max_length = np.max(slice_lengths)
+    slice_indices = cumsum_lengths[:, None] + np.arange(max_length)
+    # Mask to avoid out-of-bounds indexing
+    valid_mask = slice_indices < cumsum_lengths[:, None] + slice_lengths[:, None]
+    valid_indices = slice_indices[valid_mask]
+
     for i in range(nats):
         ii = indices[i]
         #Recovering the connections we already have
@@ -191,18 +202,7 @@ def collect_graph_from_rho(graph,rho,thresh,nnodes,maxDeg,indices,hindex=None,ve
         ki_ar = np.arange(ki_old, ki_,1)
 
         kj = 0  # Initialize kj
-        # Precompute the slice lengths for all j
-        slice_lengths = hindex[np.array(indices) + 1] - hindex[indices]
         
-        # Vectorize the extraction of slices from rho
-        cumsum_lengths = np.cumsum(np.r_[0, slice_lengths[:-1]])
-        max_length = np.max(slice_lengths)
-        slice_indices = cumsum_lengths[:, None] + np.arange(max_length)
-        
-        # Mask to avoid out-of-bounds indexing
-        valid_mask = slice_indices < cumsum_lengths[:, None] + slice_lengths[:, None]
-        valid_indices = slice_indices[valid_mask]
-
         flat_rho_slices = rho[ki_ar][:, kj + valid_indices]
 
         expanded_rho_slices = np.zeros((len(ki_ar),len(slice_lengths), max_length), dtype=rho.dtype)
