@@ -218,21 +218,19 @@ def get_fock_pyseqm_2(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, pa
     PA_test = (P[idxi[idxj_sub_ovrlp_with_rest]][...,(0,0,1,0,1,2,0,1,2,3),(0,1,1,2,2,2,3,3,3,3)]*weight).reshape((-1,10,1))
     PB_test = (P[idxj[idxi_sub_ovrlp_with_rest]][...,(0,0,1,0,1,2,0,1,2,3),(0,1,1,2,2,2,3,3,3,3)]*weight).reshape((-1,1,10))
 
-    w_2_inj=w_2[where_isinj]
-    suma_test = torch.einsum('ijk,ijk->ik',PA_test,w_2_inj)
-    sumA_test = torch.zeros(w_2_inj.shape[0],4,4,dtype=dtype, device=device)
-    del PA_test, w_2_inj
-
-    w_2_ini=w_2[where_isini]
-    sumb_test = torch.einsum('ijk,ijk->ij',PB_test,w_2_ini)
-    sumB_test = torch.zeros(w_2_ini.shape[0],4,4,dtype=dtype, device=device)
-    del PB_test, w_2_ini    
-
+    #w_2_inj=w_2[where_isinj]
+    suma_test = torch.einsum('ijk,ijk->ik',PA_test,w_2[where_isinj])
+    sumA_test = torch.zeros(torch.sum(isinj),4,4,dtype=dtype, device=device)
     sumA_test[...,(0,0,1,0,1,2,0,1,2,3),(0,1,1,2,2,2,3,3,3,3)] = suma_test
+    del PA_test, where_isinj, suma_test
+
+    #w_2_ini=w_2[where_isini]
+    sumb_test = torch.einsum('ijk,ijk->ij',PB_test,w_2[where_isini])
+    sumB_test = torch.zeros(torch.sum(isini),4,4,dtype=dtype, device=device)
     sumB_test[...,(0,0,1,0,1,2,0,1,2,3),(0,1,1,2,2,2,3,3,3,3)] = sumb_test
+    del PB_test, where_isini, sumb_test
 
-    del suma_test, sumb_test
-
+    
     iii=lookup_tensor[loc_i]
     indi_of_new_diag_in_old = maskd_sub[iii]
 
