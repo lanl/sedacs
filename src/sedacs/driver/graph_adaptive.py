@@ -582,7 +582,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         TIC_iter = time.perf_counter()
         tic = time.perf_counter()
         if node_rank == 0:
-            primary_comm.Bcast([P_contr.cpu().to(torch.float32).numpy(), MPI.FLOAT], root=0)
+            primary_comm.Bcast([P_contr.cpu().numpy(), MPI.DOUBLE], root=0)
         if rank == 0:print("Time to  bcast DM_cpu_np {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
         # Partition the graph
         tic = time.perf_counter()
