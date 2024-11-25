@@ -172,11 +172,9 @@ def collect_graph_from_rho(graph,rho,thresh,nnodes,maxDeg,indices,hindex=None,ve
     #print('graph', graph[11])
     nats = len(indices)
     weights = np.zeros((nnodes))
-    ki = 0
     ki_ = 0
     if type(rho) is not np.ndarray:
         rho = rho.numpy().astype(np.float32)
-    print(hindex.dtype)
     # Precompute the slice lengths for all j
     slice_lengths = hindex[np.array(indices) + 1] - hindex[indices]
     # Vectorize the extraction of slices from rho
@@ -200,11 +198,9 @@ def collect_graph_from_rho(graph,rho,thresh,nnodes,maxDeg,indices,hindex=None,ve
         ki_old = ki_
         ki_ = ki_ + hindex[ii+1] - hindex[ii]
         ki_ar = np.arange(ki_old, ki_,1)
-
         kj = 0  # Initialize kj
         
         flat_rho_slices = rho[ki_ar][:, kj + valid_indices]
-
         expanded_rho_slices = np.zeros((len(ki_ar),len(slice_lengths), max_length), dtype=rho.dtype)
         expanded_rho_slices[:,valid_mask] = flat_rho_slices
         abs_sums = np.sum(np.abs(expanded_rho_slices)**2, axis=(0,2))**0.5

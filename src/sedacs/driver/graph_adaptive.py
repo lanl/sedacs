@@ -261,7 +261,7 @@ def get_singlePointDM(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, 
     P_contr_sumDifTot = 0
 
     for partIndex in range(partIndex1,partIndex2):
-        tic = time.perf_counter()
+        #tic = time.perf_counter()
         # this will calculate the DM in subsys and update the whole DM
         rho_ren, maxDif, sumDif = get_density_matrix_renorm(eng, Tel, mu0, dm, P_contr, graph_for_pairs,
                                             eValOnRank_list[partIndex], Q_list[partIndex].to(torch.float64), NH_Nh_Hs_list[partIndex], I_list[partIndex], core_indices_in_sub_expanded_list[partIndex], Nocc_list[partIndex])
@@ -269,12 +269,11 @@ def get_singlePointDM(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, 
         indices_in_sub = np.linspace(0,len(partsCoreHalo[partIndex])-1, len(partsCoreHalo[partIndex]), dtype = eng.np_int_dt)
         core_indices_in_sub = indices_in_sub[np.isin(partsCoreHalo[partIndex], parts[partIndex])]
         
-        print("t DM1 {:>8.3f} (s)".format(time.perf_counter() - tic))
+        #print("t DM1 {:>8.3f} (s)".format(time.perf_counter() - tic))
         alpha = sdc.alpha
         P_contr_maxDif = []
         P_contr_sumDif = 0
 
-        tic = time.perf_counter()
         ### vectorized loop. Faster for larger cores.
         max_len = graph_for_pairs[parts[partIndex][0]][0]
         TMP1 = P_contr[:max_len,parts[partIndex]]#.clone()
@@ -296,10 +295,6 @@ def get_singlePointDM(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, 
             
         rho_ren = pack(rho_ren, NH_Nh_Hs_list[partIndex][0], NH_Nh_Hs_list[partIndex][1])
 
-        print("t DM2 {:>8.3f} (s)".format(time.perf_counter() - tic))
-
-        tic = time.perf_counter()
-
         P_contr_maxDif = max(P_contr_maxDif)
         P_contr_maxDifList.append(P_contr_maxDif)
         P_contr_sumDifTot += P_contr_sumDif
@@ -314,7 +309,6 @@ def get_singlePointDM(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, 
         #                                      pack(dm[:,I_halo_list[partIndex][0], I_halo_list[partIndex][1]], NH_Nh_Hs_list[partIndex][0], NH_Nh_Hs_list[partIndex][1])[0],
         #                                      sdc.gthresh, sy.nats, sdc.maxDeg, partsCoreHalo[partIndex], hindex, verb=False)
         del rho_ren
-        print("t D3 {:>8.3f} (s)".format(time.perf_counter() - tic))
 
     print('HERE_DM_1')
     if eng.reconstruct_dm:
@@ -392,7 +386,11 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     primary_comm = comm.Split(color=color, key=rank)
 
     device = 'cpu'
-    #device = 'cuda:{}'.format(node_rank)
+    if sdc.scfDevice == 'cuda':
+        device_tmp = 'cuda:{}'.format(node_rank)
+    else:
+        device_tmp = 'cpu'
+
 
     if torch.get_default_dtype() == torch.float32:
         eng.torch_dt = torch.float32
@@ -563,7 +561,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         fullGraph = node_comm.bcast(fullGraph, root=0)
         coreHalo = node_comm.bcast(coreHalo, root=0)
         partsCoreHalo = node_comm.bcast(partsCoreHalo, root=0)
-        new_graph_for_pairs = node_comm.bcast(new_graph_for_pairs, root=0)
+        #new_graph_for_pairs = node_comm.bcast(new_graph_for_pairs, root=0)
         graph_maskd = node_comm.bcast(graph_maskd, root=0)
         graph_for_pairs = node_comm.bcast(graph_for_pairs, root=0)
         if rank == 0: print("BCST3 {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
@@ -659,7 +657,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                 coreHalo = None
                 partsCoreHalo = None
                 graph_for_pairs = None
-                new_graph_for_pairs = None
+                #new_graph_for_pairs = None
                 graph_maskd = None
 
             tic = time.perf_counter()
@@ -667,7 +665,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                 coreHalo = node_comm.bcast(coreHalo, root=0)
                 partsCoreHalo = node_comm.bcast(partsCoreHalo, root=0)
                 graph_for_pairs = node_comm.bcast(graph_for_pairs, root=0)
-                new_graph_for_pairs = node_comm.bcast(new_graph_for_pairs, root=0)
+                #new_graph_for_pairs = node_comm.bcast(new_graph_for_pairs, root=0)
                 graph_maskd = node_comm.bcast(graph_maskd, root=0)
             if node_rank == 0: print("Time to bcast DM and mod graphs {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
             
