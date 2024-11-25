@@ -117,7 +117,7 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
         eValOnRank = np.append(eValOnRank, eVals.cpu().numpy())
 
         eValOnRank_list.append(eVals.cpu())
-        Q_list.append(Q.cpu())
+        Q_list.append(Q.cpu().to(torch.float32))
         I_list.append(I)
         I_halo_list.append(I_halo)
         core_indices_in_sub_expanded_list.append(core_indices_in_sub_expanded)
@@ -264,7 +264,7 @@ def get_singlePointDM(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, 
         tic = time.perf_counter()
         # this will calculate the DM in subsys and update the whole DM
         rho_ren, maxDif, sumDif = get_density_matrix_renorm(eng, Tel, mu0, dm, P_contr, graph_for_pairs,
-                                            eValOnRank_list[partIndex], Q_list[partIndex], NH_Nh_Hs_list[partIndex], I_list[partIndex], core_indices_in_sub_expanded_list[partIndex], Nocc_list[partIndex])
+                                            eValOnRank_list[partIndex], Q_list[partIndex].to(torch.float64), NH_Nh_Hs_list[partIndex], I_list[partIndex], core_indices_in_sub_expanded_list[partIndex], Nocc_list[partIndex])
 
         indices_in_sub = np.linspace(0,len(partsCoreHalo[partIndex])-1, len(partsCoreHalo[partIndex]), dtype = eng.np_int_dt)
         core_indices_in_sub = indices_in_sub[np.isin(partsCoreHalo[partIndex], parts[partIndex])]
