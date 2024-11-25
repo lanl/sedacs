@@ -167,7 +167,7 @@ def collect_graph_from_rho(graph,rho,thresh,nnodes,maxDeg,indices,hindex=None,ve
    
     rhoDim = len(rho[:,0])
     if (graph is None):
-        graph = np.zeros((nnodes,maxDeg+1),dtype=int) - 1
+        graph = np.zeros((nnodes,maxDeg+1),dtype=np.int16) - 1
     
     #print('graph', graph[11])
     nats = len(indices)
