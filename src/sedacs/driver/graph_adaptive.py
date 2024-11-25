@@ -275,28 +275,25 @@ def get_singlePointDM(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, 
         
         ### vectorized loop. Faster for larger cores.
         # tic = time.perf_counter()
-        max_len = graph_for_pairs[parts[partIndex][0]][0]
-        TMP1 = P_contr[:max_len,parts[partIndex]]#.clone()
-        TMP2 = rho_ren.reshape((1, NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1],4, NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1],4)) \
-                                .transpose(2,3).reshape((NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1]), (NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1]),4,4).transpose(2,3).transpose(0,1)[:,core_indices_in_sub]#.clone()
+        # max_len = graph_for_pairs[parts[partIndex][0]][0]
+        # TMP1 = P_contr[:max_len,parts[partIndex]]#.clone()
+        # TMP2 = rho_ren.reshape((1, NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1],4, NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1],4)) \
+        #                         .transpose(2,3).reshape((NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1]), (NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1]),4,4).transpose(2,3).transpose(0,1)[:,core_indices_in_sub]#.clone()
+        # P_contr_maxDif.append(torch.max(torch.abs(TMP1 - TMP2)).cpu().numpy())
+        # P_contr_sumDif += torch.sum(torch.abs(TMP1 - TMP2)).cpu().numpy()
         
-        #print(TMP1.device)
-        #print(TMP2.device)
-        P_contr_maxDif.append(torch.max(torch.abs(TMP1 - TMP2)).cpu().numpy())
-        P_contr_sumDif += torch.sum(torch.abs(TMP1 - TMP2)).cpu().numpy()
-        
-        P_contr[:max_len,parts[partIndex]] = (1-alpha)*TMP1 + alpha * TMP2
+        # P_contr[:max_len,parts[partIndex]] = (1-alpha)*TMP1 + alpha * TMP2
         #print("Vec {:>8.3f} (s)".format(time.perf_counter() - tic))
-        # tic = time.perf_counter()
-        # for i in range(len(parts[partIndex])):
-        #     tmp1 = P_contr[:graph_for_pairs[parts[partIndex][i]][0],parts[partIndex][i]]
-        #     tmp2 = rho_ren.reshape((1, NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1],4, NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1],4)) \
-        #                         .transpose(2,3).reshape((NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1]), (NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1]),4,4)[core_indices_in_sub[i]].transpose(1,2)
+        tic = time.perf_counter()
+        for i in range(len(parts[partIndex])):
+            tmp1 = P_contr[:graph_for_pairs[parts[partIndex][i]][0],parts[partIndex][i]]
+            tmp2 = rho_ren.reshape((1, NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1],4, NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1],4)) \
+                                .transpose(2,3).reshape((NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1]), (NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1]),4,4)[core_indices_in_sub[i]].transpose(1,2)
 
-        #     P_contr_maxDif.append(torch.max(torch.abs(tmp1 - tmp2)).cpu().numpy())
-        #     P_contr_sumDif += torch.sum(torch.abs(tmp1 - tmp2)).cpu().numpy()
-        #     P_contr[:graph_for_pairs[parts[partIndex][i]][0],parts[partIndex][i]] = (1-alpha)*tmp1 + alpha*tmp2
-        #     del tmp1, tmp2
+            P_contr_maxDif.append(torch.max(torch.abs(tmp1 - tmp2)).cpu().numpy())
+            P_contr_sumDif += torch.sum(torch.abs(tmp1 - tmp2)).cpu().numpy()
+            P_contr[:graph_for_pairs[parts[partIndex][i]][0],parts[partIndex][i]] = (1-alpha)*tmp1 + alpha*tmp2
+            del tmp1, tmp2
             
         rho_ren = pack(rho_ren, NH_Nh_Hs_list[partIndex][0], NH_Nh_Hs_list[partIndex][1])
 
