@@ -275,7 +275,6 @@ def get_singlePointDM(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, 
         
         ### vectorized loop. Faster for larger cores.
         # tic = time.perf_counter()
-        #P_contr_test = P_contr.clone()
         max_len = graph_for_pairs[parts[partIndex][0]][0]
         TMP1 = P_contr[:max_len,parts[partIndex]]#.clone()
         TMP2 = rho_ren.reshape((1, NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1],4, NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1],4)) \
@@ -289,7 +288,6 @@ def get_singlePointDM(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, 
         P_contr[:max_len,parts[partIndex]] = (1-alpha)*TMP1 + alpha * TMP2
         #print("Vec {:>8.3f} (s)".format(time.perf_counter() - tic))
         # tic = time.perf_counter()
-
         # for i in range(len(parts[partIndex])):
         #     tmp1 = P_contr[:graph_for_pairs[parts[partIndex][i]][0],parts[partIndex][i]]
         #     tmp2 = rho_ren.reshape((1, NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1],4, NH_Nh_Hs_list[partIndex][0]+NH_Nh_Hs_list[partIndex][1],4)) \
@@ -305,10 +303,6 @@ def get_singlePointDM(sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, 
         P_contr_maxDif = max(P_contr_maxDif)
         P_contr_maxDifList.append(P_contr_maxDif)
         P_contr_sumDifTot += P_contr_sumDif
-        #print(" MAX |\u0394DM_ij|: {:>10.7f}".format(P_contr_maxDif), rank, partIndex)
-        #print(" \u03A3   |\u0394DM_ij|: {:>10.7f}".format(P_contr_sumDif), rank, partIndex)
-
-        #tic = time.perf_counter()
 
         maxDifList.append(maxDif)
         try:
@@ -588,7 +582,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         TIC_iter = time.perf_counter()
         tic = time.perf_counter()
         if node_rank == 0:
-            primary_comm.Bcast([P_contr.cpu().numpy(), MPI.DOUBLE], root=0)
+            primary_comm.Bcast([P_contr.cpu().to(torch.float32).numpy(), MPI.FLOAT], root=0)
         if rank == 0:print("Time to  bcast DM_cpu_np {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
         # Partition the graph
         tic = time.perf_counter()
