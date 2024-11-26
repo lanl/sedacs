@@ -135,7 +135,7 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
     #Q_list_np = [arr.astype(np.float32) for arr in Q_list_np]
 
 
-    #comm.Barrier()
+    comm.Barrier()
     tic = time.perf_counter()
     full_dVals = None
     full_eVals = None
