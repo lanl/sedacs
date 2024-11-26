@@ -117,7 +117,7 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
         eValOnRank = np.append(eValOnRank, eVals.cpu().numpy())
 
         eValOnRank_list.append(eVals.cpu())
-        Q_list.append(Q.cpu()#.to(torch.float32)
+        Q_list.append(Q.cpu().to(torch.float32)
                       )
         I_list.append(I)
         I_halo_list.append(I_halo)
