@@ -117,7 +117,7 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
         eValOnRank = np.append(eValOnRank, eVals.cpu().numpy())
 
         eValOnRank_list.append(eVals.cpu())
-        Q_list.append(Q.cpu().to(torch.float32)
+        Q_list.append(Q.cpu()#.to(torch.float32)
                       )
         I_list.append(I)
         I_halo_list.append(I_halo)
@@ -428,22 +428,9 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         tic = time.perf_counter()
         print('Computing cores.')
         parts = graph_partition(eng, fullGraph, sdc.partitionType, sdc.nparts, sy.coords, sdc.verb)
-        sdc.nparts = len(parts)
-        print('New nparts:', sdc.nparts)
         print("Time to compute cores {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
         tic = time.perf_counter()
-        # for i in range(sdc.nparts):
-            # subSyCore = System(len(parts[i]))
-            # subSyCore.symbols = sy.symbols
-            # subSyCore.coords,subSyCore.types = extract_subsystem(sy.coords,sy.types,sy.symbols,parts[i])
-            # partCoreFileName = "CoreSubSy"+str(rank)+"_"+str(i)+".pdb"
-            # write_pdb_coordinates(partCoreFileName,subSyCore.coords,subSyCore.types,subSyCore.symbols)
-            # write_xyz_coordinates("CoreSubSy"+str(rank)+"_"+str(i)+".xyz",subSyCore.coords,subSyCore.types,subSyCore.symbols)
-            # print('N atoms in core {:>6d} : {:>6d}'.format(i, len(parts[i])))
-            # num_elements += len(parts[i])
-            # del subSyCore
-        # print('NUMBER OF ELEMENTS', num_elements)
         print('Loading the molecule and parameters.')
         if eng.reconstruct_dm:
             dm = get_initDM(eng, sdc, sy.coords, sy.symbols, sy.types, molecule_whole)#.share_memory_()
@@ -459,7 +446,6 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             partsCoreHalo.append(coreHalo)
             if sdc.verb: print("coreHalo for part", i, "=", coreHalo)
             if rank == 0: print('N atoms in core/coreHalo {:>6d} : {:>6d} {:>6d}'.format(i, len(parts[i]), len(coreHalo)), '\n')
-        
         print("Time to compute halos {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
         tic = time.perf_counter()
@@ -664,6 +650,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                 #new_graph_for_pairs = node_comm.bcast(new_graph_for_pairs, root=0)
                 graph_maskd = node_comm.bcast(graph_maskd, root=0)
             if node_rank == 0: print("Time to bcast DM and mod graphs {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+
             
         tic = time.perf_counter()
         # for efficiency, the PySEQM dm needs to be reshaped in 4x4 blocks.
@@ -683,8 +670,53 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         else:
             eValOnRank_list, Q_list, NH_Nh_Hs_list, I_list, core_indices_in_sub_expanded_list, Nocc_list, mu0 = \
                 get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu0, molecule_whole, dm)
+        
 
         if rank == 0: print("Time to get_singlePoint {:>7.2f} (s)".format(time.perf_counter() - tic))
+
+        if sdc.restartLoad:
+            sdc.restartLoad = False
+            
+            if node_rank == 0:
+                P_contr[:] = torch.load('P_contr.pt')
+            with open('parts.pkl','rb') as f:
+                parts = pickle.load(f)
+            with open('partsCoreHalo.pkl','rb') as f:
+                partsCoreHalo = pickle.load(f)
+            with open('fullGraph.pkl','rb') as f:
+                fullGraph = pickle.load(f)
+            mu0 = np.load('mu0.npy')
+            graph_for_pairs = np.load('graph_for_pairs.npy')
+            graph_maskd = np.load('graph_maskd.npy')
+            if rank == 0:
+                eValOnRank_list = torch.load('eValOnRank_list.pt')
+                Q_list = torch.load('Q_list.pt')
+                NH_Nh_Hs_list = torch.load('NH_Nh_Hs_list.pt')
+                I_list = torch.load('I_list.pt')
+                I_halo_list = torch.load('I_halo_list.pt')
+                core_indices_in_sub_expanded_list = torch.load('core_indices_in_sub_expanded_list.pt')
+                Nocc_list = torch.load('Nocc_list.pt')
+
+
+        if rank == 0 and sdc.restartSave:
+            torch.save(eValOnRank_list, 'eValOnRank_list.pt')
+            torch.save(Q_list, 'Q_list.pt')
+            torch.save(NH_Nh_Hs_list, 'NH_Nh_Hs_list.pt')
+            torch.save(I_list, 'I_list.pt')
+            torch.save(I_halo_list, 'I_halo_list.pt')
+            torch.save(core_indices_in_sub_expanded_list, 'core_indices_in_sub_expanded_list.pt')
+            torch.save(Nocc_list, 'Nocc_list.pt')
+            torch.save(P_contr, 'P_contr.pt')
+            with open('parts.pkl', 'wb') as f:
+                pickle.dump(parts, f)
+            with open('partsCoreHalo.pkl', 'wb') as f:
+                pickle.dump(partsCoreHalo, f)
+            with open('fullGraph.pkl', 'wb') as f:
+                pickle.dump(fullGraph, f)
+            np.save('mu0', mu0)
+            np.save('graph_for_pairs', graph_for_pairs)
+            np.save('graph_maskd', graph_maskd)
+
         
         #if rank == 0:
         if rank < node_numranks:
@@ -697,6 +729,10 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             core_indices_in_sub_expanded_list = node_comm.bcast(core_indices_in_sub_expanded_list, root=0)
             Nocc_list = node_comm.bcast(Nocc_list, root=0)
             mu0 = node_comm.bcast(mu0, root=0)
+
+            
+
+                  
 
             with torch.no_grad():
                 if eng.reconstruct_dm:

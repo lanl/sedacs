@@ -64,6 +64,10 @@ class Input:
         self.numJumps = self.get_an_int("numJumps=", 1, keyVals, validKeys, verb)
         ## Number of adaptive graph iterations
         self.numAdaptIter = self.get_an_int("NumAdaptiveIter=", 1, keyVals, validKeys, verb)
+        ## Flag to save some arrays for restart purposes 
+        self.restartSave = self.get_a_bool("restartSave=", False, keyVals, validKeys, verb=False)
+        ## Flag to load some arrays for restart purposes 
+        self.restartLoad = self.get_a_bool("restartLoad=", False, keyVals, validKeys, verb=False)
         ## Engine interface type
         self.engineInterfaceType = self.get_a_string("EngineInterfaceType=", "Files", keyVals, validKeys, verb)
         ## Engine name
