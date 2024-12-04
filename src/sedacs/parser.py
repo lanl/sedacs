@@ -68,6 +68,8 @@ class Input:
         self.restartSave = self.get_a_bool("restartSave=", False, keyVals, validKeys, verb=False)
         ## Flag to load some arrays for restart purposes 
         self.restartLoad = self.get_a_bool("restartLoad=", False, keyVals, validKeys, verb=False)
+        ## Number of adaptive graph iterations
+        self.numGPU = self.get_an_int("NumAdaptiveIter=", 1, keyVals, validKeys, verb)
         ## Engine interface type
         self.engineInterfaceType = self.get_a_string("EngineInterfaceType=", "Files", keyVals, validKeys, verb)
         ## Engine name

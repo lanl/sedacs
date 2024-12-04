@@ -385,8 +385,10 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
 
     device = 'cpu'
 
-    if sdc.fDevice == 'cuda':
+    if sdc.fDevice == 'cuda' and sdc.numGPU == -1:
         num_gpus = torch.cuda.device_count()
+    elif sdc.fDevice == 'cuda':
+        num_gpus = sdc.numGPU
     else:
         num_gpus = node_numranks
 
