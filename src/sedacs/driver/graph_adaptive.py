@@ -53,12 +53,15 @@ __all__ = ["get_singlePoint", "get_adaptiveDM"]
 # @brief Construct a connectivity graph based on constructing density matrices
 # of parts of the system.
 #
-def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu0,
+def get_singlePoint(sdc, eng,  partsPerGPU, partsPerNode, node_id, node_rank, rank, numranks, comm, gpu_global_comm, parts, partsCoreHalo, sy, hindex, mu0,
                     molecule_whole, P, P_contr, graph_for_pairs, graph_maskd):
     # computing DM for core+halo part
     partsPerRank = int(sdc.nparts / numranks)
-    partIndex1 = rank * partsPerRank
-    partIndex2 = (rank + 1) * partsPerRank
+    # partIndex1 = rank * partsPerRank
+    # partIndex2 = (rank + 1) * partsPerRank
+    partIndex1 = (node_rank) * partsPerGPU + node_id*partsPerNode #+ node_id * num_nodes
+    partIndex2 = (node_rank + 1) * partsPerGPU + node_id*partsPerNode #+ node_id * num_nodes
+
 
     graphOnRank = None
     dValOnRank = np.array([])
@@ -132,7 +135,6 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
     torch.save(Q_list, 'Q/Q_list_{}.pt'.format(rank))
     print("Time to save Q_list {:>9.4f} (s)".format(time.perf_counter() - tic))
 
-    #comm.Barrier()
     tic = time.perf_counter()
     full_dVals = None
     full_eVals = None
@@ -146,22 +148,22 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
 
     if mpiOnDebugFlag:
         if rank == 0:
-            eValOnRank_SIZES = np.empty(comm.Get_size(), dtype=int)
+            eValOnRank_SIZES = np.empty(gpu_global_comm.Get_size(), dtype=int)
             
-        comm.Gather(eValOnRank_size, eValOnRank_SIZES, root=0)
+        gpu_global_comm.Gather(eValOnRank_size, eValOnRank_SIZES, root=0)
         if rank == 0:
             full_dVals = np.empty(np.sum(eValOnRank_SIZES), dtype=eValOnRank.dtype)
             full_eVals = np.empty(np.sum(eValOnRank_SIZES), dtype=eValOnRank.dtype)
 
-        comm.Gatherv(dValOnRank, [full_dVals, eValOnRank_SIZES], root=0)
-        comm.Gatherv(eValOnRank, [full_eVals, eValOnRank_SIZES], root=0)
-        eVal_LIST = comm.gather(eValOnRank_list, root=0)
+        gpu_global_comm.Gatherv(dValOnRank, [full_dVals, eValOnRank_SIZES], root=0)
+        gpu_global_comm.Gatherv(eValOnRank, [full_eVals, eValOnRank_SIZES], root=0)
+        eVal_LIST = gpu_global_comm.gather(eValOnRank_list, root=0)
         #Q_LIST = comm.gather(Q_list, root=0)
-        NH_Nh_Hs_LIST = comm.gather(NH_Nh_Hs_list, root=0)
-        I_LIST = comm.gather(I_list, root=0)
-        I_halo_LIST = comm.gather(I_halo_list, root=0)
-        core_indices_in_sub_expanded_LIST = comm.gather(core_indices_in_sub_expanded_list, root=0)
-        Nocc_LIST = comm.gather(Nocc_list, root=0)
+        NH_Nh_Hs_LIST = gpu_global_comm.gather(NH_Nh_Hs_list, root=0)
+        I_LIST = gpu_global_comm.gather(I_list, root=0)
+        I_halo_LIST = gpu_global_comm.gather(I_halo_list, root=0)
+        core_indices_in_sub_expanded_LIST = gpu_global_comm.gather(core_indices_in_sub_expanded_list, root=0)
+        Nocc_LIST = gpu_global_comm.gather(Nocc_list, root=0)
 
         if rank == 0:
 
@@ -202,7 +204,7 @@ def get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreH
     return eVal_LIST, Q_LIST, NH_Nh_Hs_LIST, I_LIST, I_halo_LIST, core_indices_in_sub_expanded_LIST, Nocc_LIST, mu0
 
 def get_singlePointForces(sdc, eng, partsPerGPU, partsPerNode, node_id, node_rank, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, forces, molSysData, P, P_contr, graph_for_pairs, graph_maskd):
-    partsPerRank = int(sdc.nparts / numranks)
+    # partsPerRank = int(sdc.nparts / numranks)
     # partIndex1 = rank * partsPerRank
     # partIndex2 = (rank + 1) * partsPerRank
     partIndex1 = (node_rank) * partsPerGPU + node_id*partsPerNode #+ node_id * num_nodes
@@ -359,7 +361,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     eng.reconstruct_dm = False
     sdc.reconstruct_dm = eng.reconstruct_dm
 
-    node_comm = comm.Split_type(MPI.COMM_TYPE_SHARED)
+    node_comm = comm.Split_type(MPI.COMM_TYPE_SHARED) # local communicator on a node
     node_rank = node_comm.Get_rank()  # Rank within the node
     node_numranks = node_comm.Get_size()
 
@@ -382,10 +384,27 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     primary_comm = comm.Split(color=color, key=rank)
 
     device = 'cpu'
-    if sdc.scfDevice == 'cuda':
-        device_tmp = 'cuda:{}'.format(node_rank)
+
+    if sdc.fDevice == 'cuda':
+        num_gpus = torch.cuda.device_count()
     else:
-        device_tmp = 'cpu'
+        num_gpus = node_numranks
+
+    if num_gpus > node_numranks:
+        num_gpus = node_numranks
+
+    color = 0 if node_rank < num_gpus else MPI.UNDEFINED
+    gpu_comm = comm.Split(color=color, key=rank) # comm for local GPUs. Identical to node_comm if running on CPU.
+    partsPerGPU = int(sdc.nparts / (num_gpus*num_nodes)) # assume all nodes have same number of GPUs
+    partsPerNode = int(sdc.nparts / num_nodes)
+
+    color = 0 if node_rank < num_gpus else MPI.UNDEFINED
+    gpu_global_comm = comm.Split(color=color, key=rank) # global communicator for ranks with GPU. Identical to comm if running on CPU.
+    #gpu_global_rank = gpu_global_comm.Get_rank()  # Rank within the node
+    #gpu_global_numranks = gpu_global_comm.Get_size()
+
+    #print('gpu_global_rank', gpu_global_rank, gpu_global_numranks)
+
 
 
     if torch.get_default_dtype() == torch.float32:
@@ -504,11 +523,6 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         tic = time.perf_counter()
         parts = node_comm.bcast(parts, root=0)
         sdc.nparts = node_comm.bcast(sdc.nparts, root=0)
-        # if rank in primary_ranks:
-        #     print('prim rank', rank)
-        #     P_contr = primary_comm.bcast(P_contr, root=0)
-        #     P_contr_nbytes = primary_comm.bcast(P_contr_nbytes, root=0)
-
         if rank == 0: print("BCST1 {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
 
@@ -662,9 +676,12 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                                     dm.reshape((molecule_whole.nmol, molecule_whole.molsize,4, molecule_whole.molsize,4)) \
                                     .transpose(2,3).reshape(molecule_whole.nmol*molecule_whole.molsize*molecule_whole.molsize,4,4), P_contr, graph_for_pairs, graph_maskd)
                 else:
-                    eValOnRank_list, Q_list, NH_Nh_Hs_list, I_list, I_halo_list, core_indices_in_sub_expanded_list, Nocc_list, mu0 = \
-                    get_singlePoint(sdc, eng, rank, node_rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu0, molecule_whole,
-                                    None, P_contr, graph_for_pairs, graph_maskd)
+                    if node_rank < num_gpus:
+                        eValOnRank_list, Q_list, NH_Nh_Hs_list, I_list, I_halo_list, core_indices_in_sub_expanded_list, Nocc_list, mu0 = \
+                        get_singlePoint(sdc, eng, partsPerGPU, partsPerNode, node_id, node_rank, rank, numranks, comm, gpu_global_comm, parts, partsCoreHalo, sy, hindex, mu0, molecule_whole,
+                                        None, P_contr, graph_for_pairs, graph_maskd)
+                    else:
+                        eValOnRank_list, Q_list, NH_Nh_Hs_list, I_list, I_halo_list, core_indices_in_sub_expanded_list, Nocc_list, mu0 = None, None, None, None, None, None, None, None
 
             if mpiOnDebugFlag: comm.Barrier()
         else:
@@ -800,20 +817,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         if rank == 0: print("t Iter {:>8.2f} (s)".format(time.perf_counter() - TIC_iter))
 
     ### forces calculation ###
-    tic = time.perf_counter()
-    if sdc.fDevice == 'cuda':
-        num_gpus = torch.cuda.device_count()
-    else:
-        num_gpus = node_numranks
-
-    if num_gpus > node_numranks:
-        num_gpus = node_numranks
-
-    color = 0 if node_rank < num_gpus else MPI.UNDEFINED
-    gpu_comm = comm.Split(color=color, key=rank)
-    partsPerGPU = int(sdc.nparts / (num_gpus*num_nodes))
-    partsPerNode = int(sdc.nparts / num_nodes)
-    
+    tic = time.perf_counter()    
     if node_rank < num_gpus:
         if node_rank == 0:
             primary_comm.Bcast([P_contr.cpu().numpy(), MPI.DOUBLE], root=0)
