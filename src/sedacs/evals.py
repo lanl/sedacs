@@ -21,7 +21,7 @@ __all__ = ["get_eVals"]
 # @param ham Hamiltonian matrix
 # @verbose Verbosity
 #
-def get_eVals(eng, sdc, sy, nocc, ham, coords, symbols, types, Tel, mu0,
+def get_eVals(eng, sdc, sy, ham, coords, symbols, types, Tel, mu0,
               coreSize, subSy, subSyCore,
               partIndex, partCoreHaloIndex, verbose):
     if eng.interface == "None":

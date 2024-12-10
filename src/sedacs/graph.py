@@ -6,6 +6,7 @@ Some graph functions
 import sys
 
 import numpy as np
+import torch
 
 global nxLib
 try:
@@ -457,4 +458,76 @@ def get_random_adjacency_matrix(n_nodes, density = .1, degreeOnDiagonal = False)
         np.fill_diagonal(gInt, diag)
 
     return gInt
+
+# Update density matrix contraction based on the new graph of communities
+# @brief.
+# @param sy (obj): sedacs system of atoms.
+# @param P_contr (tensor): Old density matrix.
+# @param graph_for_pairs (list): old graph of communities.
+# @param new_graph_for_pairs (list): new graph of communities.
+def update_dm_contraction(sy, P_contr, graph_for_pairs, new_graph_for_pairs, device):
+    P_contr_new = torch.zeros_like(P_contr, device=device)
+    for i in range(sy.nats):
+        tmp1 = graph_for_pairs[i][1:graph_for_pairs[i][0]+1]
+        tmp2 = new_graph_for_pairs[i][1:new_graph_for_pairs[i][0]+1]
+        pos = np.searchsorted(tmp1, tmp2)
+        # Ensure the indices are within bounds
+        pos = np.clip(pos, a_min=0, a_max=len(tmp1) - 1)
+        # Check if the positions are valid and match
+        mask_isin_n_in_o = (pos < len(tmp1)) & (tmp1[pos] == tmp2)
+        #print('isin',(np.isin(tmp2, tmp1) == mask_isin_n_in_o).all())
+
+        pos = np.searchsorted(tmp2, tmp1)
+        # Ensure the indices are within bounds
+        #pos = np.clip(pos, max=len(tmp2) - 1)
+        # Check if the positions are valid and match
+        mask_isin_o_in_n = (pos < len(tmp2)) & (tmp2[pos] == tmp1)
+        #print('PC', (np.isin(tmp1, tmp2) == mask_isin_o_in_n).all())
+
+        P_contr_new[:,i][  :new_graph_for_pairs[i][0]  ][   mask_isin_n_in_o   ] = \
+            P_contr[:,i][:graph_for_pairs[i][0]][   mask_isin_o_in_n   ] 
+    P_contr[:] = P_contr_new[:]
+    del P_contr_new
+
+# Get a graph where each atom has all atoms from its CH as its neighbors, including itself.
+# @brief .
+# @param sdc (obj): sedacs driver.
+# @param sy (obj): sedacs system of atoms.
+# @param fullGraph (list): connectivity graph.
+# @param parts (list): list of cores.
+# @param partsCoreHalo (list): list of cores+halos.
+# @return np.ndarray(n_nodes, MaxDeg) of CH.
+def get_ch_graph(sdc, sy, fullGraph, parts, partsCoreHalo):
+    new_graph_for_pairs = np.array(fullGraph.copy())
+    for i in range(sy.nats):
+        for sublist_idx in range(sdc.nparts):
+            if i in parts[sublist_idx]:
+                new_graph_for_pairs[i, 0] = len(partsCoreHalo[sublist_idx])
+                new_graph_for_pairs[i, 1:new_graph_for_pairs[i][0]+1] = partsCoreHalo[sublist_idx]
+                break
+    return new_graph_for_pairs
+
+# Get a mask of diagonal blocks for contracted density matrix.
+# @brief .
+# @param sdc (obj): sedacs driver.
+# @param sy (obj): sedacs system of atoms.
+# @param new_graph_for_pairs (list): graph of communities.
+# @return np.ndarray(n_atoms).
+def get_maskd(sdc, sy, graph_for_pairs):
+    # Initialize an array to hold graph_maskd values
+    graph_maskd = []
+    # Track the position counter across rows in a vectorized way
+    counter = 0
+    for j in range(sy.nats):
+        # Get neighbors for node j from graph_for_pairs
+        neighbors = graph_for_pairs[j][1:graph_for_pairs[j][0] + 1]
+        # Find positions where `i == j` (self-loops) in the neighbors list
+        mask = np.where(neighbors == j)[0]
+        # Calculate the absolute position for masked values and store them
+        graph_maskd.extend(counter + mask)
+        # Update the counter for the next row, adding the degree difference
+        counter += len(neighbors) + int(sdc.maxDeg - graph_for_pairs[j][0])
+    # Convert graph_maskd to a NumPy array
+    graph_maskd = np.array(graph_maskd)
+    return graph_maskd
 

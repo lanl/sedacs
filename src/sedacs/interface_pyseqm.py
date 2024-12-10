@@ -461,7 +461,7 @@ def get_eVals_pyseqm(H, Nocc, Tel, mu0, coreSize, core_ham_dim, molecule=None, v
   return E_val, dVals.cpu().numpy(), Q, [molecule.nHeavy, molecule.nHydro, H.shape[-1]]
 
 
-def get_densityMatrix_renormalized_pyseqm(E_val, Q, Tel, mu0, NH_Nh_Hs, Nocc):
+def get_densityMatrix_renormalized_pyseqm(E_val, Q, Tel, mu0, NH_Nh_Hs):
   
   kB = 8.61739e-5 # eV/K, kB = 6.33366256e-6 Ry/K, kB = 3.166811429e-6 Ha/K, #kB = 3.166811429e-6 #Ha/K
   beta = 1./(kB*Tel)

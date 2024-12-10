@@ -25,31 +25,22 @@ __all__ = ["get_density_matrix"]
 # @param ham Hamiltonian matrix
 # @verbose Verbosity
 #
-def get_density_matrix_renorm(eng, Tel, mu0, dm, P_contr, graph_for_pairs,
-                              eVals, Q, NH_Nh_Hs, I, core_indices_in_sub_expandedm, nocc, verbose=False):
+def get_density_matrix_renorm(eng, Tel, mu0, P_contr, graph_for_pairs,
+                              eVals, Q, NH_Nh_Hs, core_indices_in_sub_expandedm, verbose=False):
     if eng.interface == "None":
         print("ERROR!!! - Write your own Hamiltonian")
 
     # Tight interface using modules or an external code compiled as a library
     elif eng.interface == "Module":
         # We will call proxyA directly as it will be loaded as a module.
-        rho = get_density_matrix_modules(eng, nocc, ham, verb=False)
+        rho = get_density_matrix_modules(eng, ham, verb=False)
     elif eng.interface == "PySEQM":
         if(PYSEQM == False):
             print("ERROR: No PySEQM installed")
             exit()
-        rho = get_densityMatrix_renormalized_pyseqm(eVals, Q, Tel, mu0, NH_Nh_Hs, nocc)
-        if eng.reconstruct_dm:
-            maxDif = torch.max(torch.abs(dm[:,I[0], I[1]] - rho[:,core_indices_in_sub_expandedm])).numpy()
-            sumDif = torch.sum(torch.abs(dm[:,I[0], I[1]] - rho[:,core_indices_in_sub_expandedm])).numpy()
-            print(" MAX |\u0394DM_ij|: {:>10.7f}".format(maxDif))
-            print(" \u03A3   |\u0394DM_ij|: {:>10.7f}".format(sumDif))
-            alpha = 0.16
-            dm[:,I[0], I[1]] = (1-alpha)*dm[:,I[0], I[1]] + alpha*rho[:,core_indices_in_sub_expandedm]
-
-        else:
-            maxDif = None
-            sumDif = None
+        rho = get_densityMatrix_renormalized_pyseqm(eVals, Q, Tel, mu0, NH_Nh_Hs)
+        maxDif = None
+        sumDif = None
 
     else:
         print("ERROR!!!: Interface type not recognized. Use any of the following: Module,File,Socket,MDI")
