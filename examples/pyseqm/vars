@@ -1,6 +1,0 @@
-#!/bin/bash
-THIS_PATH=`pwd`
-PROXYA_PATH=/home/maxim/Projects/SEDACS_1/sedacs
-export PYTHONPATH=$PROXYA_PATH
-export PYTHONWARNINGS="ignore:Unverified HTTPS request"
-
