@@ -36,6 +36,13 @@ conda create -n sedacs  pytorch::pytorch torchvision torchaudio openmpi mpi4py s
 ```shell
 conda create -n sedacs pytorch torchvision torchaudio pytorch-cuda=11.8 openmpi mpi4py scipy jupyter nb_conda_kernels python=3.10 -c pytorch -c nvidia
 ```
+or
+```shell
+git clone git@gitlab.lanl.gov:sedacs/sedacs.git
+cd sedacs
+pip install .
+```
+
 
 ## Folder structure
 
