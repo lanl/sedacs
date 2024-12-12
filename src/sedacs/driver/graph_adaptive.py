@@ -56,7 +56,7 @@ def get_singlePoint(sdc, eng,  partsPerGPU, partsPerNode, node_id, node_rank, ra
     mu0: chemical potential
     molecule_whole: pyseqm molecule object
     P_contr: contracted dm. (sy.nats, sdc.maxDeg, 4,4)
-    graph_for_pairs: graph of communities. E.g. graph_for_pairs[i] is a whole CH community in which atom i is, including itself. graph_for_pairs[i][0] is a community size
+    graph_for_pairs: graph of communities. E.g. graph_for_pairs[i] is a whole CH community in which atom i is a core atom, including itself. graph_for_pairs[i][0] is a community size
     graph_maskd: diagonal mask for P_contr
     '''
     ### Instead of this:
@@ -204,7 +204,7 @@ def get_singlePointForces(sdc, eng, partsPerGPU, partsPerNode, node_id, node_ran
     molecule_whole: pyseqm molecule object
     P: legacy, none
     P_contr: contracted dm. (sy.nats, sdc.maxDeg, 4,4)
-    graph_for_pairs: graph of communities. E.g. graph_for_pairs[i] is a whole CH community in which atom i is, including itself. graph_for_pairs[i][0] is a community size
+    graph_for_pairs: graph of communities. E.g. graph_for_pairs[i] is a whole CH community in which atom i is a core atom, including itself. graph_for_pairs[i][0] is a community size
     graph_maskd: diagonal mask for P_contr
     '''
     partIndex1 = (node_rank) * partsPerGPU + node_id*partsPerNode
@@ -253,7 +253,7 @@ def get_singlePointDM(sdc, eng, rank, node_numranks, node_comm, parts, partsCore
     hindex: orbital index for each atom in the system
     mu0: chemical potential
     P_contr: contracted dm. (sy.nats, sdc.maxDeg, 4,4)
-    graph_for_pairs: graph of communities. E.g. graph_for_pairs[i] is a whole CH community in which atom i is, including itself. graph_for_pairs[i][0] is a community size
+    graph_for_pairs: graph of communities. E.g. graph_for_pairs[i] is a whole CH community in which atom i is a core atom, including itself. graph_for_pairs[i][0] is a community size
     eValOnRank_list: eigenvalues of CHs. Here, for all CHs.
     Q_list: eigenvectors of CHs. Here, only those used by this rank are present.
     NH_Nh_Hs_list: list of [number_of_heavy_atoms, number_of_hydrogens, dim_of_coreHalo_ham]. Here, for all CHs.
