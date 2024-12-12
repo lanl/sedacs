@@ -782,5 +782,5 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             forceNuc = -molSysData.molecule_whole.coordinates.grad.detach()
             molSysData.molecule_whole.coordinates.grad.zero_()
             print("Time to get nuclear forces {:>8.2f} (s)".format(time.perf_counter() - tic))
-            np.save('forces.np', (forces+forceNuc.cpu().numpy()[0]), )
+            np.save('forces', (forces+forceNuc.cpu().numpy()[0]), )
     ### END FORCES CALC ###

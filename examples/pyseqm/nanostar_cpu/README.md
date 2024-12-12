@@ -11,5 +11,5 @@ Then run the calculation on two ranks.
 ```shell
 mpirun -bind-to none -n 2 python -u main.py > out.out 2>&1
 ```
-Nanostar will be partitioned into 4 parts. Each rank will process 2 parts.
-Note that NumParts in the input file must be devisible by a number of ranks (```shell-n #```).
+Nanostar will be partitioned into 4 parts, as specified by ```NumParts``` keyword. Each rank will process 2 parts.
+Note that NumParts in the input file must be devisible by a number of ranks ```-n #```.
