@@ -22,19 +22,6 @@ import os
 
 torch.cuda.empty_cache()
 
-directory_path = "graphs"
-# Check if the directory exists
-if not os.path.exists(directory_path):
-    # Create the directory
-    os.makedirs(directory_path)
-
-directory_path = "Q"
-# Check if the directory exists
-if not os.path.exists(directory_path):
-    # Create the directory
-    os.makedirs(directory_path)
-
-
 tic = time.perf_counter()
 # Pass arguments from comand line
 args = get_args()

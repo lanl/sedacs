@@ -54,8 +54,6 @@ class Input:
         self.Tel = self.get_a_real("Tel=",0.0,keyVals,validKeys,verb)
         ## do scf on cpu or gpu 
         self.scfDevice = self.get_a_string("scfDevice=", "cpu", keyVals, validKeys, verb)
-        ## do forces on cpu or gpu
-        self.fDevice = self.get_a_string("fDevice=", "cuda", keyVals, validKeys, verb)
         ## Flag to do forces calculation 
         self.doForces = self.get_a_bool("doForces=", False, keyVals, validKeys, verb=False)
         ## calculate i-j pairs via vectorization (fast but memory consuming) or via loop
@@ -70,6 +68,8 @@ class Input:
         self.restartLoad = self.get_a_bool("restartLoad=", False, keyVals, validKeys, verb=False)
         ## When rumming on GPU, set the number of GPUs per node manually. Use in case of inhomogeneous nodes and set the number to the minimum number of GPUs on one node. Has no effect on CPU runs.
         self.numGPU = self.get_an_int("numGPU=", -1, keyVals, validKeys, verb)
+        ## Flag to save core and choreHalo geomatries 
+        self.writeGeom = self.get_a_bool("writeGeom=", False, keyVals, validKeys, verb=False)
         ## Engine interface type
         self.engineInterfaceType = self.get_a_string("EngineInterfaceType=", "Files", keyVals, validKeys, verb)
         ## Engine name

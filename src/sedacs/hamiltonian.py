@@ -9,7 +9,6 @@ import time
 from sedacs.interface_files import get_hamiltonian_files
 from sedacs.interface_modules import get_hamiltonian_module
 from sedacs.interface_pyseqm import get_fock_pyseqm_2, get_molecule_pyseqm
-from sedacs.energy import get_eElec
 from seqm.seqm_functions.two_elec_two_center_int import two_elec_two_center_int as TETCI
 from seqm.seqm_functions.hcore import hcore
 from seqm.seqm_functions.pack import pack
@@ -48,10 +47,24 @@ def print_memory_usage(rank, node_rank, message):
     print(f"{message} | Rank: {rank}, Node Rank: {node_rank}, Memory Usage: {mem_info.rss / (1024 ** 2):.2f} MB")
 
 def get_hamiltonian(sdc, eng, coords, types, symbols,
-                    partsIndex, partsCoreHaloIndex, molecule_whole, P, P_contr, graph_for_pairs, graph_maskd, core_indices_in_sub_expanded, doForces = False,
-                    verbose=False):
-    # Call the proper interface
-    # If there is no interface, one should write its own Hamiltonian
+                    partsIndex, partsCoreHaloIndex, molecule_whole, P_contr, graph_for_pairs, graph_maskd, core_indices_in_sub_expanded, ham_timing, doForces = False, verbose=False):
+    '''
+    Function constructs Fock matrix. Calculates electronic energy and electronic forces if doForces. If doForces==False, just electronic energy.
+    sdc:
+    eng:
+    coords: coordanates of CH, list(n_atoms, 3)
+    types: atoms types
+    symbols: symbols corresponding to atoms types
+    partsIndex: core
+    partsCoreHaloIndex: core+halo
+    partsCoreHalo: list of core+halo
+    molecule_whole: pyseqm molecule object for the whole system
+    P_contr: contracted dm. (sy.nats, sdc.maxDeg, 4,4)
+    graph_for_pairs: graph of communities. E.g. graph_for_pairs[i] is a whole CH community in which atom i is, including itself. graph_for_pairs[i][0] is a community size
+    graph_maskd: diagonal mask for P_contr
+    core_indices_in_sub_expanded_list: indices of core columns in CH. E.g., CH[i] contains atoms [0,1,2,3], core atoms are [1,3], 4 AOs per atom. Then, core_indices_in_sub_expanded_list[i] is [4,5,6,7, 12,13,14,15].
+    doForces: flag for forces computation. backprop.
+    '''
     if eng.interface == "None":
         raise ValueError("ERROR!!! - Write your own Hamiltonian.")
     # Tight interface using modules or an external code compiled as a library
@@ -69,25 +82,26 @@ def get_hamiltonian(sdc, eng, coords, types, symbols,
         return get_hamiltonian_files(eng, coords, types, symbols, verb=verbose)
     elif eng.interface == "PySEQM":
         tic = time.time()
-        block_indices = torch.tensor(partsCoreHaloIndex, dtype=eng.torch_int_dt, device=P_contr.device)
+        block_indices = torch.tensor(partsCoreHaloIndex, dtype=eng.torch_int_dt, device=P_contr.device) # core+halo as tensor
         # Define the length of block indices
-        block_size = torch.tensor(len(block_indices), device = P_contr.device, dtype=eng.torch_int_dt)
+        block_size = torch.tensor(len(block_indices), device = P_contr.device, dtype=eng.torch_int_dt) # size of core+halo
         # Vectorize diagonal indices
-        maskd_sub = torch.arange(0, block_size * block_size, block_size + 1, device = P_contr.device)  # Diagonal indices
+        maskd_sub = torch.arange(0, block_size * block_size, block_size + 1, device = P_contr.device)  # Diagonal indices of core+halo hamiltonian
         # Vectorize upper triangle indices
         mask_sub = torch.cat([torch.arange(i * block_size + i + 1, (i + 1) * block_size, device = P_contr.device) for i in range(block_size)])
         #mask_sub_lower_TEST = torch.cat([torch.arange(i * block_size + i-1, i * block_size-1, -1) for i in range(block_size-1, 0,-1)])
 
-        if doForces:
-            molSub = get_molecule_pyseqm(eng, molecule_whole.coordinates[:,partsCoreHaloIndex], symbols, types, device=P_contr.device)[0]#.to(P_contr.device)
+        if doForces: # pyseqm molecule object for core+halo
+            molSub = get_molecule_pyseqm(eng, molecule_whole.coordinates[:,partsCoreHaloIndex], symbols, types, device=P_contr.device)[0]
         else:
             with torch.no_grad():
-                molSub = get_molecule_pyseqm(eng, molecule_whole.coordinates[:,partsCoreHaloIndex], symbols, types, device=P_contr.device)[0]#.to(P_contr.device)
-        M_sub, _, __, ___ = hcore(molSub, doTETCI=False) # non-diagonal h1elec
+                molSub = get_molecule_pyseqm(eng, molecule_whole.coordinates[:,partsCoreHaloIndex], symbols, types, device=P_contr.device)[0]
+        M_sub, _, __, ___ = hcore(molSub, doTETCI=False) # off-diagonal h1elec
         del _, __, ___
-        print("t: h1elNonDi {:>7.3f} |".format(time.time() - tic), end=" ")
+        ham_timing['h1elNonDi'] = time.time() - tic
+        #print("t: h1elNonDi {:>7.3f} |".format(time.time() - tic), end=" ")
 
-        if eng.use_pyseqm_lt: # if pyseqm "large tensors" are pre-computed (e.g. idxi, idxj, masks), these will be sliced and used
+        if eng.use_pyseqm_lt: # if pyseqm "large tensors" are pre-computed (e.g. idxi, idxj, masks), these will be sliced and used. Not recommended for large systems
             # subIndsUnion_i = torch.isin(molecule_whole.idxi, block_indices)
             # subIndsUnion_j = torch.isin(molecule_whole.idxj, block_indices)
             # subIndsUnion = subIndsUnion_i + subIndsUnion_j
@@ -118,7 +132,8 @@ def get_hamiltonian(sdc, eng, coords, types, symbols,
             subIndsUnion = subIndsUnion_i + subIndsUnion_j
             del subIndsUnion_i, subIndsUnion_j, valid_top_row
             #subIndsUnion = torch.isin(molecule_whole.idxi, block_indices) + torch.isin(molecule_whole.idxj, block_indices)
-            print("subIndsUnion {:>7.3f} |".format(time.time() - tic), end=" ")
+            ham_timing['subIndsUnion'] = time.time() - tic
+            #print("subIndsUnion {:>7.3f} |".format(time.time() - tic), end=" ")
 
             tic = time.time() # compute 2c2e and diagonal h1elec
             coulInts_test, e1b, e2a, _, _ = TETCI(molecule_whole.const, molecule_whole.idxi[subIndsUnion], molecule_whole.idxj[subIndsUnion],
@@ -128,9 +143,11 @@ def get_hamiltonian(sdc, eng, coords, types, symbols,
                 molecule_whole.parameters['g_ss'], molecule_whole.parameters['g_pp'], molecule_whole.parameters['g_p2'], molecule_whole.parameters['h_sp'],\
                 molecule_whole.parameters['F0SD'], molecule_whole.parameters['G2SD'], molecule_whole.parameters['rho_core'],\
                 molecule_whole.alp, molecule_whole.chi, molecule_whole.method)
-            print("TETCI&DiI {:>7.3f} |".format(time.time() - tic), end=" ")
+            ham_timing['TETCI&DiI'] = time.time() - tic
+            #print("TETCI&DiI {:>7.3f} |".format(time.time() - tic), end=" ")
+            
         
-        else: # otherwise, compute only relevant idxi, idxj, xij, rij for this coreHalo
+        else: # otherwise, compute only relevant idxi, idxj, xij, rij for this core+halo
             tic = time.time()
             dtypeTEST = molecule_whole.Z.dtype # torch.long
             atom_index = torch.arange(molecule_whole.nmol*molecule_whole.molsize, device=P_contr.device,dtype=torch.int64)
@@ -192,7 +209,8 @@ def get_hamiltonian(sdc, eng, coords, types, symbols,
             x_ij = -paircoord / pairdist.unsqueeze(1)
             del paircoord, pairdist
             
-            print("idxi&idxj {:>7.3f} |".format(time.time() - tic), end=" ")
+            ham_timing['idxi&idxj'] = time.time() - tic
+            #print("idxi&idxj {:>7.3f} |".format(time.time() - tic), end=" ")
 
             tic = time.time() # compute 2c2e and diagonal h1elec
             coulInts_test, e1b, e2a, _, _ = TETCI(molecule_whole.const, iii, jjj,
@@ -245,7 +263,8 @@ def get_hamiltonian(sdc, eng, coords, types, symbols,
             #     molecule_whole.method,
             #     use_reentrant=True
             # )
-            print("TETCI&DiI {:>7.3f} |".format(time.time() - tic), end=" ")
+            ham_timing['TETCI&DiI'] = time.time() - tic
+            #print("TETCI&DiI {:>7.3f} |".format(time.time() - tic), end=" ")
         
         tic = time.time()
         idx_to_idx_mapping = {value: idx for idx, value in enumerate(block_indices)}
@@ -259,12 +278,14 @@ def get_hamiltonian(sdc, eng, coords, types, symbols,
             in_block_mask[block_indices]=True
             new_idxi = lookup_tensor[molecule_whole.idxi[in_block_mask[molecule_whole.idxi].to(torch.bool)]]
             new_idxj = lookup_tensor[molecule_whole.idxj[in_block_mask[molecule_whole.idxj].to(torch.bool)]]
-            print("diIndsExp {:>7.3f} |".format(time.time() - tic), end=" ")
+            ham_timing['diIndsExp'] = time.time() - tic
+            #print("diIndsExp {:>7.3f} |".format(time.time() - tic), end=" ")
             tic = time.time()
             # add diagonal to h1elec
             M_sub.index_add_(0,molSub.maskd[new_idxi], e1b[torch.isin(molecule_whole.idxi[subIndsUnion], block_indices)])
             M_sub.index_add_(0,molSub.maskd[new_idxj], e2a[torch.isin(molecule_whole.idxj[subIndsUnion], block_indices)])
-            print("h1elDiUpd {:>7.3f} |".format(time.time() - tic), end=" ")
+            ham_timing['h1elDiUpd'] = time.time() - tic
+            #print("h1elDiUpd {:>7.3f} |".format(time.time() - tic), end=" ")
         else:
             # Calculate the repeated counts for each index in block_indices
             repeats = molecule_whole.molsize - 1 - block_indices
@@ -278,7 +299,8 @@ def get_hamiltonian(sdc, eng, coords, types, symbols,
             # Generate slices from top_row based on start_indices for each row
             new_jjj_list = ([top_row[start:] for start in start_indices])
             new_jjj = torch.cat(new_jjj_list)
-            print("diIndsExp {:>7.3f} |".format(time.time() - tic), end=" ")
+            ham_timing['diIndsExp'] = time.time() - tic
+            #print("diIndsExp {:>7.3f} |".format(time.time() - tic), end=" ")
             ### $$$ index_add_ is very slow!
 
             tic = time.time()
@@ -292,7 +314,8 @@ def get_hamiltonian(sdc, eng, coords, types, symbols,
             M_sub.index_add_(0,molSub.maskd[new_iii], e1b[idxi_sub_ovrlp_with_rest])
             M_sub.index_add_(0,molSub.maskd[new_jjj], e2a[torch.isin(jjj, block_indices)])
             del repeats, new_iii, new_jjj_list, new_jjj, top_row, start_indices, pos, idxi_sub_ovrlp_with_rest
-            print("h1elDiUpd {:>7.3f} |".format(time.time() - tic), end=" ")
+            ham_timing['h1elDiUpd'] = time.time() - tic
+            #print("h1elDiUpd {:>7.3f} |".format(time.time() - tic), end=" ")
             
         del e1b, e2a, _
         
@@ -321,7 +344,8 @@ def get_hamiltonian(sdc, eng, coords, types, symbols,
 
         P_sub_from_contr = P_sub_from_contr.reshape(len(block_indices)*len(block_indices), 4,4)
         P_diag_contr = P_contr.transpose(0,1).reshape(molecule_whole.molsize*(len(graph_for_pairs[0])-1), 4,4)[graph_maskd]#.transpose(0,1)
-        print("P_sub_from_contr {:>7.3f} |".format(time.time() - tic), end=" ")
+        ham_timing['P_sub_from_contr'] = time.time() - tic
+        #print("P_sub_from_contr {:>7.3f} |".format(time.time() - tic), end=" ")
         tic = time.time()
 
         if eng.use_pyseqm_lt:
@@ -362,41 +386,42 @@ def get_hamiltonian(sdc, eng, coords, types, symbols,
             del subIndsUnion, new_idxi, new_idxj, in_block_mask
         else:
             del iii, jjj, r_ij, x_ij
-        print("FulSubFock {:>7.3f} |".format(time.time() - tic), end=" ")
+        ham_timing['FulSubFock'] = time.time() - tic
+        #print("FulSubFock {:>7.3f} |".format(time.time() - tic), end=" ")
 
-        if doForces:
+        ### CALC Eelec ###
+        tic = time.time()
+        h1elec_sub = M_sub.reshape(molSub.nmol, molSub.molsize, molSub.molsize,4,4) \
+                .transpose(2,3) \
+                .reshape(molSub.nmol, 4*molSub.molsize, 4*molSub.molsize) 
+        h1elec_sub = h1elec_sub.triu()+h1elec_sub.triu(1).transpose(1,2)
+
+        dm_contr = P_sub_from_contr.reshape(molSub.nmol, molSub.molsize, molSub.molsize,4,4) \
+                .transpose(2,3) \
+                .reshape(molSub.nmol, 4*molSub.molsize, 4*molSub.molsize)
+        eElec_contr  = 0.5*(dm_contr[:,:,core_indices_in_sub_expanded]*(h1elec_sub[:,:,core_indices_in_sub_expanded]+ham_contr[:,:,core_indices_in_sub_expanded])).sum()
+        del dm_contr, h1elec_sub, P_sub_from_contr, M_sub, molSub
+        ham_timing['En'] = time.time() - tic
+        #print("En {:>7.3f} (s)|".format(time.time() - tic), end=" ")
+        ### END CALC Eelec ###
+
+        if doForces:            
             tic = time.time()
-            h1elec_sub = M_sub.reshape(molSub.nmol, molSub.molsize, molSub.molsize,4,4) \
-                    .transpose(2,3) \
-                    .reshape(molSub.nmol, 4*molSub.molsize, 4*molSub.molsize) 
-            h1elec_sub = h1elec_sub.triu()+h1elec_sub.triu(1).transpose(1,2)
-
-            dm_contr = P_sub_from_contr.reshape(molSub.nmol, molSub.molsize, molSub.molsize,4,4) \
-                    .transpose(2,3) \
-                    .reshape(molSub.nmol, 4*molSub.molsize, 4*molSub.molsize)
-            
-            eElec_contr  = 0.5*(dm_contr[:,:,core_indices_in_sub_expanded]*(h1elec_sub[:,:,core_indices_in_sub_expanded]+ham_contr[:,:,core_indices_in_sub_expanded])).sum()
-            del dm_contr, h1elec_sub, ham_contr, P_sub_from_contr, M_sub, molSub
             L = eElec_contr.sum()
-            print("En {:>7.3f} |".format(time.time() - tic), end=" ")
-            tic = time.time()
-            #del dm_contr, P_sub_from_contr, h1elec_sub, ham_contr, molSub
             torch.cuda.empty_cache()
-            #L.backward(retain_graph=True)
             if molecule_whole.coordinates.requires_grad:
                 L.backward()
                 force = -molecule_whole.coordinates.grad.detach()[0].cpu().numpy()
                 molecule_whole.coordinates.grad.zero_()
             else:
                 force = molecule_whole.coordinates[0].cpu().numpy() * 0.0
-            
-            del  L
-            print("Force {:>7.3f} |".format(time.time() - tic), end=" ")
+            del  L, ham_contr
+            ham_timing['Force'] = time.time() - tic
+            #print("Force {:>7.3f} |".format(time.time() - tic), end=" ")
             return force, eElec_contr.detach().cpu().numpy()
         else:
-            del M_sub, P_sub_from_contr, molSub
             #print_memory_usage(len(partsIndex), 99, "HAM memory usage")
-        return ham_contr
+            return ham_contr, eElec_contr.detach().cpu().numpy()
 
     raise ValueError(f"ERROR!!!: Interface type not recognized: '{eng.interface}'. " +
                      f"Use any of the following: Module,File,Socket,MDI")

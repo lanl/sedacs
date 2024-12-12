@@ -1,33 +1,8 @@
-from sedacs.interface_pyseqm import get_elec_energy_pyseqm, get_nucAB_energy_pyseqm, get_total_energy_pyseqm
+from sedacs.interface_pyseqm import get_nucAB_energy_pyseqm, get_total_energy_pyseqm
 import torch
 
 __all__ = ["get_fock"]
 
-
-## Build the density matrix.
-# @brief This will build a density matrix. Typically this will be done interfacing with an engine.
-# @param eng Engine object. See sdc_engine.py for a full explanation
-# @param nocc Number of occupied states
-# @param ham Hamiltonian matrix
-# @verbose Verbosity
-#
-def get_eElec(eng, DM, F, Hcore, doTriu=True):
-    if eng.interface == "None":
-        print("ERROR!!! - Write your own Fock")
-
-    # Tight interface using modules or an external code compiled as a library
-    elif eng.interface == "Module":
-        # We will call proxyA directly as it will be loaded as a module.
-        print("ERROR!!! - Write your own Fock")
-        exit()
-    elif eng.interface == "PySEQM":
-
-        return get_elec_energy_pyseqm(DM, F, Hcore, doTriu=doTriu)
-        
-    else:
-        print("ERROR!!!: Interface type not recognized. Use any of the following: Module,File,Socket,MDI")
-        exit()
-    return rho
 
 def get_eNuc(eng, obj):
     if eng.interface == "None":
@@ -69,8 +44,6 @@ def get_eNuc(eng, obj):
                                          obj.molecule_whole.idxi, obj.molecule_whole.idxj, obj.molecule_whole.rij, \
                                          obj.rho0xi_whole, obj.rho0xj_whole, obj.molecule_whole.alp, obj.molecule_whole.chi,
                                          gam, obj.molecule_whole.method, parnuc)
-
-
         
     else:
         print("ERROR!!!: Interface type not recognized. Use any of the following: Module,File,Socket,MDI")
@@ -89,9 +62,6 @@ def get_eTot(eng, obj, eNucAB, eElec):
     elif eng.interface == "PySEQM":
         eTot, eNuc = get_total_energy_pyseqm(obj.molecule_whole.nmol, obj.molecule_whole.pair_molid, eNucAB, eElec)
         return eTot[0], eNuc[0]
-
-
-        
     else:
         print("ERROR!!!: Interface type not recognized. Use any of the following: Module,File,Socket,MDI")
         exit()

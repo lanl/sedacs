@@ -6,8 +6,7 @@ this will be done interfacing with an engine.
 
 import sys
 
-from sedacs.interface_modules import get_density_matrix_modules
-from sedacs.interface_pyseqm import get_molecule_pyseqm, get_coreHalo_ham_inds, get_eVals_pyseqm, pyseqmObjects
+from sedacs.interface_pyseqm import pyseqmObjects
 import numpy as np
 
 __all__ = ["get_eVals"]

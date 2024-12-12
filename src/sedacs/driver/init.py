@@ -135,7 +135,7 @@ def init(args):
             comm.Barrier()
 
         toc = time.perf_counter()
-        print("Time for build_nlist", toc - tic, "(s)")
+        if rank == 0: print("Time for build_nlist", toc - tic, "(s)")
         if rank == 0:
             with open("neighborinfo.txt", "w") as of:
                 for kk in range(sy.nats):
@@ -152,17 +152,6 @@ def init(args):
                 sy.coords, sy.latticeVectors, sdc.rcut, rank=rank, numranks=numranks, verb=False
             )
 
-
-    ## Uncomment for printing atom's 1234 neighbor list
-    #AtToPrint = 1234
-    #subSy = System(nl[AtToPrint, 0])
-    #subSy.symbols = sy.symbols
-    #subSy.coords, subSy.types = extract_subsystem(
-    #    sy.coords, sy.types, sy.symbols, nl[AtToPrint, 1 : nl[AtToPrint, 0] + 1]
-    #)
-    #if rank == 0:
-    #    write_xyz_coordinates("subSyNL.xyz", subSy.coords, subSy.types, subSy.symbols)
-
     # Get initial graph (from a neighbor list)
     if rank == 0:
         print('!!!!')
@@ -170,13 +159,10 @@ def init(args):
             print('Creating overlap matrix for initial graph.')
             tic = time.perf_counter()
             
-            #sdc.overlap_whole = get_overlap(eng, sy.coords, sy.symbols, sy.types, hindex)
+            sdc.overlap_whole = get_overlap(eng, sy.coords, sy.symbols, sy.types, hindex)
             #torch.save(sdc.overlap_whole, 'overlap_whole.pt')
             #sdc.overlap_whole = torch.load('overlap_whole.pt')
-            # sdc.overlap_whole[:(7+9)*4] *= 0.25 # 0.15
-            # sdc.overlap_whole[(7+9)*4:][:, :(7+9)*4] *= 0.25
             
-            #sdc.overlap_whole = sdc.overlap_whole@sdc.overlap_whole
             print("Time to get overlap", time.perf_counter() - tic,"(s)")
             graphOnRank = None
             print('Creating initial graph.')
@@ -186,9 +172,6 @@ def init(args):
             #del sdc.overlap_whole
 
         else:
-            #sdc.overlap_whole = torch.load('overlap_whole.pt')
-            #sdc.overlap_whole = get_overlap(eng, sy.coords, sy.symbols, sy.types, hindex)
-
             graphNL = get_initial_graph(sy.coords, nl, sdc.rcut, sdc.maxDeg, True)
     else:
         graphNL = None

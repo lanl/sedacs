@@ -22,6 +22,7 @@ __all__ = ["get_eVals"]
 # @verbose Verbosity
 #
 def get_eVals(eng, sdc, sy, ham, coords, symbols, types, Tel, mu0,
+              core_indices_in_sub, core_indices_in_sub_expanded, hindex_sub,
               coreSize, subSy, subSyCore,
               partIndex, partCoreHaloIndex, verbose):
     if eng.interface == "None":
@@ -50,26 +51,18 @@ def get_eVals(eng, sdc, sy, ham, coords, symbols, types, Tel, mu0,
             4 ,4 ,4 ,4 ,4 ,4 ,4 , 4,  \
             4 ,4 ,4 ,4 ,4 ,4 ,4 , 4,  \
 
-
         molecule_sub, occ = get_molecule_pyseqm(sdc, coords, symbols, types, do_large_tensors=False)
-
-        symbol_to_index = {symbol: idx for idx, symbol in enumerate(symbols_internal)}
-        # Translate `symbols` to `symbols_internal` indices
-        mapped_indices = np.array([symbol_to_index[symbol] for symbol in subSyCore.symbols])
-        # Convert atomTypes to `symbols_internal` indices
-        atom_internal_indices = mapped_indices[subSyCore.types]
-        # Sum the corresponding values in bas_per_atom and numel_internal
-        core_ham_dim = np.sum(bas_per_atom[atom_internal_indices])
         
-        core_indices_in_sub, core_indices_in_sub_expanded, hindex_sub, I, I_halo = \
-            get_coreHalo_ham_inds(partIndex, partCoreHaloIndex, sdc, sy, subSy, device=ham.device)
-        #core_ham_dim = np.hstack([np.arange(s, e) for s, e in zip(hindex_sub[core_indices_in_sub], hindex_sub[core_indices_in_sub+1])])
         core_ham_dim_list = [torch.arange(s, e) for s, e in zip(hindex_sub[core_indices_in_sub], hindex_sub[core_indices_in_sub + 1])]
-        core_ham_dim = torch.cat(core_ham_dim_list).to(ham.device)
+        core_indices_in_sub_expanded_packed = torch.cat(core_ham_dim_list).to(ham.device)
 
-        eVals, dVals, Q, NH_Nh_Hs = get_eVals_pyseqm(ham, occ, Tel, mu0, coreSize, core_ham_dim, molecule=molecule_sub, verb=False)
+        # the difference between core_indices_in_sub_expanded and core_indices_in_sub_expanded_packed is that
+        # core_indices_in_sub_expanded is core indices of core+halo hamiltonian in 4x4 blocks form (pyseqm format)
+        # core_indices_in_sub_expanded_packed is core indices of core+halo hamiltonian in normal form corresponding to the number of AOs per atom. We need this one for parsing eigenvectors.
+
+        eVals, dVals, Q, NH_Nh_Hs = get_eVals_pyseqm(ham, occ, core_indices_in_sub_expanded_packed, molecule=molecule_sub, verb=False)
         # We will call proxyA directly as it will be loaded as a module.
     else:
         print("ERROR!!!: Interface type not recognized. Use any of the following: Module,File,Socket,MDI")
         exit()
-    return eVals, dVals, Q, NH_Nh_Hs, I, I_halo, core_indices_in_sub_expanded
+    return eVals, dVals, Q, NH_Nh_Hs

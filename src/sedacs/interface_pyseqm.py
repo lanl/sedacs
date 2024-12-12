@@ -22,14 +22,12 @@ try:
   seqm.seqm_functions.scf_loop.debug=False
   import torch
   import time
-
 except: PYSEQM = False
 
-
-import scipy
-from scipy.linalg import fractional_matrix_power
-
 class pyseqmObjects(torch.nn.Module):
+    '''
+    Container for pyseqm objects
+    '''
     def __init__(self, sdc, coords, symbols,atomTypes, do_large_tensors=True, device='cpu'):
         """
         Constructor
@@ -40,11 +38,10 @@ class pyseqmObjects(torch.nn.Module):
         
         self.M_whole, self.w_whole = None, None
         self.molecule_whole = get_molecule_pyseqm(sdc, coords, symbols, atomTypes, do_large_tensors=do_large_tensors, device=device)[0].to(device)
-        if do_large_tensors:
+        if do_large_tensors: ### some tensors for calculating nuclear forces
           self.w_ssss = torch.zeros_like(self.molecule_whole.idxi)
           #print('Creating DM guess.')
           #make_dm_guess(self.molecule_whole, self.molecule_whole.seqm_parameters, mix_homo_lumo=False, mix_coeff=0.3, overwrite_existing_dm=True);
-
           ev = 27.21
           rho_0 = 0.5*ev/self.molecule_whole.parameters['g_ss']
           self.rho0xi_whole = rho_0[self.molecule_whole.idxi].clone()
@@ -54,90 +51,59 @@ class pyseqmObjects(torch.nn.Module):
           self.rho0xi_whole[A] =self.molecule_whole.parameters['rho_core'][self.molecule_whole.idxi][A]
           self.rho0xj_whole[B] =self.molecule_whole.parameters['rho_core'][self.molecule_whole.idxj][B]
 
-
-
-
 def get_coreHalo_ham_inds(partIndex, partCoreHaloIndex, sdc, sy, subSy, device='cpu'):
-    
-    #indices_in_sub = np.linspace(0,len(partCoreHaloIndex)-1, len(partCoreHaloIndex), dtype = sdc.torch_int_dt)
+    '''
+    partIndex: core indices
+    partCoreHaloIndex: core+halo indices
+    sdc:
+    sy:
+    subSy:
+    Function returns:
+    core_indices_in_sub: core indices of atoms in core+halo
+    core_indices_in_sub_expanded: core indices of core+halo hamiltonian in 4x4 blocks form (pyseqm format)
+    hindex_sub: orbital index for each atom in the CH (in CH numbering)
+    '''
+     # generate local indexing of core+halo atoms
     indices_in_sub = torch.linspace(0, len(partCoreHaloIndex) - 1, len(partCoreHaloIndex), dtype=sdc.torch_int_dt, device=device)
-
-    #core_indices_in_sub = indices_in_sub[np.isin(partCoreHaloIndex, partIndex)]
     core_indices_in_sub = indices_in_sub[torch.isin(torch.tensor(partCoreHaloIndex, device=device), torch.tensor(partIndex, device=device))] # $$$ torch.searchsorted might be better
-
     block_size = 4
     # Generate the expanded indices for each block
-    #base_indices = np.arange(block_size)  # Create a base index tensor of size block_size
     base_indices = torch.arange(block_size, dtype=sdc.torch_int_dt, device=device)  # Create a base index tensor of size block_size
-
-    #core_indices_in_sub_expanded = np.expand_dims(core_indices_in_sub, axis=1) * block_size + base_indices  # Broadcast and add
     core_indices_in_sub_expanded = core_indices_in_sub.unsqueeze(1) * block_size + base_indices
-
-    #core_indices_in_sub_expanded = core_indices_in_sub_expanded.flatten()  # Flatten the result
     core_indices_in_sub_expanded = core_indices_in_sub_expanded.flatten()
 
-    #core_indices_in_sub_expanded = torch.from_numpy(core_indices_in_sub_expanded)
     norbs, norbs_for_every_type, hindex_sub, numel = get_hindex(sdc.orbs, sdc.valency, sy.symbols, subSy.types)
     hindex_sub = torch.from_numpy(hindex_sub).to(device, dtype=sdc.torch_int_dt)
-
-    
-    
-    
-    #I_core = torch.meshgrid(core_cols_in_whole_expanded, core_cols_in_whole_expanded, indexing='ij')
-    if sdc.reconstruct_dm:
-        # Given tensor of block indices and block size
-        coreHalo_rows_in_whole = torch.tensor(partCoreHaloIndex, dtype=sdc.torch_int_dt)
-        # Generate the expanded indices for each block
-        coreHalo_rows_in_whole_expanded = coreHalo_rows_in_whole.unsqueeze(1) * block_size + base_indices  # Broadcast and add
-        coreHalo_rows_in_whole_expanded = coreHalo_rows_in_whole_expanded.flatten()  # Flatten the result
-
-        # Given tensor of block indices and block size
-        core_cols_in_whole = torch.tensor(partIndex, dtype=sdc.torch_int_dt)
-        # Generate the expanded indices for each block
-        core_cols_in_whole_expanded = core_cols_in_whole.unsqueeze(1) * block_size + base_indices  # Broadcast and add
-        core_cols_in_whole_expanded = core_cols_in_whole_expanded.flatten()  # Flatten the result
-        #I_core = torch.meshgrid(core_cols_in_whole_expanded, core_cols_in_whole_expanded, indexing='ij')
-
-        I = torch.meshgrid(coreHalo_rows_in_whole_expanded, core_cols_in_whole_expanded, indexing='ij', device=device)
-        I_halo = torch.meshgrid(coreHalo_rows_in_whole_expanded, coreHalo_rows_in_whole_expanded, indexing='ij', device=device)
-    else:
-        I = None
-        I_halo = None
-    return core_indices_in_sub, core_indices_in_sub_expanded, hindex_sub, I, I_halo
-
-def get_elec_energy_pyseqm(P,F,Hcore, doTriu=True):
-   return elec_energy(P,F,Hcore, doTriu=doTriu)
+    return core_indices_in_sub, core_indices_in_sub_expanded, hindex_sub
 
 def get_nucAB_energy_pyseqm(Z, const, nmol, ni, nj, idxi, idxj, rij, \
                                      rho0xi,rho0xj,alp, chi, gam, method, parnuc):
-   
    return pair_nuclear_energy(Z, const, nmol, ni, nj, idxi, idxj, rij, \
                                      rho0xi,rho0xj,alp, chi, gam=gam, method=method, parameters=parnuc)
 
 def get_total_energy_pyseqm(nmol, pair_molid, EnucAB, Eelec):
    return total_energy(nmol, pair_molid, EnucAB, Eelec)
    
-
 def get_full_fock_pyseqm(nmol, molsize, P, M, maskd, mask, idxi, idxj, w, W, gss, gpp, gsp, gp2, hsp,
          themethod, zetas, zetap, zetad, Z, F0SD, G2SD):
-    
     return fock(nmol, molsize, P, M, maskd, mask, idxi, idxj, w, W, gss, gpp, gsp, gp2, hsp,
          themethod, zetas, zetap, zetad, Z, F0SD, G2SD)
 
 def get_fock_pyseqm_2(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, parameters, maskd_sub, mask_sub):
-    ### optimized version by Nick. 3x faster ###
-    # P: diagonal dm blocks of the whole system
-    # P_sub: subsystem dm
-    # M: 1elec hamiltonian of subsystem
-    # w_2: 2c2e ints. subsystem-subsystem and subsystem-outer. no outer-outer
-    # block_indices: subsystem atom numbers
-    # nmol: number of molecules in a batch. Always 1 in SEDACS.
-    # idxi, idxj: unique pairs between atoms in subsystem or between an atom in subsystem and in the outer system.
-    # rij: distances for unique pairs
-    # parameters: seqm atomic params
-    # maskd_sub: indices of diagonal blocks in subsystem
-    # mask_sub: indices of off-diagonal blocks in subsystem
-
+    '''
+    Function returns Fock matrix for CH. In 4x4 block pyseqm format
+    P: diagonal dm blocks of the whole system
+    P_sub: subsystem dm
+    M: 1elec hamiltonian of subsystem
+    w_2: 2c2e ints. subsystem-subsystem and subsystem-outer. no outer-outer
+    block_indices: subsystem atom numbers
+    nmol: number of molecules in a batch. Always 1 in SEDACS.
+    idxi, idxj: unique pairs between atoms in subsystem or between an atom in subsystem and in the outer system.
+    rij: distances for unique pairs
+    parameters: seqm atomic params
+    maskd_sub: indices of diagonal blocks in subsystem
+    mask_sub: indices of off-diagonal blocks in subsystem
+    '''
     idx_to_idx_mapping = {value: idx for idx, value in enumerate(block_indices)}
     max_key = max(idx_to_idx_mapping.keys())
     lookup_tensor = torch.zeros(max_key + 1, dtype=torch.long, device = P_sub.device)
@@ -150,7 +116,6 @@ def get_fock_pyseqm_2(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, pa
     in_block_mask = torch.zeros(atom_max+1,dtype=torch.bool, device = P_sub.device)
     in_block_mask[block_indices]=True
 
-    
     isini = in_block_mask[idxi]#.to(torch.bool)
     where_isini = torch.nonzero(isini).squeeze()
 
@@ -160,7 +125,6 @@ def get_fock_pyseqm_2(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, pa
     loc_i = idxi[isini]
     loc_j = idxj[isinj]
 
-    
     ### first doing idxi because its sorted
     #     idxi_sub_ovrlp_with_rest = torch.isin(idxi, block_indices) # <- insted of this
     # Searchsorted gives you the indices where the elements should be placed to maintain order. Works with idxi (sorted) but not with idxj (not sorted)
@@ -184,11 +148,9 @@ def get_fock_pyseqm_2(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, pa
     #     idxj_sub_ovrlp_with_rest[start_ind:end_ind] = valid_top_row[i:]
     #     start_ind = end_ind
     #     end_ind = end_ind + len(P) - i - 2
-
-    
     idxj_sub_ovrlp_with_rest = torch.isin(idxj, block_indices)
-
-
+    
+    ### Populate diagonal 1c ###
     F = M.clone()
     Pptot = P_sub[...,1,1]+P_sub[...,2,2]+P_sub[...,3,3]
     TMP = torch.zeros_like(M)
@@ -207,7 +169,7 @@ def get_fock_pyseqm_2(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, pa
     del TMP, Pptot
 
     ##############################################
-
+    ### Populate diagonal 2c ###
     dtype = P.dtype
     device = P.device
     weight = torch.tensor([1.0,
@@ -238,7 +200,7 @@ def get_fock_pyseqm_2(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, pa
     del PB_test, where_isini, sumb_test, iii, loc_i, indi_of_new_diag_in_old, sumB_test
 
     ####################################################
-
+    ### Populate off-diagonal ###
     sub_inds = idxi_sub_ovrlp_with_rest * idxj_sub_ovrlp_with_rest
 
     summ = torch.zeros(w_2[sub_inds].shape[0],4,4,dtype=dtype, device=device)
@@ -260,20 +222,15 @@ def get_fock_pyseqm_2(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, pa
     F.index_add_(0,mask_sub,summ)
     del summ
 
-    F0 = F.reshape(nmol,len(block_indices),len(block_indices),4,4) \
-                     .transpose(2,3) \
+    F0 = F.reshape(nmol,len(block_indices),len(block_indices),4,4).transpose(2,3) \
                      .reshape(nmol, 4*len(block_indices), 4*len(block_indices))
     F0.add_(F0.triu(1).transpose(1,2));       
     return F0
 
 def get_hcore_pyseqm(coords,symbols,atomTypes, device='cpu', verb=False):
   print('Creating Hcore.')
-
   if(PYSEQM == False):
     print("ERROR: No PySEQM installed")
-
-  
-  
   symbols_internal = np.array([ "Bl" ,                               
       "H" ,                                     "He",        
       "Li", "Be", "B" , "C" , "N" , "O" , "F" , "Ne",          \
@@ -291,7 +248,6 @@ def get_hcore_pyseqm(coords,symbols,atomTypes, device='cpu', verb=False):
       4 ,4 ,4 ,4 ,4 ,4 ,4 , 4,  \
       4 ,4 ,4 ,4 ,4 ,4 ,4 , 4,  \
   
-  
   # Map symbols to indices in symbols_internal
   symbol_to_index = {symbol: idx for idx, symbol in enumerate(symbols_internal)}
 
@@ -301,25 +257,10 @@ def get_hcore_pyseqm(coords,symbols,atomTypes, device='cpu', verb=False):
   # Convert atomTypes to `symbols_internal` indices
   atom_internal_indices = mapped_indices[atomTypes]
 
-  # Vectorized approach to combine the arrays
-  combined_array = np.column_stack((atom_internal_indices[:, np.newaxis], coords)).tolist()
-
-  # Convert to the desired format
-  molecule_elem_coord = [[int(item[0]), tuple(item[1:])] for item in combined_array]
-
-
-  species = torch.as_tensor(np.array([atom_internal_indices,]),
-                          dtype=torch.int64, device=device)
-  
+  species = torch.as_tensor(np.array([atom_internal_indices,]), dtype=torch.int64, device=device)
   coordinates = torch.tensor(np.array([coords,]), device=device, dtype=torch.float64)
-  
-  #print(coordinates)
-
- 
   const = Constants().to(device)
-
   elements = [0]+sorted(set(species.reshape(-1).tolist()))
-
   seqm_parameters = {
                     'method' : 'PM6_SP',  # AM1, MNDO, PM3, PM6, PM6_SP. PM6_SP is PM6 without d-orbitals. Effectively, PM6 for the first two rows of periodic table
                     'scf_eps' : 1.0e-6,  # unit eV, change of electric energy, as nuclear energy doesnt' change during SCF
@@ -335,8 +276,6 @@ def get_hcore_pyseqm(coords,symbols,atomTypes, device='cpu', verb=False):
                     'pair_outer_cutoff' : 1.0e10, # consistent with the unit on coordinates
                     'eig' : True, # store orbital energies
                     }
-
-  
   molecule = Molecule(const, seqm_parameters, coordinates, species).to(device)
   molecule.coordinates.requires_grad_(True)
 
@@ -345,18 +284,22 @@ def get_hcore_pyseqm(coords,symbols,atomTypes, device='cpu', verb=False):
 
   return M, w, molecule, rho0xi, rho0xj
 
-
 def get_molecule_pyseqm(sdc, coords, symbols, atomTypes, do_large_tensors=True, device='cpu', verb=False):
+  '''
+  Function returns pyseqm molecule object for SEDACS
+  sdc:
+  coords: coordinates array
+  symbols:
+  atomTypes:
+  do_large_tensors: if False, PySEQM won't calculate large tensors like idxi, idxj, rij, xij, mask
+  '''
   # move to a sep file $$$
   torch.cuda.empty_cache()
   """PYSEQM"""
-  
   # COHO
   # symbols: (C, O, H)
   # atomsTypes (0,1,2,1)
   # construc dict: 
-
-
   if(PYSEQM == False):
     print("ERROR: No PySCF installed")
 
@@ -376,38 +319,26 @@ def get_molecule_pyseqm(sdc, coords, symbols, atomTypes, do_large_tensors=True, 
       1 ,1 ,\
       4 ,4 ,4 ,4 ,4 ,4 ,4 , 4,  \
       4 ,4 ,4 ,4 ,4 ,4 ,4 , 4,  \
-
   
   # Map symbols to indices in symbols_internal
   symbol_to_index = {symbol: idx for idx, symbol in enumerate(symbols_internal)}
-
   # Translate `symbols` to `symbols_internal` indices
   mapped_indices = np.array([symbol_to_index[symbol] for symbol in symbols])
-
   # Convert atomTypes to `symbols_internal` indices
   atom_internal_indices = mapped_indices[atomTypes]
-
   if sdc.torch_dt == torch.float64:
     dtype_int = torch.int64
   else:
     dtype_int = torch.int32
-  species = torch.as_tensor(np.array([atom_internal_indices,]),
-                          dtype=dtype_int, device=device)
-  
+  species = torch.as_tensor(np.array([atom_internal_indices,]), dtype=dtype_int, device=device)
   
   if torch.is_tensor(coords):
     coordinates = coords
   else:
-    coordinates = torch.tensor(np.array([coords]), 
-                             device=device, dtype=sdc.torch_dt)
-  
-  #print(coordinates)
-
+    coordinates = torch.tensor(np.array([coords]), device=device, dtype=sdc.torch_dt)
  
   const = Constants().to(device)
-
   elements = [0]+sorted(set(species.reshape(-1).tolist()))
-
   seqm_parameters = {
                     'method' : 'PM6_SP',  # AM1, MNDO, PM3, PM6, PM6_SP. PM6_SP is PM6 without d-orbitals. Effectively, PM6 for the first two rows of periodic table
                     'scf_eps' : 1.0e-6,  # unit eV, change of electric energy, as nuclear energy doesnt' change during SCF
@@ -424,23 +355,24 @@ def get_molecule_pyseqm(sdc, coords, symbols, atomTypes, do_large_tensors=True, 
                     'eig' : True, # store orbital energies
                     }
 
-  
+  # Charge does not matter. Assigned to avoid internal pyseqm error.
   if torch.sum(species)%2 == 0:
      charges = 0
   else:
      charges = -1
      
-  molecule = Molecule(const, seqm_parameters, coordinates, species, charges=charges, do_large_tensors=do_large_tensors).to(device)
-
-  ### Create electronic structure driver:
-  
+  molecule = Molecule(const, seqm_parameters, coordinates, species, charges=charges, do_large_tensors=do_large_tensors).to(device)  
   return molecule, molecule.nocc.item()
 
 
-def get_eVals_pyseqm(H, Nocc, Tel, mu0, coreSize, core_ham_dim, molecule=None, verb=False, calcD=False):
-
-  kB = 8.61739e-5 # eV/K, kB = 6.33366256e-6 Ry/K, kB = 3.166811429e-6 Ha/K, #kB = 3.166811429e-6 #Ha/K
-  if(verb): print("Computing the renormalized Density matrix")
+def get_eVals_pyseqm(H, Nocc, core_indices_in_sub_expanded_packed, molecule, verb=False, calcD=False):
+  '''
+  Function returns eigenvalues, dVals, eigenvectors, list of [number_of_heavy_atoms, number_of_hydrogens, dim_of_coreHalo_ham]
+  H: hamiltonian, 4x4 blocks
+  Nocc: number of occupied states
+  core_indices_in_sub_expanded_packed: core indices of core+halo hamiltonian in normal form corresponding to the number of AOs per atom
+  '''
+  if(verb): print("Computing eVals/dVals")
 
   E_val, Q = sym_eig_trunc( H, molecule.nHeavy, molecule.nHydro, Nocc, eig_only=True)
   Q = Q[0]
@@ -450,18 +382,24 @@ def get_eVals_pyseqm(H, Nocc, Tel, mu0, coreSize, core_ham_dim, molecule=None, v
   homoIndex = Nocc - 1
   lumoIndex = Nocc
   #mu_test = 0.5*(E_val[homoIndex] + E_val[lumoIndex]) #don't need it 
-  print(' SubSys HOMO/LUMO:', np.round(E_val[homoIndex].item(),4), np.round(E_val[lumoIndex].item(),4), end=" ")
+  #print(' SubSys HOMO/LUMO:', np.round(E_val[homoIndex].item(),4), np.round(E_val[lumoIndex].item(),4), end=" ")
 
   # rho = Q@f_vector@Q.T
   # or
   # rho_ij = SUM_k Q_ik * f_kk * Q_jk
-
-  dVals = torch.sum(Q[core_ham_dim, :] ** 2, dim=0)
-
+  dVals = torch.sum(Q[core_indices_in_sub_expanded_packed, :] ** 2, dim=0)
   return E_val, dVals.cpu().numpy(), Q, [molecule.nHeavy, molecule.nHydro, H.shape[-1]]
 
 
 def get_densityMatrix_renormalized_pyseqm(E_val, Q, Tel, mu0, NH_Nh_Hs):
+  '''
+  Function returns dm corrected by fermi occupancies
+  E_val: eigenvalues
+  Q: eigenvectors
+  Tel: electronic temperature
+  mu0: chemical potential
+  NH_Nh_Hs: list of [number_of_heavy_atoms, number_of_hydrogens, dim_of_coreHalo_ham]
+  '''
   
   kB = 8.61739e-5 # eV/K, kB = 6.33366256e-6 Ry/K, kB = 3.166811429e-6 Ha/K, #kB = 3.166811429e-6 #Ha/K
   beta = 1./(kB*Tel)
@@ -470,46 +408,28 @@ def get_densityMatrix_renormalized_pyseqm(E_val, Q, Tel, mu0, NH_Nh_Hs):
   # two lines below are vectorization of this: D = 2*sum(torch.outer(Q[:, i],Q[:, i]*f[i]) for i in range(Nocc))
   Q_weighted = Q * f  # Broadcasting multiplication
   D = 2 * Q @ Q_weighted.T
-
-  #D = 2*sum(torch.outer(Q[:, i],Q[:, i]) for i in range(Nocc))
   D = unpack(D, NH_Nh_Hs[0], NH_Nh_Hs[1], NH_Nh_Hs[2])
-
   return D
 
 
 def get_overlap_pyseqm(coords,symbols,atomTypes, hindex, verb=False):
-    # move to a sep file $$$
-    torch.cuda.empty_cache()
-    """PYSEQM"""
+    '''Overlap matrix from pyseqm. Returned in a packed form (not 4x4 blocks pyseqm format)'''
 
     # COHO
     # symbols: (C, O, H)
     # atomsTypes (0,1,2,1)
     # construc dict: 
-
-
     if(PYSEQM == False):
         print("ERROR: No PySCF installed")
-
     from seqm.seqm_functions.constants import Constants
     from seqm.Molecule import Molecule
     import numpy as np
     from seqm.seqm_functions.pack import pack
     from seqm.seqm_functions.diat_overlap_PM6_SP import diatom_overlap_matrix_PM6_SP
     from seqm.seqm_functions.constants import overlap_cutoff
-
-
-
     seqm.seqm_functions.scf_loop.debug=False
 
-
-
-
     device = torch.device('cpu')
-
-
-
-
     symbols_internal = np.array([ "Bl" ,                               
         "H" ,                                     "He",        
         "Li", "Be", "B" , "C" , "N" , "O" , "F" , "Ne",          \
@@ -527,36 +447,22 @@ def get_overlap_pyseqm(coords,symbols,atomTypes, hindex, verb=False):
         4 ,4 ,4 ,4 ,4 ,4 ,4 , 4,  \
         4 ,4 ,4 ,4 ,4 ,4 ,4 , 4,  \
 
-
     # Map symbols to indices in symbols_internal
     symbol_to_index = {symbol: idx for idx, symbol in enumerate(symbols_internal)}
-
     # Translate `symbols` to `symbols_internal` indices
     mapped_indices = np.array([symbol_to_index[symbol] for symbol in symbols])
-
     # Convert atomTypes to `symbols_internal` indices
     atom_internal_indices = mapped_indices[atomTypes]
-
     # Vectorized approach to combine the arrays
     combined_array = np.column_stack((atom_internal_indices[:, np.newaxis], coords)).tolist()
-
     # Convert to the desired format
     molecule_elem_coord = [[int(item[0]), tuple(item[1:])] for item in combined_array]
 
 
-    species = torch.as_tensor(np.array([np.array(atom_internal_indices)]),
-                            dtype=torch.int64, device=device)
-
-    coordinates = torch.tensor(np.array([coords]),
-                                device=device, dtype=torch.float64)
-
-    #print(coordinates)
-
-
+    species = torch.as_tensor(np.array([np.array(atom_internal_indices)]), dtype=torch.int64, device=device)
+    coordinates = torch.tensor(np.array([coords]), device=device, dtype=torch.float64)
     const = Constants().to(device)
-
     elements = [0]+sorted(set(species.reshape(-1).tolist()))
-
     seqm_parameters = {
                     'method' : 'PM6_SP',  # AM1, MNDO, PM3, PM6, PM6_SP. PM6_SP is PM6 without d-orbitals. Effectively, PM6 for the first two rows of periodic table
                     'scf_eps' : 1.0e-6,  # unit eV, change of electric energy, as nuclear energy doesnt' change during SCF
@@ -572,7 +478,6 @@ def get_overlap_pyseqm(coords,symbols,atomTypes, hindex, verb=False):
                     'pair_outer_cutoff' : 1.0e10, # consistent with the unit on coordinates
                     'eig' : True # store orbital energies
                     }
-
     molecule = Molecule(const, seqm_parameters, coordinates, species).to(device)
     dtype = molecule.xij.dtype
     device = molecule.xij.device
@@ -585,7 +490,6 @@ def get_overlap_pyseqm(coords,symbols,atomTypes, hindex, verb=False):
         zeta = torch.cat((molecule.parameters['zeta_s'].unsqueeze(1), molecule.parameters['zeta_p'].unsqueeze(1)),dim=1)
     overlap_pairs = molecule.rij<=overlap_cutoff
 
-
     if molecule.method == 'PM6_SP':
         di = torch.zeros((molecule.xij.shape[0], 4, 4),dtype=dtype, device=device)
         di[overlap_pairs] = diatom_overlap_matrix_PM6_SP(molecule.ni[overlap_pairs],
@@ -596,13 +500,9 @@ def get_overlap_pyseqm(coords,symbols,atomTypes, hindex, verb=False):
                                 zeta[molecule.idxj][overlap_pairs],
                                 qn_int)
     
-    #torch.save(di, 'di.pt')
-    #del di, overlap_pairs, zeta, qn_int, coordinates
     di_full = torch.zeros((molecule.nmol*molecule.molsize*molecule.molsize, 4, 4),dtype=dtype, device=device)
     mask_H = molecule.Z==1
     mask_heavy = molecule.Z>1
-    
-
     H_self_ovr = torch.zeros((4,4), dtype=dtype, device=device)
     H_self_ovr[0,0] = 1.0
 
@@ -610,22 +510,17 @@ def get_overlap_pyseqm(coords,symbols,atomTypes, hindex, verb=False):
     di_full[molecule.maskd[mask_heavy]] = torch.eye(4, dtype=dtype, device=device)
     di_full[molecule.mask] = di
     di_full[molecule.mask_l] = di.transpose(1,2)
-
-    di_full = di_full.reshape(molecule.nmol,molecule.molsize,molecule.molsize,4,4) \
-                 .transpose(2,3) \
+    di_full = di_full.reshape(molecule.nmol,molecule.molsize,molecule.molsize,4,4).transpose(2,3) \
                  .reshape(molecule.nmol, 4*molecule.molsize, 4*molecule.molsize)
-
-        
     di_full = pack(di_full, molecule.nHeavy, molecule.nHydro)
-
-
     return di_full[0]
 
 def get_diag_guess_pyseqm(molecule, sy, verb=False):
+    '''
+    Initial guess for dm diagonal
+    '''
     tore = molecule.const.tore
-    
     method = 'PM6_SP'
-
     if method == 'PM6':
         P0 = torch.zeros(sy.nats,9,9,dtype=molecule.coordinates.dtype, device=tore.device)  # density matrix
         P0[molecule.Z>1,0,0] = tore[molecule.Z[molecule.Z>1]]/4.0
@@ -633,23 +528,11 @@ def get_diag_guess_pyseqm(molecule, sy, verb=False):
         P0[:,2,2] = P0[:,0,0]
         P0[:,3,3] = P0[:,0,0]
         P0[molecule.Z==1,0,0] = 1.0
-        # P = P0.reshape(nmol,molecule.molsize,molecule.molsize,9,9) \
-        #     .transpose(2,3) \
-        #     .reshape(nmol, 9*molecule.molsize, 9*molecule.molsize)
-        
     else:
         P0 = torch.zeros(sy.nats,4,4,dtype=molecule.coordinates.dtype, device=tore.device)  # density matrix
         P0[molecule.Z>1,0,0] = tore[molecule.Z[molecule.Z>1]]/4.0
         P0[:,1,1] = P0[:,0,0]
         P0[:,2,2] = P0[:,0,0]
         P0[:,3,3] = P0[:,0,0]
-        P0[molecule.Z==1,0,0] = 1.0
-        # P = P0.reshape(nmol,molecule.molsize,molecule.molsize,4,4) \
-        #     .transpose(2,3) \
-        #     .reshape(nmol, 4*molecule.molsize, 4*molecule.molsize)
-        
+        P0[molecule.Z==1,0,0] = 1.0        
     return P0
-
-class ParamContainer():
-   def __init__(self,):
-      self
