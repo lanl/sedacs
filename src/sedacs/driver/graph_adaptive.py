@@ -63,8 +63,8 @@ def get_singlePoint(sdc, eng,  partsPerGPU, partsPerNode, node_id, node_rank, ra
     # partIndex1 = rank * partsPerRank
     # partIndex2 = (rank + 1) * partsPerRank
     ### we do this because there might be fewer GPUs per node than ranks per node.
-    partIndex1 = (node_rank) * partsPerGPU + node_id*partsPerNode #+ node_id * num_nodes
-    partIndex2 = (node_rank + 1) * partsPerGPU + node_id*partsPerNode #+ node_id * num_nodes
+    partIndex1 = (node_rank) * partsPerGPU + node_id*partsPerNode
+    partIndex2 = (node_rank + 1) * partsPerGPU + node_id*partsPerNode
 
     dValOnRank = np.array([]) # this will store flattened dVals for all CH. 1d np array. For mu0
     eValOnRank = np.array([]) # this will store flattened eVals for all CH. 1d np array.
@@ -473,7 +473,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         print("Time to compute halos {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
         tic = time.perf_counter()
-        new_graph_for_pairs = get_ch_graph(sdc, sy, fullGraph, parts, partsCoreHalo) # Graph where new_graph_for_pairs[i] is a CH in which atom i is (including i itself). new_graph_for_pairs[i][0] is the size of CH.
+        new_graph_for_pairs = get_ch_graph(sdc, sy, fullGraph, parts, partsCoreHalo) # Graph where new_graph_for_pairs[i] is a CH in which atom i is a core atom. new_graph_for_pairs[i][0] is the size of CH.
         graph_for_pairs = new_graph_for_pairs # Here, same as new_graph_for_pairs
         graph_maskd = get_maskd(sdc, sy, graph_for_pairs) # mask for diagonal block in contracted dm
         print("Time to init mod graphs {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
@@ -560,7 +560,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                 ### END HALOS CALC ###
 
                 tic = time.perf_counter()
-                new_graph_for_pairs = get_ch_graph(sdc, sy, fullGraph, parts, partsCoreHalo) # Graph where new_graph_for_pairs[i] is a CH in which atom i is (including i itself). new_graph_for_pairs[i][0] is the size of CH.
+                new_graph_for_pairs = get_ch_graph(sdc, sy, fullGraph, parts, partsCoreHalo) # Graph where new_graph_for_pairs[i] is a CH in which atom i is a core atom. new_graph_for_pairs[i][0] is the size of CH.
                 if rank == 0: print("Time to updt DM and mod graphs {:>7.2f} (s)".format(time.perf_counter() - tic))
                 tic = time.perf_counter()
                 update_dm_contraction(sy, P_contr, graph_for_pairs, new_graph_for_pairs, device) # update dm contraction based on new_graph_for_pairs
@@ -592,7 +592,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                     eElec, eValOnRank_list, Q_list, NH_Nh_Hs_list, core_indices_in_sub_expanded_list, Nocc_list, mu0 = \
                     get_singlePoint(sdc, eng, partsPerGPU, partsPerNode, node_id, node_rank, rank, gpu_comm, parts, partsCoreHalo, sy, hindex, mu0, molecule_whole,
                                     P_contr, graph_for_pairs, graph_maskd)
-                    gpu_comm.Allreduce(eElec, global_Eelec, op=MPI.SUM) #primary_comm
+                    gpu_comm.Allreduce(eElec, global_Eelec, op=MPI.SUM)
                 else:
                     eElec, eValOnRank_list, Q_list, NH_Nh_Hs_list, core_indices_in_sub_expanded_list, Nocc_list, mu0 = 0, None, None, None, None, None, None
             comm.Barrier()
