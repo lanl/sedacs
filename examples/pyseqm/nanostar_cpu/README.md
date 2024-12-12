@@ -1,6 +1,9 @@
 ### `PySEQM`
 PySEQM works with finite systems. Therefore, systems are placed inside boxes with large vacuum gaps.
 
+In ```main.py```, change ```proxya_path``` and ```pyseqm_path```.
+In ```input.in```, change ```Path``` and ```Executable``` paths.
+
 Set OMP_NUM_THREADS to a desired number
 ```shell
 cd JOB_DIRECTORY

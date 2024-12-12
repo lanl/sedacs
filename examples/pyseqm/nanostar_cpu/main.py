@@ -1,23 +1,22 @@
 """Main sedacs prototype driver"""
 import os
 os.environ["PYTHONWARNINGS"] = "ignore:Unverified HTTPS request"
-
 import time
 import sys
-# Dynamically add PROXYA_PATH to PYTHONPATH
+import torch
+import numpy as np
+
+# ADD PROXYA_PATH to PYTHONPATH
 proxya_path = "/home/maxim/Projects/SEDACS_1/sedacs"
 sys.path.append(proxya_path)
 
-print(sys.version)
-print(sys.executable)
-
-sys.path.insert(1, "/home/maxim/Projects/git2/PYSEQM_dev/")
-import torch
+### ADD PATH TO PYSEQM ###
+pyseqm_path = "/home/maxim/Projects/git2/PYSEQM_dev/"
+sys.path.insert(1, pyseqm_path)
 
 DTYPE = torch.float64
 torch.set_default_dtype(DTYPE)
 
-import numpy as np
 from sedacs.driver.graph_adaptive import get_adaptiveDM
 from sedacs.driver.init import get_args, init
 
@@ -37,5 +36,3 @@ print("INITIALIZATION TIME {:>7.2f} (s)".format(time.perf_counter() - tic), rank
 # Perform a graph-adaptive calculation of the density matrix
 get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL)
 print("TOTAL TIME {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
-
-
