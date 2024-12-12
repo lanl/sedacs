@@ -35,9 +35,7 @@ conda create -n sedacs  pytorch::pytorch torchvision torchaudio openmpi mpi4py s
 
 ```shell
 conda create -n sedacs pytorch torchvision torchaudio pytorch-cuda=11.8 openmpi mpi4py scipy jupyter nb_conda_kernels python=3.10 -c pytorch -c nvidia
-```
-or
-```shell
+source activate sedacs
 git clone git@gitlab.lanl.gov:sedacs/sedacs.git
 cd sedacs
 pip install .
@@ -82,6 +80,16 @@ to develop SEDACS.
 ### `driver`
 
 Scripts to exercise the code.
+
+### `PySEQM`
+
+Set OMP_NUM_THREADS to a desired number
+```shell
+cd JOB_DIRECTORY
+source activate sedacs
+export OMP_NUM_THREADS=4
+```
+
 
 # License
 
