@@ -81,16 +81,6 @@ to develop SEDACS.
 
 Scripts to exercise the code.
 
-### `PySEQM`
-
-Set OMP_NUM_THREADS to a desired number
-```shell
-cd JOB_DIRECTORY
-source activate sedacs
-export OMP_NUM_THREADS=4
-```
-
-
 # License
 
 This program is open source under the [BSD-3 License](LICENSE.txt).
