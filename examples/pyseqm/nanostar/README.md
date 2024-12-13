@@ -2,7 +2,9 @@
 
 ### Overview
 
-`PySEQM` is designed to handle finite systems. Therefore, structures are placed in boxes with vacuum gaps to avoid interactions between periodic images.
+PySEQM is a PyTorch-based framework for Semi-Empirical Quantum Mechanics, supporting various NDDO methods such as PM6, PM3, AM1, and MNDO.
+It includes built-in drivers for MD thermostats and XL-BOMD, with native support for ML (re)parametrization.
+It is designed to handle finite systems. Therefore, structures are placed in boxes with vacuum gaps to avoid interactions between periodic images.
 
 ### CPU Setup and Execution
 
