@@ -2,7 +2,7 @@
 
 ### Overview
 
-`PySEQM` is designed to handle finite systems, which are placed in boxes with significant vacuum gaps to avoid interactions between periodic images.
+`PySEQM` is designed to handle finite systems. Therefore, structures are placed in boxes with vacuum gaps to avoid interactions between periodic images.
 
 ### CPU Setup and Execution
 
@@ -68,8 +68,9 @@
 - The system will be partitioned into parts as specified by the `NumParts` keyword.
 - Partitioned parts are distributed across GPUs. If only one GPU is available, all parts will be processed sequentially on rank 0.
 - **Hybrid GPU-CPU Execution:**
-  - Density matrix updates are performed on the CPU, in parallel.
-  - For example, with `-n 4` and `NumParts=4`, each rank updates one part of the density matrix.
+  - Hamiltonian construction, diagonalization, energy/forces calculations are performed on GPUs.
+  - Density matrix updates are performed on the CPU, in parallel on all ranks specified with `-n`. For example, with `-n 4` and `NumParts=4`, the i-th rank updates the portion of the density matrix corresponding to i-th part (aka i-th core+halo).
+  - Graph updates and density matrix contraction are performed on rank 0.
 - **Important:** Ensure `NumParts` is divisible by the number of ranks (`-n`) and the number of available GPUs.
 
 ---
