@@ -4,7 +4,7 @@
 
 PySEQM is a PyTorch-based framework for Semi-Empirical Quantum Mechanics, supporting various NDDO methods such as PM6, PM3, AM1, and MNDO.
 It includes built-in drivers for MD thermostats and XL-BOMD, with native support for ML (re)parametrization.
-Install the most up-to-date branch `https://github.com/lanl/PYSEQM/tree/pm6_test`.
+To install the latest version, use the following branch: [`PySEQM`](https://github.com/lanl/PYSEQM/tree/pm6_test).
 It is designed to handle finite systems. Therefore, structures are placed in boxes with vacuum gaps to avoid interactions between periodic images.
 
 ### CPU Setup and Execution
