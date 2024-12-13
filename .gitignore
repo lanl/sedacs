@@ -1,6 +1,5 @@
 ### Custom
 **/*.indented
-*.in
 *.dat
 *.pt
 *.npy

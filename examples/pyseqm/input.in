@@ -1,0 +1,28 @@
+#Input file for SEDACS
+
+Verbosity= False
+Threshold= 1.0E-5
+CoordsFile= nanostar.pdb # gs_solvated_10k_rel5 gs_solvated_10k_rel gs_solvated_10k gs_solvated_8k gs_solvated_7k gs_solvated_6k gs_solvated_5k gs_solvated_4k nanostar coords_w32_el_sort gs_solvated_cell  w_4 co2_32_el_sort
+GraphThreshold= 0.0005 # dm graph threshold (frobenius norm)
+GraphThresholdInit= 0.04 # for initial overlap parsing
+MaxDeg= 500 #Max graph degree
+Rcut= 3.0 # Radius cutoff for initial graph
+Alpha= 0.7 # dm linear mixing coeff. Alpha*new + (1-Alpha)*old
+InitGraphType= Geom # OverlapM Geom
+PartitionType= SpectralClustering # SpectralClustering #MinCut BalancedKmeans
+NumParts= 4 # number of cores
+SCFTol= 1.0E-5
+Orbitals= {"H":1,"Li":4,"C":4,"N":4,"O":4,"F":4,"Cl":4,"Na":4} #This has to be known for each engine
+Valency= {"H":1,"Li":1,"C":4,"N":5,"O":6,"F":7,"Cl":7,"Na":1} #This has to be known for each engine
+Tel= 4000 # electronic temperature
+doForces= True # flag to compute forces
+scfDevice= cuda # cpu or cuda
+ijMethod= Vec # create idxi and idxj for pyseqm driver through vetorization (fast but memory consuming) or a loop
+numJumps= 1 # length of jumps across graph for constructing halos
+NumAdaptiveIter= 25 # Number of graph adaptive iterations (aka scf iterations)
+restartSave= False # save files for scf restart. slows things down
+restartLoad= False # load files for scf restart
+numGPU= -1 # If on CPU, no efect. If on GPU and nodes are homogeneous, set to -1. If on gpu and nodes are inhomogeneous (diferent number of GPUs per node), set it to the minimum number of GPUs per node. 
+writeGeom= False # save core and coreHalo geometries
+Engine= {"Name":"ProxyAPython","InterfaceType":"PySEQM","Path":"/home/maxim/Projects/SEDACS_1/sedacs/proxies/python/","Executable":"/home/maxim/Projects/SEDACS_1/sedacs/examples/pyseqm/"} #The name of the external code
+
