@@ -5,7 +5,7 @@ import torch
 import numpy as np
 
 # ADD PROXYA_PATH to PYTHONPATH
-proxya_path = "/home/maxim/Projects/SEDACS_1/sedacs"
+proxya_path = ".../sedacs"
 sys.path.append(proxya_path)
 
 ### ADD PATH TO PYSEQM ###

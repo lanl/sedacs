@@ -1,4 +1,8 @@
 """Graph adaptive solver"""
+import warnings
+warnings.simplefilter("ignore", FutureWarning)
+import os
+os.environ["PYTHONWARNINGS"] = "ignore:Unverified HTTPS request"
 import time
 import torch
 print('num_threads',torch.get_num_threads())
