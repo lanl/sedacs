@@ -1,0 +1,1182 @@
+num_threads 8
+num_threads 8
+loading nvidia...
+loading nvidia...
+
+Input variables:
+Input:  Tag= myRun
+Input:  CoordsFile= nanostar.pdb
+Input:  InitGraphType= Geom
+Input:  PartitionType= SpectralClustering
+Input:  MaxDeg= 500
+Input:  NumParts= 4
+Input:  Rcut= 3.0
+Input:  Alpha= 0.7
+Input:  Threshold= 1e-05
+Input:  GraphThreshold= 0.0005
+Input:  GraphThresholdInit= 0.04
+Input:  Field= [0. 0. 0.]
+Input:  Orbitals= {'H': 1, 'Li': 4, 'C': 4, 'N': 4, 'O': 4, 'F': 4, 'Cl': 4, 'Na': 4}
+Input:  Valency= {'H': 1, 'Li': 1, 'C': 4, 'N': 5, 'O': 6, 'F': 7, 'Cl': 7, 'Na': 1}
+Input:  Tel= 4000.0
+Input:  scfDevice= cpu
+Input:  ijMethod= Vec
+Input:  numJumps= 1
+Input:  NumAdaptiveIter= 30
+Input:  numGPU= -1
+Input:  EngineInterfaceType= Files
+Input:  EngineName= ProxyA
+Input:  Engine= {'Name': 'ProxyAPython', 'InterfaceType': 'PySEQM', 'Path': '/home/maxim/Projects/SEDACS_1/sedacs/proxies/python/', 'Executable': ''}
+Input:  StopAt= 
+Input:  SCFTol= 1e-05
+Time for build_nlist 2.840694885700941 (s)
+!!!!
+INITIALIZATION TIME    2.98 (s) 1
+INITIALIZATION TIME    2.98 (s) 0
+Time to init molSysData    0.06 (s) 0
+Computing cores.
+  Computing spectral_clustering_partition on XYZ data.
+Time to compute cores    0.24 (s) 0
+Loading the molecule and parameters.
+
+|||| Adaptive iter: 0 ||||
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    206
+  N atoms in core/coreHalo      1 :    296    300
+  N atoms in core/coreHalo      2 :    196    202
+  N atoms in core/coreHalo      3 :    192    194
+Time to compute halos    0.01 (s) 0
+Time to init mod graphs    0.02 (s) 0
+Time to init DM    0.01 (s) 0
+BCST1    0.00 (s) 0
+BCST2    0.05 (s) 0
+BCST3    0.01 (s) 0
+Time to init bcast and share DM    0.01 (s) 0
+Time INIT    0.41 (s)
+
+
+|||| Adaptive iter: 0 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Time to init bcast and share DM    0.01 (s) 1
+Rank 1 part 2 : h1elNonDi    0.095 | idxi&idxj    0.006 | TETCI&DiI    0.595 | diIndsExp    0.013 | h1elDiUpd    0.008 | P_sub_from_contr    0.014 | FulSubFock    0.079 | En    0.003 | eVals/dVals    0.053 | TOT    0.873
+Rank 0 part 0 : h1elNonDi    0.101 | idxi&idxj    0.008 | TETCI&DiI    0.519 | diIndsExp    0.036 | h1elDiUpd    0.022 | P_sub_from_contr    0.024 | FulSubFock    0.117 | En    0.004 | eVals/dVals    0.042 | TOT    0.881
+Rank 1 part 3 : h1elNonDi    0.074 | idxi&idxj    0.005 | TETCI&DiI    0.261 | diIndsExp    0.006 | h1elDiUpd    0.006 | P_sub_from_contr    0.014 | FulSubFock    0.072 | En    0.003 | eVals/dVals    0.039 | TOT    0.487
+Rank 0 part 1 : h1elNonDi    0.117 | idxi&idxj    0.005 | TETCI&DiI    0.420 | diIndsExp    0.011 | h1elDiUpd    0.009 | P_sub_from_contr    0.013 | FulSubFock    0.138 | En    0.014 | eVals/dVals    0.083 | TOT    0.815
+/home/maxim/anaconda3/envs/sedacs_2/lib/python3.10/site-packages/torch/storage.py:414: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  return torch.load(io.BytesIO(b))
+
+Calculating mu:
+Iter, mu, g:
+     0 -5.50000000 1.34600289
+Final mu, g: 3 -5.54774484 0.00000000
+Time to get_singlePoint    2.08 (s)
+/home/maxim/anaconda3/envs/sedacs_2/lib/python3.10/site-packages/torch/storage.py:414: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  return torch.load(io.BytesIO(b))
+eElec:   -1680061.50823576 | ΔE| 1680061.50823576
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.8360743 at SubSy     0
+ Σ   |ΔDM_ij|: 3331.7130464
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.8918732 at SubSy     1
+ Σ   |ΔDM_ij|: 4569.6834497
+Time to updt DM    0.18 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.02 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     2.28 (s)
+
+
+|||| Adaptive iter: 1 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    256
+  N atoms in core/coreHalo      1 :    296    354
+  N atoms in core/coreHalo      2 :    196    224
+  N atoms in core/coreHalo      3 :    192    235
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.02 (s)
+Time to updt DM and mod graphs    0.17 (s)
+Time to updt DM and mod graphs    0.01 (s)
+Time to bcast DM and mod graphs    0.01 (s) 0
+Rank 1 part 2 : h1elNonDi    0.072 | idxi&idxj    0.006 | TETCI&DiI    0.580 | diIndsExp    0.012 | h1elDiUpd    0.017 | P_sub_from_contr    0.021 | FulSubFock    0.125 | En    0.006 | eVals/dVals    0.041 | TOT    0.888
+Rank 0 part 0 : h1elNonDi    0.098 | idxi&idxj    0.005 | TETCI&DiI    0.637 | diIndsExp    0.013 | h1elDiUpd    0.012 | P_sub_from_contr    0.035 | FulSubFock    0.138 | En    0.005 | eVals/dVals    0.056 | TOT    1.012
+Rank 1 part 3 : h1elNonDi    0.077 | idxi&idxj    0.005 | TETCI&DiI    0.299 | diIndsExp    0.007 | h1elDiUpd    0.007 | P_sub_from_contr    0.016 | FulSubFock    0.100 | En    0.004 | eVals/dVals    0.046 | TOT    0.568
+Rank 0 part 1 : h1elNonDi    0.133 | idxi&idxj    0.006 | TETCI&DiI    0.383 | diIndsExp    0.012 | h1elDiUpd    0.011 | P_sub_from_contr    0.023 | FulSubFock    0.178 | En    0.011 | eVals/dVals    0.101 | TOT    0.864
+
+Calculating mu:
+Iter, mu, g:
+     0 -5.54774484 -2.47005047
+     4 -4.11463310 0.00028744
+Final mu, g: 6 -4.11512116 -0.00000000
+Time to get_singlePoint    2.48 (s)
+eElec:   -1691950.66478471 | ΔE| 11889.15654895
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.3110053 at SubSy     0
+ Σ   |ΔDM_ij|: 963.7310698
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.3660774 at SubSy     1
+ Σ   |ΔDM_ij|: 1344.6335615
+Time to updt DM    0.19 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.00 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     2.91 (s)
+
+
+|||| Adaptive iter: 2 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.02 (s)
+Time to updt DM and mod graphs    0.14 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 0 part 0 : h1elNonDi    0.080 | idxi&idxj    0.005 | TETCI&DiI    0.628 | diIndsExp    0.021 | h1elDiUpd    0.019 | P_sub_from_contr    0.029 | FulSubFock    0.151 | En    0.006 | eVals/dVals    0.054 | TOT    1.002
+Rank 1 part 2 : h1elNonDi    0.077 | idxi&idxj    0.006 | TETCI&DiI    0.795 | diIndsExp    0.024 | h1elDiUpd    0.016 | P_sub_from_contr    0.031 | FulSubFock    0.160 | En    0.006 | eVals/dVals    0.058 | TOT    1.187
+Rank 1 part 3 : h1elNonDi    0.092 | idxi&idxj    0.005 | TETCI&DiI    0.350 | diIndsExp    0.009 | h1elDiUpd    0.008 | P_sub_from_contr    0.022 | FulSubFock    0.103 | En    0.004 | eVals/dVals    0.051 | TOT    0.654
+Rank 0 part 1 : h1elNonDi    0.118 | idxi&idxj    0.006 | TETCI&DiI    0.374 | diIndsExp    0.009 | h1elDiUpd    0.011 | P_sub_from_contr    0.025 | FulSubFock    0.187 | En    0.016 | eVals/dVals    0.110 | TOT    0.862
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.11512116 0.01983617
+     4 -4.61627657 0.00000000
+Final mu, g: 4 -4.61627657 0.00000000
+Time to get_singlePoint    2.13 (s)
+eElec:   -1696694.81553168 | ΔE| 4744.15074696
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.1161320 at SubSy     1
+ Σ   |ΔDM_ij|: 324.4455972
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.1389944 at SubSy     1
+ Σ   |ΔDM_ij|: 445.3507513
+Time to updt DM    0.16 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.02 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     2.51 (s)
+
+
+|||| Adaptive iter: 3 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.02 (s)
+Time to updt DM and mod graphs    0.11 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 0 part 0 : h1elNonDi    0.076 | idxi&idxj    0.006 | TETCI&DiI    0.319 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.015 | FulSubFock    0.102 | En    0.006 | eVals/dVals    0.054 | TOT    0.598
+Rank 1 part 2 : h1elNonDi    0.096 | idxi&idxj    0.005 | TETCI&DiI    0.364 | diIndsExp    0.010 | h1elDiUpd    0.009 | P_sub_from_contr    0.025 | FulSubFock    0.110 | En    0.004 | eVals/dVals    0.059 | TOT    0.693
+Rank 1 part 3 : h1elNonDi    0.091 | idxi&idxj    0.006 | TETCI&DiI    0.358 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.019 | FulSubFock    0.108 | En    0.007 | eVals/dVals    0.044 | TOT    0.655
+Rank 0 part 1 : h1elNonDi    0.117 | idxi&idxj    0.006 | TETCI&DiI    0.349 | diIndsExp    0.009 | h1elDiUpd    0.011 | P_sub_from_contr    0.017 | FulSubFock    0.181 | En    0.015 | eVals/dVals    0.101 | TOT    0.812
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.61627657 0.00043565
+Final mu, g: 2 -4.65917071 -0.00000000
+Time to get_singlePoint    1.57 (s)
+eElec:   -1698229.81890857 | ΔE| 1535.00337689
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0482689 at SubSy     1
+ Σ   |ΔDM_ij|: 139.5346734
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0527228 at SubSy     1
+ Σ   |ΔDM_ij|: 192.5662912
+Time to updt DM    0.15 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.00 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.89 (s)
+
+
+|||| Adaptive iter: 4 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.01 (s)
+Time to updt DM and mod graphs    0.11 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 0 part 0 : h1elNonDi    0.075 | idxi&idxj    0.005 | TETCI&DiI    0.325 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.013 | FulSubFock    0.106 | En    0.006 | eVals/dVals    0.051 | TOT    0.602
+Rank 1 part 2 : h1elNonDi    0.077 | idxi&idxj    0.006 | TETCI&DiI    0.324 | diIndsExp    0.007 | h1elDiUpd    0.007 | P_sub_from_contr    0.020 | FulSubFock    0.109 | En    0.004 | eVals/dVals    0.043 | TOT    0.607
+Rank 1 part 3 : h1elNonDi    0.074 | idxi&idxj    0.005 | TETCI&DiI    0.306 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.018 | FulSubFock    0.102 | En    0.005 | eVals/dVals    0.043 | TOT    0.573
+Rank 0 part 1 : h1elNonDi    0.109 | idxi&idxj    0.006 | TETCI&DiI    0.351 | diIndsExp    0.009 | h1elDiUpd    0.011 | P_sub_from_contr    0.018 | FulSubFock    0.168 | En    0.012 | eVals/dVals    0.093 | TOT    0.783
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.65917071 0.00025601
+Final mu, g: 2 -4.69712888 0.00000000
+Time to get_singlePoint    1.55 (s)
+eElec:   -1698701.80039667 | ΔE| 471.98148810
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0229967 at SubSy     1
+ Σ   |ΔDM_ij|: 69.7810990
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0225726 at SubSy     1
+ Σ   |ΔDM_ij|: 98.3138535
+Time to updt DM    0.15 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.02 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.87 (s)
+
+
+|||| Adaptive iter: 5 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.02 (s)
+Time to updt DM and mod graphs    0.11 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 0 part 0 : h1elNonDi    0.078 | idxi&idxj    0.005 | TETCI&DiI    0.322 | diIndsExp    0.008 | h1elDiUpd    0.008 | P_sub_from_contr    0.014 | FulSubFock    0.108 | En    0.006 | eVals/dVals    0.047 | TOT    0.597
+Rank 1 part 2 : h1elNonDi    0.079 | idxi&idxj    0.006 | TETCI&DiI    0.322 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.020 | FulSubFock    0.115 | En    0.004 | eVals/dVals    0.050 | TOT    0.621
+Rank 1 part 3 : h1elNonDi    0.076 | idxi&idxj    0.005 | TETCI&DiI    0.311 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.021 | FulSubFock    0.097 | En    0.005 | eVals/dVals    0.040 | TOT    0.577
+Rank 0 part 1 : h1elNonDi    0.108 | idxi&idxj    0.006 | TETCI&DiI    0.344 | diIndsExp    0.009 | h1elDiUpd    0.012 | P_sub_from_contr    0.018 | FulSubFock    0.168 | En    0.016 | eVals/dVals    0.074 | TOT    0.763
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.69712888 0.00012209
+Final mu, g: 2 -4.71902155 0.00000000
+Time to get_singlePoint    1.59 (s)
+eElec:   -1698844.91558382 | ΔE| 143.11518715
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0153092 at SubSy     1
+ Σ   |ΔDM_ij|: 37.8984558
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0150350 at SubSy     1
+ Σ   |ΔDM_ij|: 54.3892627
+Time to updt DM    0.15 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.00 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.90 (s)
+
+
+|||| Adaptive iter: 6 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.01 (s)
+Time to updt DM and mod graphs    0.10 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 0 part 0 : h1elNonDi    0.078 | idxi&idxj    0.005 | TETCI&DiI    0.319 | diIndsExp    0.008 | h1elDiUpd    0.009 | P_sub_from_contr    0.014 | FulSubFock    0.081 | En    0.007 | eVals/dVals    0.057 | TOT    0.579
+Rank 1 part 2 : h1elNonDi    0.079 | idxi&idxj    0.006 | TETCI&DiI    0.321 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.018 | FulSubFock    0.118 | En    0.004 | eVals/dVals    0.049 | TOT    0.612
+Rank 1 part 3 : h1elNonDi    0.074 | idxi&idxj    0.005 | TETCI&DiI    0.311 | diIndsExp    0.007 | h1elDiUpd    0.007 | P_sub_from_contr    0.021 | FulSubFock    0.100 | En    0.005 | eVals/dVals    0.038 | TOT    0.576
+Rank 0 part 1 : h1elNonDi    0.110 | idxi&idxj    0.006 | TETCI&DiI    0.347 | diIndsExp    0.009 | h1elDiUpd    0.012 | P_sub_from_contr    0.017 | FulSubFock    0.170 | En    0.014 | eVals/dVals    0.093 | TOT    0.787
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.71902155 0.00005979
+Final mu, g: 2 -4.73085994 -0.00000000
+Time to get_singlePoint    1.53 (s)
+eElec:   -1698888.17504520 | ΔE| 43.25946138
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0108327 at SubSy     1
+ Σ   |ΔDM_ij|: 22.0567864
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0106981 at SubSy     1
+ Σ   |ΔDM_ij|: 32.0693622
+Time to updt DM    0.15 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.00 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.83 (s)
+
+
+|||| Adaptive iter: 7 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.01 (s)
+Time to updt DM and mod graphs    0.10 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 0 part 0 : h1elNonDi    0.079 | idxi&idxj    0.005 | TETCI&DiI    0.320 | diIndsExp    0.008 | h1elDiUpd    0.008 | P_sub_from_contr    0.014 | FulSubFock    0.117 | En    0.006 | eVals/dVals    0.051 | TOT    0.609
+Rank 1 part 2 : h1elNonDi    0.079 | idxi&idxj    0.006 | TETCI&DiI    0.324 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.021 | FulSubFock    0.113 | En    0.005 | eVals/dVals    0.051 | TOT    0.622
+Rank 1 part 3 : h1elNonDi    0.076 | idxi&idxj    0.005 | TETCI&DiI    0.309 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.022 | FulSubFock    0.098 | En    0.005 | eVals/dVals    0.042 | TOT    0.573
+Rank 0 part 1 : h1elNonDi    0.110 | idxi&idxj    0.006 | TETCI&DiI    0.347 | diIndsExp    0.009 | h1elDiUpd    0.012 | P_sub_from_contr    0.017 | FulSubFock    0.167 | En    0.015 | eVals/dVals    0.097 | TOT    0.787
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.73085994 0.00002985
+Final mu, g: 2 -4.73711765 -0.00000000
+Time to get_singlePoint    1.57 (s)
+eElec:   -1698901.26175090 | ΔE| 13.08670570
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0075013 at SubSy     1
+ Σ   |ΔDM_ij|: 13.5520624
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0074447 at SubSy     1
+ Σ   |ΔDM_ij|: 19.8727825
+Time to updt DM    0.15 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.00 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.87 (s)
+
+
+|||| Adaptive iter: 8 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.01 (s)
+Time to updt DM and mod graphs    0.10 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 0 part 0 : h1elNonDi    0.077 | idxi&idxj    0.005 | TETCI&DiI    0.324 | diIndsExp    0.008 | h1elDiUpd    0.008 | P_sub_from_contr    0.014 | FulSubFock    0.084 | En    0.006 | eVals/dVals    0.053 | TOT    0.581
+Rank 1 part 2 : h1elNonDi    0.078 | idxi&idxj    0.006 | TETCI&DiI    0.314 | diIndsExp    0.009 | h1elDiUpd    0.007 | P_sub_from_contr    0.021 | FulSubFock    0.108 | En    0.004 | eVals/dVals    0.043 | TOT    0.597
+Rank 1 part 3 : h1elNonDi    0.074 | idxi&idxj    0.005 | TETCI&DiI    0.302 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.019 | FulSubFock    0.100 | En    0.005 | eVals/dVals    0.047 | TOT    0.573
+Rank 0 part 1 : h1elNonDi    0.111 | idxi&idxj    0.006 | TETCI&DiI    0.343 | diIndsExp    0.009 | h1elDiUpd    0.012 | P_sub_from_contr    0.017 | FulSubFock    0.158 | En    0.011 | eVals/dVals    0.095 | TOT    0.767
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.73711765 0.00001522
+Final mu, g: 2 -4.74042400 0.00000000
+Time to get_singlePoint    1.50 (s)
+eElec:   -1698905.23378506 | ΔE| 3.97203416
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0051426 at SubSy     1
+ Σ   |ΔDM_ij|:  8.7244438
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0051289 at SubSy     1
+ Σ   |ΔDM_ij|: 12.8365450
+Time to updt DM    0.15 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.00 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.80 (s)
+
+
+|||| Adaptive iter: 9 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.01 (s)
+Time to updt DM and mod graphs    0.10 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 0 part 0 : h1elNonDi    0.075 | idxi&idxj    0.005 | TETCI&DiI    0.320 | diIndsExp    0.008 | h1elDiUpd    0.009 | P_sub_from_contr    0.013 | FulSubFock    0.082 | En    0.006 | eVals/dVals    0.054 | TOT    0.573
+Rank 1 part 2 : h1elNonDi    0.077 | idxi&idxj    0.006 | TETCI&DiI    0.322 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.018 | FulSubFock    0.109 | En    0.004 | eVals/dVals    0.044 | TOT    0.597
+Rank 1 part 3 : h1elNonDi    0.074 | idxi&idxj    0.005 | TETCI&DiI    0.317 | diIndsExp    0.007 | h1elDiUpd    0.007 | P_sub_from_contr    0.020 | FulSubFock    0.098 | En    0.005 | eVals/dVals    0.049 | TOT    0.590
+Rank 0 part 1 : h1elNonDi    0.111 | idxi&idxj    0.006 | TETCI&DiI    0.346 | diIndsExp    0.009 | h1elDiUpd    0.012 | P_sub_from_contr    0.018 | FulSubFock    0.161 | En    0.011 | eVals/dVals    0.093 | TOT    0.773
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.74042400 0.00000802
+Final mu, g: 1 -4.74220625 0.00000000
+Time to get_singlePoint    1.45 (s)
+eElec:   -1698906.44703074 | ΔE| 1.21324569
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0035073 at SubSy     1
+ Σ   |ΔDM_ij|:  5.8479272
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0036342 at SubSy     1
+ Σ   |ΔDM_ij|:  8.5917551
+Time to updt DM    0.15 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.00 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.75 (s)
+
+
+|||| Adaptive iter: 10 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.01 (s)
+Time to updt DM and mod graphs    0.11 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 0 part 0 : h1elNonDi    0.078 | idxi&idxj    0.005 | TETCI&DiI    0.317 | diIndsExp    0.008 | h1elDiUpd    0.008 | P_sub_from_contr    0.013 | FulSubFock    0.107 | En    0.006 | eVals/dVals    0.053 | TOT    0.596
+Rank 1 part 2 : h1elNonDi    0.078 | idxi&idxj    0.006 | TETCI&DiI    0.324 | diIndsExp    0.007 | h1elDiUpd    0.007 | P_sub_from_contr    0.021 | FulSubFock    0.107 | En    0.004 | eVals/dVals    0.049 | TOT    0.612
+Rank 1 part 3 : h1elNonDi    0.074 | idxi&idxj    0.005 | TETCI&DiI    0.305 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.019 | FulSubFock    0.101 | En    0.004 | eVals/dVals    0.038 | TOT    0.569
+Rank 0 part 1 : h1elNonDi    0.112 | idxi&idxj    0.006 | TETCI&DiI    0.344 | diIndsExp    0.009 | h1elDiUpd    0.012 | P_sub_from_contr    0.017 | FulSubFock    0.165 | En    0.014 | eVals/dVals    0.096 | TOT    0.785
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.74220625 0.00000445
+Final mu, g: 1 -4.74320966 0.00000000
+Time to get_singlePoint    1.58 (s)
+eElec:   -1698906.82186090 | ΔE| 0.37483016
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0023845 at SubSy     1
+ Σ   |ΔDM_ij|:  4.0519012
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0028117 at SubSy     1
+ Σ   |ΔDM_ij|:  5.9333737
+Time to updt DM    0.15 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.01 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.90 (s)
+
+
+|||| Adaptive iter: 11 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.01 (s)
+Time to updt DM and mod graphs    0.11 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 1 part 2 : h1elNonDi    0.078 | idxi&idxj    0.006 | TETCI&DiI    0.321 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.020 | FulSubFock    0.144 | En    0.007 | eVals/dVals    0.041 | TOT    0.638
+Rank 0 part 0 : h1elNonDi    0.078 | idxi&idxj    0.005 | TETCI&DiI    0.323 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.022 | FulSubFock    0.174 | En    0.008 | eVals/dVals    0.081 | TOT    0.709
+Rank 1 part 3 : h1elNonDi    0.070 | idxi&idxj    0.005 | TETCI&DiI    0.289 | diIndsExp    0.007 | h1elDiUpd    0.007 | P_sub_from_contr    0.018 | FulSubFock    0.096 | En    0.004 | eVals/dVals    0.044 | TOT    0.548
+Rank 0 part 1 : h1elNonDi    0.134 | idxi&idxj    0.006 | TETCI&DiI    0.388 | diIndsExp    0.012 | h1elDiUpd    0.011 | P_sub_from_contr    0.020 | FulSubFock    0.182 | En    0.021 | eVals/dVals    0.123 | TOT    0.905
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.74320966 0.00000265
+Final mu, g: 1 -4.74381463 0.00000000
+Time to get_singlePoint    1.77 (s)
+eElec:   -1698906.94005431 | ΔE| 0.11819341
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0017336 at SubSy     0
+ Σ   |ΔDM_ij|:  2.8907436
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0021700 at SubSy     1
+ Σ   |ΔDM_ij|:  4.2140431
+Time to updt DM    0.20 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.00 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     2.14 (s)
+
+
+|||| Adaptive iter: 12 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.02 (s)
+Time to updt DM and mod graphs    0.14 (s)
+Time to updt DM and mod graphs    0.01 (s)
+Time to bcast DM and mod graphs    0.01 (s) 0
+Rank 1 part 2 : h1elNonDi    0.077 | idxi&idxj    0.006 | TETCI&DiI    0.316 | diIndsExp    0.007 | h1elDiUpd    0.007 | P_sub_from_contr    0.019 | FulSubFock    0.119 | En    0.005 | eVals/dVals    0.051 | TOT    0.612
+Rank 0 part 0 : h1elNonDi    0.096 | idxi&idxj    0.005 | TETCI&DiI    0.373 | diIndsExp    0.010 | h1elDiUpd    0.009 | P_sub_from_contr    0.019 | FulSubFock    0.109 | En    0.005 | eVals/dVals    0.066 | TOT    0.696
+Rank 1 part 3 : h1elNonDi    0.075 | idxi&idxj    0.005 | TETCI&DiI    0.291 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.017 | FulSubFock    0.096 | En    0.005 | eVals/dVals    0.038 | TOT    0.548
+Rank 0 part 1 : h1elNonDi    0.110 | idxi&idxj    0.006 | TETCI&DiI    0.354 | diIndsExp    0.008 | h1elDiUpd    0.011 | P_sub_from_contr    0.014 | FulSubFock    0.163 | En    0.012 | eVals/dVals    0.079 | TOT    0.765
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.74381463 0.00000173
+Final mu, g: 1 -4.74421279 0.00000000
+Time to get_singlePoint    1.55 (s)
+eElec:   -1698906.97870175 | ΔE| 0.03864744
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0014854 at SubSy     0
+ Σ   |ΔDM_ij|:  2.1123751
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0016724 at SubSy     1
+ Σ   |ΔDM_ij|:  3.0671587
+Time to updt DM    0.15 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.00 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.91 (s)
+
+
+|||| Adaptive iter: 13 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.02 (s)
+Time to updt DM and mod graphs    0.10 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 0 part 0 : h1elNonDi    0.076 | idxi&idxj    0.005 | TETCI&DiI    0.319 | diIndsExp    0.008 | h1elDiUpd    0.009 | P_sub_from_contr    0.013 | FulSubFock    0.120 | En    0.005 | eVals/dVals    0.052 | TOT    0.609
+Rank 1 part 2 : h1elNonDi    0.078 | idxi&idxj    0.006 | TETCI&DiI    0.321 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.023 | FulSubFock    0.145 | En    0.004 | eVals/dVals    0.048 | TOT    0.642
+Rank 1 part 3 : h1elNonDi    0.074 | idxi&idxj    0.005 | TETCI&DiI    0.309 | diIndsExp    0.007 | h1elDiUpd    0.007 | P_sub_from_contr    0.019 | FulSubFock    0.095 | En    0.005 | eVals/dVals    0.047 | TOT    0.575
+Rank 0 part 1 : h1elNonDi    0.108 | idxi&idxj    0.006 | TETCI&DiI    0.344 | diIndsExp    0.009 | h1elDiUpd    0.012 | P_sub_from_contr    0.017 | FulSubFock    0.170 | En    0.014 | eVals/dVals    0.092 | TOT    0.782
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.74421279 0.00000124
+Final mu, g: 1 -4.74449986 0.00000000
+Time to get_singlePoint    1.49 (s)
+eElec:   -1698906.99214750 | ΔE| 0.01344575
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0012769 at SubSy     0
+ Σ   |ΔDM_ij|:  1.5754481
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0012877 at SubSy     1
+ Σ   |ΔDM_ij|:  2.2807825
+Time to updt DM    0.15 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.00 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.80 (s)
+
+
+|||| Adaptive iter: 14 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.01 (s)
+Time to updt DM and mod graphs    0.10 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 0 part 0 : h1elNonDi    0.076 | idxi&idxj    0.005 | TETCI&DiI    0.322 | diIndsExp    0.007 | h1elDiUpd    0.009 | P_sub_from_contr    0.014 | FulSubFock    0.111 | En    0.005 | eVals/dVals    0.060 | TOT    0.610
+Rank 1 part 2 : h1elNonDi    0.078 | idxi&idxj    0.007 | TETCI&DiI    0.322 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.018 | FulSubFock    0.113 | En    0.005 | eVals/dVals    0.047 | TOT    0.611
+Rank 1 part 3 : h1elNonDi    0.074 | idxi&idxj    0.005 | TETCI&DiI    0.302 | diIndsExp    0.007 | h1elDiUpd    0.007 | P_sub_from_contr    0.018 | FulSubFock    0.096 | En    0.004 | eVals/dVals    0.039 | TOT    0.557
+Rank 0 part 1 : h1elNonDi    0.110 | idxi&idxj    0.006 | TETCI&DiI    0.350 | diIndsExp    0.009 | h1elDiUpd    0.012 | P_sub_from_contr    0.017 | FulSubFock    0.156 | En    0.011 | eVals/dVals    0.074 | TOT    0.754
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.74449986 0.00000097
+Final mu, g: 1 -4.74472353 0.00000000
+Time to get_singlePoint    1.45 (s)
+eElec:   -1698906.99730062 | ΔE| 0.00515312
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0010999 at SubSy     0
+ Σ   |ΔDM_ij|:  1.1962770
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0009908 at SubSy     1
+ Σ   |ΔDM_ij|:  1.7285443
+Time to updt DM    0.15 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.00 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.75 (s)
+
+
+|||| Adaptive iter: 15 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.01 (s)
+Time to updt DM and mod graphs    0.10 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 0 part 0 : h1elNonDi    0.077 | idxi&idxj    0.005 | TETCI&DiI    0.323 | diIndsExp    0.008 | h1elDiUpd    0.009 | P_sub_from_contr    0.013 | FulSubFock    0.084 | En    0.006 | eVals/dVals    0.059 | TOT    0.585
+Rank 1 part 2 : h1elNonDi    0.079 | idxi&idxj    0.006 | TETCI&DiI    0.320 | diIndsExp    0.007 | h1elDiUpd    0.009 | P_sub_from_contr    0.020 | FulSubFock    0.107 | En    0.005 | eVals/dVals    0.050 | TOT    0.608
+Rank 1 part 3 : h1elNonDi    0.075 | idxi&idxj    0.005 | TETCI&DiI    0.315 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.019 | FulSubFock    0.097 | En    0.004 | eVals/dVals    0.038 | TOT    0.575
+Rank 0 part 1 : h1elNonDi    0.112 | idxi&idxj    0.006 | TETCI&DiI    0.345 | diIndsExp    0.009 | h1elDiUpd    0.012 | P_sub_from_contr    0.022 | FulSubFock    0.165 | En    0.011 | eVals/dVals    0.090 | TOT    0.774
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.74472353 0.00000079
+Final mu, g: 1 -4.74490769 0.00000000
+Time to get_singlePoint    1.46 (s)
+eElec:   -1698906.99954821 | ΔE| 0.00224759
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0009487 at SubSy     0
+ Σ   |ΔDM_ij|:  0.9226122
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0008040 at SubSy     0
+ Σ   |ΔDM_ij|:  1.3323483
+Time to updt DM    0.15 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.00 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.76 (s)
+
+
+|||| Adaptive iter: 16 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.01 (s)
+Time to updt DM and mod graphs    0.10 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 0 part 0 : h1elNonDi    0.077 | idxi&idxj    0.005 | TETCI&DiI    0.318 | diIndsExp    0.008 | h1elDiUpd    0.010 | P_sub_from_contr    0.014 | FulSubFock    0.104 | En    0.006 | eVals/dVals    0.058 | TOT    0.600
+Rank 1 part 2 : h1elNonDi    0.079 | idxi&idxj    0.006 | TETCI&DiI    0.332 | diIndsExp    0.009 | h1elDiUpd    0.008 | P_sub_from_contr    0.022 | FulSubFock    0.108 | En    0.005 | eVals/dVals    0.042 | TOT    0.619
+Rank 1 part 3 : h1elNonDi    0.072 | idxi&idxj    0.005 | TETCI&DiI    0.300 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.017 | FulSubFock    0.106 | En    0.005 | eVals/dVals    0.039 | TOT    0.560
+Rank 0 part 1 : h1elNonDi    0.108 | idxi&idxj    0.006 | TETCI&DiI    0.346 | diIndsExp    0.009 | h1elDiUpd    0.012 | P_sub_from_contr    0.017 | FulSubFock    0.158 | En    0.011 | eVals/dVals    0.074 | TOT    0.745
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.74490769 0.00000067
+Final mu, g: 1 -4.74506458 0.00000000
+Time to get_singlePoint    1.44 (s)
+eElec:   -1698907.00067631 | ΔE| 0.00112810
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0008190 at SubSy     0
+ Σ   |ΔDM_ij|:  0.7215988
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0006890 at SubSy     0
+ Σ   |ΔDM_ij|:  1.0428932
+Time to updt DM    0.15 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.00 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.74 (s)
+
+
+|||| Adaptive iter: 17 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.01 (s)
+Time to updt DM and mod graphs    0.11 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 0 part 0 : h1elNonDi    0.076 | idxi&idxj    0.005 | TETCI&DiI    0.323 | diIndsExp    0.008 | h1elDiUpd    0.009 | P_sub_from_contr    0.014 | FulSubFock    0.085 | En    0.006 | eVals/dVals    0.051 | TOT    0.578
+Rank 1 part 2 : h1elNonDi    0.077 | idxi&idxj    0.006 | TETCI&DiI    0.321 | diIndsExp    0.007 | h1elDiUpd    0.009 | P_sub_from_contr    0.019 | FulSubFock    0.108 | En    0.004 | eVals/dVals    0.050 | TOT    0.602
+Rank 1 part 3 : h1elNonDi    0.074 | idxi&idxj    0.005 | TETCI&DiI    0.305 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.018 | FulSubFock    0.099 | En    0.004 | eVals/dVals    0.038 | TOT    0.564
+Rank 0 part 1 : h1elNonDi    0.109 | idxi&idxj    0.006 | TETCI&DiI    0.344 | diIndsExp    0.009 | h1elDiUpd    0.011 | P_sub_from_contr    0.019 | FulSubFock    0.165 | En    0.016 | eVals/dVals    0.097 | TOT    0.781
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.74506458 0.00000058
+Final mu, g: 1 -4.74520075 0.00000000
+Time to get_singlePoint    1.48 (s)
+eElec:   -1698907.00131620 | ΔE| 0.00063989
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0007075 at SubSy     0
+ Σ   |ΔDM_ij|:  0.5714676
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0005911 at SubSy     0
+ Σ   |ΔDM_ij|:  0.8276894
+Time to updt DM    0.15 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.00 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.78 (s)
+
+
+|||| Adaptive iter: 18 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.01 (s)
+Time to updt DM and mod graphs    0.10 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 0 part 0 : h1elNonDi    0.075 | idxi&idxj    0.005 | TETCI&DiI    0.321 | diIndsExp    0.008 | h1elDiUpd    0.008 | P_sub_from_contr    0.014 | FulSubFock    0.082 | En    0.007 | eVals/dVals    0.051 | TOT    0.571
+Rank 1 part 2 : h1elNonDi    0.079 | idxi&idxj    0.006 | TETCI&DiI    0.326 | diIndsExp    0.007 | h1elDiUpd    0.007 | P_sub_from_contr    0.026 | FulSubFock    0.102 | En    0.005 | eVals/dVals    0.042 | TOT    0.602
+Rank 1 part 3 : h1elNonDi    0.074 | idxi&idxj    0.005 | TETCI&DiI    0.303 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.019 | FulSubFock    0.100 | En    0.004 | eVals/dVals    0.046 | TOT    0.572
+Rank 0 part 1 : h1elNonDi    0.109 | idxi&idxj    0.006 | TETCI&DiI    0.353 | diIndsExp    0.009 | h1elDiUpd    0.012 | P_sub_from_contr    0.019 | FulSubFock    0.166 | En    0.013 | eVals/dVals    0.094 | TOT    0.788
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.74520075 0.00000051
+Final mu, g: 1 -4.74532000 0.00000000
+Time to get_singlePoint    1.53 (s)
+eElec:   -1698907.00171295 | ΔE| 0.00039675
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0006113 at SubSy     0
+ Σ   |ΔDM_ij|:  0.4576815
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0005076 at SubSy     0
+ Σ   |ΔDM_ij|:  0.6650679
+Time to updt DM    0.15 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.01 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.84 (s)
+
+
+|||| Adaptive iter: 19 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.01 (s)
+Time to updt DM and mod graphs    0.10 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 0 part 0 : h1elNonDi    0.077 | idxi&idxj    0.006 | TETCI&DiI    0.320 | diIndsExp    0.009 | h1elDiUpd    0.008 | P_sub_from_contr    0.014 | FulSubFock    0.094 | En    0.006 | eVals/dVals    0.054 | TOT    0.589
+Rank 1 part 2 : h1elNonDi    0.078 | idxi&idxj    0.006 | TETCI&DiI    0.330 | diIndsExp    0.010 | h1elDiUpd    0.009 | P_sub_from_contr    0.021 | FulSubFock    0.107 | En    0.004 | eVals/dVals    0.052 | TOT    0.619
+Rank 1 part 3 : h1elNonDi    0.074 | idxi&idxj    0.005 | TETCI&DiI    0.309 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.019 | FulSubFock    0.101 | En    0.005 | eVals/dVals    0.046 | TOT    0.580
+Rank 0 part 1 : h1elNonDi    0.111 | idxi&idxj    0.006 | TETCI&DiI    0.347 | diIndsExp    0.009 | h1elDiUpd    0.011 | P_sub_from_contr    0.017 | FulSubFock    0.158 | En    0.011 | eVals/dVals    0.093 | TOT    0.768
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.74532000 0.00000045
+Final mu, g: 1 -4.74542481 0.00000000
+Time to get_singlePoint    1.46 (s)
+eElec:   -1698907.00197371 | ΔE| 0.00026076
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0005283 at SubSy     0
+ Σ   |ΔDM_ij|:  0.3702555
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0004361 at SubSy     0
+ Σ   |ΔDM_ij|:  0.5403634
+Time to updt DM    0.15 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.00 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.76 (s)
+
+
+|||| Adaptive iter: 20 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.01 (s)
+Time to updt DM and mod graphs    0.11 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 0 part 0 : h1elNonDi    0.075 | idxi&idxj    0.005 | TETCI&DiI    0.317 | diIndsExp    0.008 | h1elDiUpd    0.008 | P_sub_from_contr    0.013 | FulSubFock    0.080 | En    0.005 | eVals/dVals    0.052 | TOT    0.565
+Rank 1 part 2 : h1elNonDi    0.077 | idxi&idxj    0.006 | TETCI&DiI    0.325 | diIndsExp    0.007 | h1elDiUpd    0.007 | P_sub_from_contr    0.021 | FulSubFock    0.104 | En    0.004 | eVals/dVals    0.050 | TOT    0.609
+Rank 1 part 3 : h1elNonDi    0.075 | idxi&idxj    0.005 | TETCI&DiI    0.306 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.019 | FulSubFock    0.095 | En    0.005 | eVals/dVals    0.038 | TOT    0.563
+Rank 0 part 1 : h1elNonDi    0.109 | idxi&idxj    0.006 | TETCI&DiI    0.346 | diIndsExp    0.009 | h1elDiUpd    0.011 | P_sub_from_contr    0.018 | FulSubFock    0.169 | En    0.013 | eVals/dVals    0.072 | TOT    0.760
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.74542481 0.00000039
+Final mu, g: 1 -4.74551699 -0.00000000
+Time to get_singlePoint    1.42 (s)
+eElec:   -1698907.00215157 | ΔE| 0.00017786
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0004566 at SubSy     0
+ Σ   |ΔDM_ij|:  0.3023342
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0003749 at SubSy     0
+ Σ   |ΔDM_ij|:  0.4434523
+Time to updt DM    0.15 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.00 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.72 (s)
+
+
+|||| Adaptive iter: 21 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.01 (s)
+Time to updt DM and mod graphs    0.10 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 0 part 0 : h1elNonDi    0.077 | idxi&idxj    0.005 | TETCI&DiI    0.326 | diIndsExp    0.011 | h1elDiUpd    0.008 | P_sub_from_contr    0.015 | FulSubFock    0.105 | En    0.006 | eVals/dVals    0.050 | TOT    0.604
+Rank 1 part 2 : h1elNonDi    0.079 | idxi&idxj    0.006 | TETCI&DiI    0.335 | diIndsExp    0.010 | h1elDiUpd    0.008 | P_sub_from_contr    0.021 | FulSubFock    0.108 | En    0.004 | eVals/dVals    0.041 | TOT    0.621
+Rank 1 part 3 : h1elNonDi    0.073 | idxi&idxj    0.005 | TETCI&DiI    0.303 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.019 | FulSubFock    0.098 | En    0.005 | eVals/dVals    0.038 | TOT    0.563
+Rank 0 part 1 : h1elNonDi    0.110 | idxi&idxj    0.006 | TETCI&DiI    0.345 | diIndsExp    0.009 | h1elDiUpd    0.012 | P_sub_from_contr    0.017 | FulSubFock    0.167 | En    0.013 | eVals/dVals    0.078 | TOT    0.763
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.74551699 0.00000035
+Final mu, g: 1 -4.74559802 0.00000000
+Time to get_singlePoint    1.46 (s)
+eElec:   -1698907.00227587 | ΔE| 0.00012430
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0003947 at SubSy     0
+ Σ   |ΔDM_ij|:  0.2488954
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0003225 at SubSy     0
+ Σ   |ΔDM_ij|:  0.3672384
+Time to updt DM    0.15 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.02 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.78 (s)
+
+
+|||| Adaptive iter: 22 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.02 (s)
+Time to updt DM and mod graphs    0.11 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 1 part 2 : h1elNonDi    0.078 | idxi&idxj    0.006 | TETCI&DiI    0.316 | diIndsExp    0.008 | h1elDiUpd    0.007 | P_sub_from_contr    0.026 | FulSubFock    0.111 | En    0.004 | eVals/dVals    0.044 | TOT    0.603
+Rank 0 part 0 : h1elNonDi    0.077 | idxi&idxj    0.005 | TETCI&DiI    0.326 | diIndsExp    0.008 | h1elDiUpd    0.008 | P_sub_from_contr    0.020 | FulSubFock    0.116 | En    0.005 | eVals/dVals    0.051 | TOT    0.617
+Rank 1 part 3 : h1elNonDi    0.074 | idxi&idxj    0.005 | TETCI&DiI    0.306 | diIndsExp    0.007 | h1elDiUpd    0.007 | P_sub_from_contr    0.018 | FulSubFock    0.096 | En    0.004 | eVals/dVals    0.045 | TOT    0.568
+Rank 0 part 1 : h1elNonDi    0.107 | idxi&idxj    0.006 | TETCI&DiI    0.359 | diIndsExp    0.009 | h1elDiUpd    0.011 | P_sub_from_contr    0.023 | FulSubFock    0.166 | En    0.014 | eVals/dVals    0.096 | TOT    0.799
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.74559802 0.00000030
+Final mu, g: 1 -4.74566917 0.00000000
+Time to get_singlePoint    1.53 (s)
+eElec:   -1698907.00236422 | ΔE| 0.00008835
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0003411 at SubSy     0
+ Σ   |ΔDM_ij|:  0.2063628
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0002775 at SubSy     0
+ Σ   |ΔDM_ij|:  0.3065083
+Time to updt DM    0.15 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.01 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.85 (s)
+
+
+|||| Adaptive iter: 23 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.01 (s)
+Time to updt DM and mod graphs    0.11 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 1 part 2 : h1elNonDi    0.077 | idxi&idxj    0.006 | TETCI&DiI    0.326 | diIndsExp    0.007 | h1elDiUpd    0.007 | P_sub_from_contr    0.017 | FulSubFock    0.109 | En    0.005 | eVals/dVals    0.043 | TOT    0.598
+Rank 0 part 0 : h1elNonDi    0.077 | idxi&idxj    0.005 | TETCI&DiI    0.321 | diIndsExp    0.008 | h1elDiUpd    0.008 | P_sub_from_contr    0.022 | FulSubFock    0.114 | En    0.005 | eVals/dVals    0.044 | TOT    0.604
+Rank 1 part 3 : h1elNonDi    0.072 | idxi&idxj    0.005 | TETCI&DiI    0.307 | diIndsExp    0.007 | h1elDiUpd    0.007 | P_sub_from_contr    0.018 | FulSubFock    0.104 | En    0.005 | eVals/dVals    0.043 | TOT    0.573
+Rank 0 part 1 : h1elNonDi    0.105 | idxi&idxj    0.006 | TETCI&DiI    0.352 | diIndsExp    0.009 | h1elDiUpd    0.012 | P_sub_from_contr    0.025 | FulSubFock    0.164 | En    0.014 | eVals/dVals    0.098 | TOT    0.790
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.74566917 0.00000027
+Final mu, g: 1 -4.74573156 0.00000000
+Time to get_singlePoint    1.50 (s)
+eElec:   -1698907.00242781 | ΔE| 0.00006359
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0002949 at SubSy     0
+ Σ   |ΔDM_ij|:  0.1721466
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0002388 at SubSy     0
+ Σ   |ΔDM_ij|:  0.2575277
+Time to updt DM    0.15 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.00 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.81 (s)
+
+
+|||| Adaptive iter: 24 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.01 (s)
+Time to updt DM and mod graphs    0.10 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 0 part 0 : h1elNonDi    0.076 | idxi&idxj    0.005 | TETCI&DiI    0.328 | diIndsExp    0.008 | h1elDiUpd    0.009 | P_sub_from_contr    0.020 | FulSubFock    0.109 | En    0.005 | eVals/dVals    0.049 | TOT    0.609
+Rank 1 part 2 : h1elNonDi    0.082 | idxi&idxj    0.008 | TETCI&DiI    0.318 | diIndsExp    0.008 | h1elDiUpd    0.008 | P_sub_from_contr    0.018 | FulSubFock    0.109 | En    0.005 | eVals/dVals    0.055 | TOT    0.612
+Rank 1 part 3 : h1elNonDi    0.072 | idxi&idxj    0.005 | TETCI&DiI    0.300 | diIndsExp    0.007 | h1elDiUpd    0.007 | P_sub_from_contr    0.018 | FulSubFock    0.104 | En    0.005 | eVals/dVals    0.048 | TOT    0.571
+Rank 0 part 1 : h1elNonDi    0.104 | idxi&idxj    0.006 | TETCI&DiI    0.353 | diIndsExp    0.009 | h1elDiUpd    0.012 | P_sub_from_contr    0.022 | FulSubFock    0.166 | En    0.015 | eVals/dVals    0.093 | TOT    0.786
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.74573156 0.00000023
+Final mu, g: 1 -4.74578622 0.00000000
+Time to get_singlePoint    1.49 (s)
+eElec:   -1698907.00247403 | ΔE| 0.00004622
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0002549 at SubSy     0
+ Σ   |ΔDM_ij|:  0.1443489
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0002056 at SubSy     0
+ Σ   |ΔDM_ij|:  0.2176358
+Time to updt DM    0.15 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.00 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.79 (s)
+
+
+|||| Adaptive iter: 25 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.01 (s)
+Time to updt DM and mod graphs    0.11 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 0 part 0 : h1elNonDi    0.076 | idxi&idxj    0.005 | TETCI&DiI    0.326 | diIndsExp    0.008 | h1elDiUpd    0.009 | P_sub_from_contr    0.015 | FulSubFock    0.122 | En    0.007 | eVals/dVals    0.045 | TOT    0.612
+Rank 1 part 2 : h1elNonDi    0.078 | idxi&idxj    0.006 | TETCI&DiI    0.323 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.019 | FulSubFock    0.112 | En    0.007 | eVals/dVals    0.048 | TOT    0.615
+Rank 1 part 3 : h1elNonDi    0.072 | idxi&idxj    0.005 | TETCI&DiI    0.302 | diIndsExp    0.007 | h1elDiUpd    0.007 | P_sub_from_contr    0.018 | FulSubFock    0.094 | En    0.005 | eVals/dVals    0.043 | TOT    0.558
+Rank 0 part 1 : h1elNonDi    0.106 | idxi&idxj    0.006 | TETCI&DiI    0.349 | diIndsExp    0.009 | h1elDiUpd    0.013 | P_sub_from_contr    0.017 | FulSubFock    0.166 | En    0.013 | eVals/dVals    0.092 | TOT    0.780
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.74578622 0.00000020
+Final mu, g: 1 -4.74583405 0.00000000
+Time to get_singlePoint    1.50 (s)
+eElec:   -1698907.00250790 | ΔE| 0.00003387
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0002203 at SubSy     0
+ Σ   |ΔDM_ij|:  0.1215978
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0001854 at SubSy     1
+ Σ   |ΔDM_ij|:  0.1848587
+Time to updt DM    0.15 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.00 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.80 (s)
+
+
+|||| Adaptive iter: 26 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.01 (s)
+Time to updt DM and mod graphs    0.10 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 0 part 0 : h1elNonDi    0.074 | idxi&idxj    0.005 | TETCI&DiI    0.316 | diIndsExp    0.008 | h1elDiUpd    0.010 | P_sub_from_contr    0.014 | FulSubFock    0.103 | En    0.011 | eVals/dVals    0.056 | TOT    0.598
+Rank 1 part 2 : h1elNonDi    0.077 | idxi&idxj    0.006 | TETCI&DiI    0.333 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.019 | FulSubFock    0.102 | En    0.004 | eVals/dVals    0.042 | TOT    0.604
+Rank 1 part 3 : h1elNonDi    0.072 | idxi&idxj    0.005 | TETCI&DiI    0.308 | diIndsExp    0.007 | h1elDiUpd    0.007 | P_sub_from_contr    0.018 | FulSubFock    0.100 | En    0.004 | eVals/dVals    0.037 | TOT    0.563
+Rank 0 part 1 : h1elNonDi    0.108 | idxi&idxj    0.006 | TETCI&DiI    0.360 | diIndsExp    0.013 | h1elDiUpd    0.013 | P_sub_from_contr    0.017 | FulSubFock    0.168 | En    0.015 | eVals/dVals    0.074 | TOT    0.782
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.74583405 0.00000018
+Final mu, g: 1 -4.74587586 0.00000000
+Time to get_singlePoint    1.47 (s)
+eElec:   -1698907.00253288 | ΔE| 0.00002498
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0001904 at SubSy     0
+ Σ   |ΔDM_ij|:  0.1028379
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0001682 at SubSy     1
+ Σ   |ΔDM_ij|:  0.1577146
+Time to updt DM    0.15 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.00 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.77 (s)
+
+
+|||| Adaptive iter: 27 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.01 (s)
+Time to updt DM and mod graphs    0.10 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 1 part 2 : h1elNonDi    0.078 | idxi&idxj    0.006 | TETCI&DiI    0.314 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.021 | FulSubFock    0.114 | En    0.006 | eVals/dVals    0.043 | TOT    0.603
+Rank 0 part 0 : h1elNonDi    0.081 | idxi&idxj    0.008 | TETCI&DiI    0.351 | diIndsExp    0.007 | h1elDiUpd    0.009 | P_sub_from_contr    0.014 | FulSubFock    0.117 | En    0.005 | eVals/dVals    0.045 | TOT    0.638
+Rank 1 part 3 : h1elNonDi    0.071 | idxi&idxj    0.005 | TETCI&DiI    0.299 | diIndsExp    0.007 | h1elDiUpd    0.007 | P_sub_from_contr    0.018 | FulSubFock    0.097 | En    0.005 | eVals/dVals    0.038 | TOT    0.553
+Rank 0 part 1 : h1elNonDi    0.104 | idxi&idxj    0.006 | TETCI&DiI    0.351 | diIndsExp    0.009 | h1elDiUpd    0.012 | P_sub_from_contr    0.022 | FulSubFock    0.165 | En    0.012 | eVals/dVals    0.077 | TOT    0.768
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.74587586 0.00000016
+Final mu, g: 1 -4.74591240 0.00000000
+Time to get_singlePoint    1.50 (s)
+eElec:   -1698907.00255142 | ΔE| 0.00001854
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0001646 at SubSy     0
+ Σ   |ΔDM_ij|:  0.0872795
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0001527 at SubSy     1
+ Σ   |ΔDM_ij|:  0.1350958
+Time to updt DM    0.14 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.00 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.79 (s)
+
+
+|||| Adaptive iter: 28 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.01 (s)
+Time to updt DM and mod graphs    0.10 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 0 part 0 : h1elNonDi    0.076 | idxi&idxj    0.005 | TETCI&DiI    0.319 | diIndsExp    0.008 | h1elDiUpd    0.008 | P_sub_from_contr    0.014 | FulSubFock    0.112 | En    0.006 | eVals/dVals    0.043 | TOT    0.593
+Rank 1 part 2 : h1elNonDi    0.078 | idxi&idxj    0.006 | TETCI&DiI    0.323 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.020 | FulSubFock    0.115 | En    0.004 | eVals/dVals    0.041 | TOT    0.610
+Rank 1 part 3 : h1elNonDi    0.072 | idxi&idxj    0.005 | TETCI&DiI    0.304 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.019 | FulSubFock    0.110 | En    0.005 | eVals/dVals    0.037 | TOT    0.572
+Rank 0 part 1 : h1elNonDi    0.107 | idxi&idxj    0.006 | TETCI&DiI    0.349 | diIndsExp    0.009 | h1elDiUpd    0.012 | P_sub_from_contr    0.024 | FulSubFock    0.168 | En    0.015 | eVals/dVals    0.080 | TOT    0.778
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.74591240 0.00000014
+Final mu, g: 1 -4.74594432 0.00000000
+Time to get_singlePoint    1.54 (s)
+eElec:   -1698907.00256524 | ΔE| 0.00001383
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0001422 at SubSy     0
+ Σ   |ΔDM_ij|:  0.0743133
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0001388 at SubSy     1
+ Σ   |ΔDM_ij|:  0.1161651
+Time to updt DM    0.15 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.01 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.85 (s)
+
+
+|||| Adaptive iter: 29 ||||
+Time to  bcast DM_cpu_np    0.00 (s) 0
+Core and halos indices for every part:
+  N atoms in core/coreHalo      0 :    200    264
+  N atoms in core/coreHalo      1 :    296    372
+  N atoms in core/coreHalo      2 :    196    253
+  N atoms in core/coreHalo      3 :    192    238
+Time to compute halos    0.01 (s)
+Time to updt DM and mod graphs    0.02 (s)
+Time to updt DM and mod graphs    0.11 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time to bcast DM and mod graphs    0.00 (s) 0
+Rank 1 part 2 : h1elNonDi    0.078 | idxi&idxj    0.006 | TETCI&DiI    0.324 | diIndsExp    0.007 | h1elDiUpd    0.009 | P_sub_from_contr    0.018 | FulSubFock    0.111 | En    0.004 | eVals/dVals    0.043 | TOT    0.607
+Rank 0 part 0 : h1elNonDi    0.078 | idxi&idxj    0.005 | TETCI&DiI    0.325 | diIndsExp    0.007 | h1elDiUpd    0.009 | P_sub_from_contr    0.020 | FulSubFock    0.119 | En    0.005 | eVals/dVals    0.043 | TOT    0.613
+Rank 1 part 3 : h1elNonDi    0.070 | idxi&idxj    0.005 | TETCI&DiI    0.303 | diIndsExp    0.007 | h1elDiUpd    0.007 | P_sub_from_contr    0.017 | FulSubFock    0.098 | En    0.004 | eVals/dVals    0.038 | TOT    0.556
+Rank 0 part 1 : h1elNonDi    0.106 | idxi&idxj    0.006 | TETCI&DiI    0.355 | diIndsExp    0.009 | h1elDiUpd    0.012 | P_sub_from_contr    0.018 | FulSubFock    0.164 | En    0.014 | eVals/dVals    0.072 | TOT    0.764
+
+Calculating mu:
+Iter, mu, g:
+     0 -4.74594432 0.00000012
+Final mu, g: 1 -4.74597218 0.00000000
+Time to get_singlePoint    1.47 (s)
+eElec:   -1698907.00257561 | ΔE| 0.00001036
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0001229 at SubSy     0
+ Σ   |ΔDM_ij|:  0.0634454
+HERE_DM_1
+ MAX |ΔDM_ij|:  0.0001262 at SubSy     1
+ Σ   |ΔDM_ij|:  0.1002395
+Time to updt DM    0.14 (s)
+Time to add graphs    0.01 (s)
+DM TRACE: 2264.0000000
+Time to get trace    0.00 (s)
+Time to bcast fullGraph    0.00 (s)
+t Iter     1.77 (s)
+
+Core and halos indices for every part:
+N atoms in core/coreHalo      0 :    200    264
+N atoms in core/coreHalo      1 :    296    372
+N atoms in core/coreHalo      2 :    196    253
+N atoms in core/coreHalo      3 :    192    238
+Time to updt DM and mod graphs    0.01 (s)
+Time to updt DM and mod graphs    0.10 (s)
+Time to updt DM and mod graphs    0.00 (s)
+Time init forces     0.14 (s)
+Rank 1 part 2 : h1elNonDi    0.148 | idxi&idxj    0.005 | TETCI&DiI    0.657 | diIndsExp    0.021 | h1elDiUpd    0.016 | P_sub_from_contr    0.229 | FulSubFock    0.185 | En    0.007 | Force    3.111 | TOT    4.383 || EelecCH -356205.818 eV ||
+Rank 0 part 0 : h1elNonDi    0.149 | idxi&idxj    0.005 | TETCI&DiI    0.875 | diIndsExp    0.011 | h1elDiUpd    0.019 | P_sub_from_contr    0.023 | FulSubFock    0.142 | En    0.007 | Force    3.313 | TOT    4.549 || EelecCH -373578.929 eV ||
+Rank 1 part 3 : h1elNonDi    0.104 | idxi&idxj    0.005 | TETCI&DiI    0.347 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.019 | FulSubFock    0.085 | En    0.004 | Force    1.856 | TOT    2.440 || EelecCH -340614.177 eV ||
+Rank 0 part 1 : h1elNonDi    0.150 | idxi&idxj    0.006 | TETCI&DiI    0.432 | diIndsExp    0.009 | h1elDiUpd    0.014 | P_sub_from_contr    0.024 | FulSubFock    0.198 | En    0.023 | Force    2.744 | TOT    3.606 || EelecCH -628508.079 eV ||
+Time to get electron forces     8.16 (s)
+eElec:   -1698907.002583403839
+TOTAL TIME   68.59 (s) 1
+Enuc:   1636910.253524194239
+Time to get nuclear forces     0.08 (s)
+TOTAL TIME   68.70 (s) 0
