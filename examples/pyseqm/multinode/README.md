@@ -20,26 +20,17 @@ It is designed to handle finite systems. Therefore, structures are placed in box
 #### Environment and Execution
 In slurm submission script `slurm.sl`:
 1. Set the  number of nodes `--nodes`.
-2. Set `--ntasks-per-node`. `--nodes` * `--ntasks-per-node` will be the total number of ranks.
-1. Set the desired number of OpenMP threads:
-   ```shell
-   export OMP_NUM_THREADS=4
-   ```
-2. Activate the required environment:
-   ```shell
-   cd JOB_DIRECTORY
-   source activate sedacs
-   ```
-3. Run the calculation on two ranks:
-   ```shell
-   mpirun -bind-to none -n 2 python -u main.py > out.out 2>&1
-   ```
+2. Set `--ntasks-per-node`. (`--nodes` * `--ntasks-per-node` will be the total number of ranks)
+3. Set `--cpus-per-task`. This will also be used as the number of OpenMP threads.
+4. Load conda and cuda modules, activate the environment.
+5. (Optional) `PYTHONUNBUFFERED=1' is used for writing the output on-the fly.
+6. Set your `--mpi`.
 
 #### Partitioning
 
-- The system (e.g., nanostar) will be partitioned into parts as specified by the `NumParts` keyword in `input.in`.
-- Each rank will process an equal number of parts. For example, with `NumParts= 4` and `-n 2`, each rank processes 2 parts.
-- **Important:** Ensure `NumParts` is divisible by the number of ranks specified with `-n`.
+- The system (here, Gramicidin S solvated in H2O, Cl, Na, 3605 atoms) will be partitioned into 16 parts as specified by the `NumParts` keyword in `input.in`.
+- Each rank will process an equal number of parts. For example, with `--nodes=2`, `--ntasks-per-node=8`, and `NumParts= 16`, each rank processes 1 part.
+- **Important:** Ensure `NumParts` is divisible by `--nodes` * `--ntasks-per-node`.
 
 ---
 
@@ -49,38 +40,27 @@ In slurm submission script `slurm.sl`:
 
 - In `input.in`, set:
   - `scfDevice= cuda`
-  - If running on a single machine, set `numGPU= -1` (the code will detect the number of available GPUs automatically).
+  - If running on a single node or nodes are homogeneous (number of GPUs per node is the same for all nodes), set `numGPU= -1` (the code will detect the number of available GPUs automatically).
+  - If the number of GPUs per node is NOT the same for all nodes, set `numGPU=` to a MINIMUM number of available GPUs per node.
 
 #### Environment and Execution
 
-1. Set the desired number of OpenMP threads:
-   ```shell
-   export OMP_NUM_THREADS=4
-   ```
-2. Activate the required environment:
-   ```shell
-   cd JOB_DIRECTORY
-   source activate sedacs
-   ```
-3. Run the calculation on two ranks:
-   ```shell
-   mpirun -bind-to none -n 2 python -u main.py > out.out 2>&1
-   ```
+In slurm submission script `slurm.sl`:
+1. Set the  number of nodes `--nodes`.
+2. Set `--ntasks-per-node`. (`--nodes` * `--ntasks-per-node` will be the total number of ranks)
+3. Set `--cpus-per-task`. This will also be used as the number of OpenMP threads.
+4. Load conda and cuda modules, activate the environment.
+5. (Optional) `PYTHONUNBUFFERED=1' is used for writing the output on-the fly.
+6. Set your `--mpi`.
 
 #### Partitioning and GPU Utilization
 
 - The system will be partitioned into parts as specified by the `NumParts` keyword.
-- Partitioned parts are distributed across GPUs. If only one GPU is available, all parts will be processed sequentially on rank 0.
+- Partitioned parts are evenly distributed across GPUs. If only one GPU is available, all parts will be processed sequentially on rank 0.
 - **Hybrid GPU-CPU Execution:**
   - Hamiltonian construction, diagonalization, energy/forces calculations are performed on GPUs.
-  - Density matrix updates are performed on the CPU, in parallel on all ranks specified with `-n`. For example, with `-n 4` and `NumParts= 4`, the i-th rank updates the portion of the density matrix corresponding to i-th part (aka i-th core+halo).
+  - Density matrix updates are performed on the CPU, in parallel on all ranks on node 0.
   - Graph updates and density matrix contraction are performed on rank 0.
-- **Important:** Ensure `NumParts` is divisible by the number of ranks (`-n`) and the number of available GPUs. The number of ranks (`-n`) must be `>=` the number of available GPUs. 
+- **Important:** Ensure `NumParts` is divisible by `--nodes` * `--ntasks-per-node` and by the number of available GPUs. `--ntasks-per-node` must be `>=` the number of available GPUs per node. 
 
 ---
-
-### Notes
-
-- Ensure all required paths and parameters are set correctly before running the calculation.
-- Use `NumParts` carefully to optimize performance based on your available hardware (ranks and GPUs).
-

@@ -10,8 +10,8 @@
 module purge
 module load miniconda3
 module load cuda/12.0.0
-
 source activate sedacs
+
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 export PYTHONUNBUFFERED=1
 
