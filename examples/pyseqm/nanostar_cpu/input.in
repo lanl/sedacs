@@ -24,5 +24,5 @@ restartSave= False                                             # Save files for 
 restartLoad= False                                             # Load files for scf restart.
 numGPU= -1                                                     # If on CPU, no efect. If on GPU and nodes are homogeneous, set to -1. If on GPU and nodes are inhomogeneous (diferent number of GPUs per node), set it to the minimum number of GPUs per node. 
 writeGeom= False                                               # Save core and core+halo geometries.
-Engine= {"Name":"ProxyAPython","InterfaceType":"PySEQM","Path":"/home/maxim/Projects/SEDACS_1/sedacs/proxies/python/","Executable":"/home/maxim/Projects/SEDACS_1/sedacs/examples/pyseqm/"} #The name of the external code
+Engine= {"Name":"ProxyAPython","InterfaceType":"PySEQM","Path":"/home/maxim/Projects/SEDACS_1/sedacs/proxies/python/","Executable":""} #The name of the external code
 

@@ -13,7 +13,6 @@
   - `pyseqm_path`
 - In `input.in`, modify the paths for:
   - `Path`
-  - `Executable`
 
 #### Environment and Execution
 
@@ -34,7 +33,7 @@
 #### Partitioning
 
 - The system (e.g., nanostar) will be partitioned into parts as specified by the `NumParts` keyword in `input.in`.
-- Each rank will process an equal number of parts. For example, with `NumParts=4` and `-n 2`, each rank processes 2 parts.
+- Each rank will process an equal number of parts. For example, with `NumParts= 4` and `-n 2`, each rank processes 2 parts.
 - **Important:** Ensure `NumParts` is divisible by the number of ranks specified with `-n`.
 
 ---
@@ -44,8 +43,8 @@
 #### File Modifications
 
 - In `input.in`, set:
-  - `scfDevice = cuda`
-  - If running on a single machine, set `numGPU = -1` (the code will detect the number of available GPUs automatically).
+  - `scfDevice= cuda`
+  - If running on a single machine, set `numGPU= -1` (the code will detect the number of available GPUs automatically).
 
 #### Environment and Execution
 
@@ -69,9 +68,9 @@
 - Partitioned parts are distributed across GPUs. If only one GPU is available, all parts will be processed sequentially on rank 0.
 - **Hybrid GPU-CPU Execution:**
   - Hamiltonian construction, diagonalization, energy/forces calculations are performed on GPUs.
-  - Density matrix updates are performed on the CPU, in parallel on all ranks specified with `-n`. For example, with `-n 4` and `NumParts=4`, the i-th rank updates the portion of the density matrix corresponding to i-th part (aka i-th core+halo).
+  - Density matrix updates are performed on the CPU, in parallel on all ranks specified with `-n`. For example, with `-n 4` and `NumParts= 4`, the i-th rank updates the portion of the density matrix corresponding to i-th part (aka i-th core+halo).
   - Graph updates and density matrix contraction are performed on rank 0.
-- **Important:** Ensure `NumParts` is divisible by the number of ranks (`-n`) and the number of available GPUs.
+- **Important:** Ensure `NumParts` is divisible by the number of ranks (`-n`) and the number of available GPUs. The number of ranks (`-n`) must be `>=` the number of available GPUs. 
 
 ---
 
