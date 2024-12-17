@@ -2,251 +2,34 @@ num_threads 8
 num_threads 8
 loading nvidia...
 loading nvidia...
+Traceback (most recent call last):
+  File "/home/maxim/Projects/SEDACS_1/sedacs/examples/pyseqm/singleNode_nanostar/main.py", line 18, in <module>
+    from sedacs.driver.graph_adaptive import get_adaptiveDM
+  File "/home/maxim/anaconda3/envs/sedacs_2/lib/python3.10/site-packages/sedacs/driver/graph_adaptive.py", line 5, in <module>
+    from sedacs.density_matrix import get_density_matrix, get_initDM, get_dmErrs, get_dmTrace
+  File "/home/maxim/anaconda3/envs/sedacs_2/lib/python3.10/site-packages/sedacs/density_matrix.py", line 10, in <module>
+    from sedacs.interface_pyseqm import get_molecule_pyseqm
+Traceback (most recent call last):
+  File "/home/maxim/anaconda3/envs/sedacs_2/lib/python3.10/site-packages/sedacs/interface_pyseqm.py", line 27, in <module>
+  File "/home/maxim/Projects/SEDACS_1/sedacs/examples/pyseqm/singleNode_nanostar/main.py", line 18, in <module>
+    class pyseqmObjects(torch.nn.Module):
+NameError: name 'torch' is not defined
+    from sedacs.driver.graph_adaptive import get_adaptiveDM
+  File "/home/maxim/anaconda3/envs/sedacs_2/lib/python3.10/site-packages/sedacs/driver/graph_adaptive.py", line 5, in <module>
+    from sedacs.density_matrix import get_density_matrix, get_initDM, get_dmErrs, get_dmTrace
+  File "/home/maxim/anaconda3/envs/sedacs_2/lib/python3.10/site-packages/sedacs/density_matrix.py", line 10, in <module>
+    from sedacs.interface_pyseqm import get_molecule_pyseqm
+  File "/home/maxim/anaconda3/envs/sedacs_2/lib/python3.10/site-packages/sedacs/interface_pyseqm.py", line 27, in <module>
+    class pyseqmObjects(torch.nn.Module):
+NameError: name 'torch' is not defined
+--------------------------------------------------------------------------
+Primary job  terminated normally, but 1 process returned
+a non-zero exit code. Per user-direction, the job has been aborted.
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+mpirun detected that one or more processes exited with non-zero status, thus causing
+the job to be terminated. The first process to do so was:
 
-Input variables:
-Input:  Tag= myRun
-Input:  CoordsFile= nanostar.pdb
-Input:  InitGraphType= Geom
-Input:  PartitionType= SpectralClustering
-Input:  MaxDeg= 500
-Input:  NumParts= 4
-Input:  Rcut= 3.0
-Input:  Alpha= 0.7
-Input:  Threshold= 1e-05
-Input:  GraphThreshold= 0.0005
-Input:  GraphThresholdInit= 0.04
-Input:  Field= [0. 0. 0.]
-Input:  Orbitals= {'H': 1, 'Li': 4, 'C': 4, 'N': 4, 'O': 4, 'F': 4, 'Cl': 4, 'Na': 4}
-Input:  Valency= {'H': 1, 'Li': 1, 'C': 4, 'N': 5, 'O': 6, 'F': 7, 'Cl': 7, 'Na': 1}
-Input:  Tel= 4000.0
-Input:  scfDevice= cpu
-Input:  ijMethod= Vec
-Input:  numJumps= 1
-Input:  NumAdaptiveIter= 30
-Input:  numGPU= -1
-Input:  EngineInterfaceType= Files
-Input:  EngineName= ProxyA
-Input:  Engine= {'Name': 'ProxyAPython', 'InterfaceType': 'PySEQM', 'Path': '/home/maxim/Projects/SEDACS_1/sedacs/proxies/python/', 'Executable': ''}
-Input:  StopAt= 
-Input:  SCFTol= 1e-05
-Time for build_nlist 2.0922057516872883 (s)
-!!!!
-INITIALIZATION TIME    2.25 (s) 1
-INITIALIZATION TIME    2.23 (s) 0
-Time to init molSysData    0.01 (s) 0
-Computing cores.
-  Computing spectral_clustering_partition on XYZ data.
-Time to compute cores    0.16 (s) 0
-Loading the molecule and parameters.
-
-|||| Adaptive iter: 0 ||||
-Core and halos indices for every part:
-  N atoms in core/coreHalo      0 :    200    206
-  N atoms in core/coreHalo      1 :    296    300
-  N atoms in core/coreHalo      2 :    196    202
-  N atoms in core/coreHalo      3 :    192    194
-Time to compute halos    0.01 (s) 0
-Time to init mod graphs    0.03 (s) 0
-Time to init DM    0.01 (s) 0
-BCST1    0.00 (s) 0
-BCST2    0.06 (s) 0
-BCST3    0.01 (s) 0
-Time to init bcast and share DM    0.01 (s) 0
-Time INIT    0.29 (s)
-
-
-|||| Adaptive iter: 0 ||||
-Time to  bcast DM_cpu_np    0.00 (s) 0
-Time to init bcast and share DM    0.01 (s) 1
-Rank 1 part 2 : h1elNonDi    0.077 | idxi&idxj    0.006 | TETCI&DiI    0.365 | diIndsExp    0.007 | h1elDiUpd    0.007 | P_sub_from_contr    0.014 | FulSubFock    0.074 | En    0.003 | eVals/dVals    0.030 | TOT    0.587
-Rank 0 part 0 : h1elNonDi    0.101 | idxi&idxj    0.006 | TETCI&DiI    0.321 | diIndsExp    0.010 | h1elDiUpd    0.009 | P_sub_from_contr    0.013 | FulSubFock    0.086 | En    0.003 | eVals/dVals    0.041 | TOT    0.595
-Rank 1 part 3 : h1elNonDi    0.063 | idxi&idxj    0.004 | TETCI&DiI    0.260 | diIndsExp    0.006 | h1elDiUpd    0.006 | P_sub_from_contr    0.011 | FulSubFock    0.071 | En    0.003 | eVals/dVals    0.031 | TOT    0.462
-Rank 0 part 1 : h1elNonDi    0.116 | idxi&idxj    0.005 | TETCI&DiI    0.401 | diIndsExp    0.011 | h1elDiUpd    0.015 | P_sub_from_contr    0.014 | FulSubFock    0.137 | En    0.011 | eVals/dVals    0.081 | TOT    0.797
-/home/maxim/anaconda3/envs/sedacs_2/lib/python3.10/site-packages/torch/storage.py:414: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
-  return torch.load(io.BytesIO(b))
-
-Calculating mu:
-Iter, mu, g:
-     0 -5.50000000 1.34600289
-Final mu, g: 3 -5.54774484 0.00000000
-Time to get_singlePoint    1.74 (s)
-/home/maxim/anaconda3/envs/sedacs_2/lib/python3.10/site-packages/torch/storage.py:414: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
-  return torch.load(io.BytesIO(b))
-eElec:   -1680061.50823576 | ΔE| 1680061.50823576
-HERE_DM_1
- MAX |ΔDM_ij|:  0.8360743 at SubSy     0
- Σ   |ΔDM_ij|: 3331.7130464
-HERE_DM_1
- MAX |ΔDM_ij|:  0.8918732 at SubSy     1
- Σ   |ΔDM_ij|: 4569.6834497
-Time to updt DM    0.14 (s)
-Time to add graphs    0.01 (s)
-DM TRACE: 2264.0000000
-Time to get trace    0.02 (s)
-Time to bcast fullGraph    0.00 (s)
-t Iter     1.92 (s)
-
-
-|||| Adaptive iter: 1 ||||
-Time to  bcast DM_cpu_np    0.00 (s) 0
-Core and halos indices for every part:
-  N atoms in core/coreHalo      0 :    200    256
-  N atoms in core/coreHalo      1 :    296    354
-  N atoms in core/coreHalo      2 :    196    224
-  N atoms in core/coreHalo      3 :    192    235
-Time to compute halos    0.01 (s)
-Time to updt DM and mod graphs    0.02 (s)
-Time to updt DM and mod graphs    0.14 (s)
-Time to updt DM and mod graphs    0.01 (s)
-Time to bcast DM and mod graphs    0.01 (s) 0
-Rank 1 part 2 : h1elNonDi    0.071 | idxi&idxj    0.006 | TETCI&DiI    0.334 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.014 | FulSubFock    0.091 | En    0.004 | eVals/dVals    0.040 | TOT    0.583
-Rank 0 part 0 : h1elNonDi    0.084 | idxi&idxj    0.006 | TETCI&DiI    0.320 | diIndsExp    0.008 | h1elDiUpd    0.008 | P_sub_from_contr    0.018 | FulSubFock    0.103 | En    0.006 | eVals/dVals    0.044 | TOT    0.599
-Rank 1 part 3 : h1elNonDi    0.073 | idxi&idxj    0.005 | TETCI&DiI    0.305 | diIndsExp    0.007 | h1elDiUpd    0.007 | P_sub_from_contr    0.017 | FulSubFock    0.094 | En    0.004 | eVals/dVals    0.037 | TOT    0.555
-Rank 0 part 1 : h1elNonDi    0.101 | idxi&idxj    0.006 | TETCI&DiI    0.341 | diIndsExp    0.008 | h1elDiUpd    0.011 | P_sub_from_contr    0.020 | FulSubFock    0.154 | En    0.014 | eVals/dVals    0.094 | TOT    0.756
-
-Calculating mu:
-Iter, mu, g:
-     0 -5.54774484 -2.47005047
-     4 -4.11463310 0.00028744
-Final mu, g: 6 -4.11512116 -0.00000000
-Time to get_singlePoint    1.71 (s)
-eElec:   -1691950.66478471 | ΔE| 11889.15654895
-HERE_DM_1
- MAX |ΔDM_ij|:  0.3110053 at SubSy     0
- Σ   |ΔDM_ij|: 963.7310698
-HERE_DM_1
- MAX |ΔDM_ij|:  0.3660774 at SubSy     1
- Σ   |ΔDM_ij|: 1344.6335615
-Time to updt DM    0.15 (s)
-Time to add graphs    0.01 (s)
-DM TRACE: 2264.0000000
-Time to get trace    0.01 (s)
-Time to bcast fullGraph    0.00 (s)
-t Iter     2.08 (s)
-
-
-|||| Adaptive iter: 2 ||||
-Time to  bcast DM_cpu_np    0.00 (s) 0
-Core and halos indices for every part:
-  N atoms in core/coreHalo      0 :    200    264
-  N atoms in core/coreHalo      1 :    296    372
-  N atoms in core/coreHalo      2 :    196    253
-  N atoms in core/coreHalo      3 :    192    238
-Time to compute halos    0.01 (s)
-Time to updt DM and mod graphs    0.01 (s)
-Time to updt DM and mod graphs    0.11 (s)
-Time to updt DM and mod graphs    0.00 (s)
-Time to bcast DM and mod graphs    0.00 (s) 0
-Rank 1 part 2 : h1elNonDi    0.078 | idxi&idxj    0.006 | TETCI&DiI    0.324 | diIndsExp    0.008 | h1elDiUpd    0.008 | P_sub_from_contr    0.018 | FulSubFock    0.109 | En    0.005 | eVals/dVals    0.041 | TOT    0.604
-Rank 0 part 0 : h1elNonDi    0.082 | idxi&idxj    0.005 | TETCI&DiI    0.324 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.020 | FulSubFock    0.107 | En    0.005 | eVals/dVals    0.056 | TOT    0.615
-Rank 1 part 3 : h1elNonDi    0.071 | idxi&idxj    0.005 | TETCI&DiI    0.304 | diIndsExp    0.007 | h1elDiUpd    0.007 | P_sub_from_contr    0.018 | FulSubFock    0.096 | En    0.004 | eVals/dVals    0.040 | TOT    0.559
-Rank 0 part 1 : h1elNonDi    0.107 | idxi&idxj    0.006 | TETCI&DiI    0.343 | diIndsExp    0.009 | h1elDiUpd    0.012 | P_sub_from_contr    0.017 | FulSubFock    0.161 | En    0.015 | eVals/dVals    0.076 | TOT    0.751
-
-Calculating mu:
-Iter, mu, g:
-     0 -4.11512116 0.01983617
-     4 -4.61627657 0.00000000
-Final mu, g: 4 -4.61627657 0.00000000
-Time to get_singlePoint    1.62 (s)
-eElec:   -1696694.81553168 | ΔE| 4744.15074696
-HERE_DM_1
- MAX |ΔDM_ij|:  0.1161320 at SubSy     1
- Σ   |ΔDM_ij|: 324.4455972
-HERE_DM_1
- MAX |ΔDM_ij|:  0.1389944 at SubSy     1
- Σ   |ΔDM_ij|: 445.3507513
-Time to updt DM    0.15 (s)
-Time to add graphs    0.01 (s)
-DM TRACE: 2264.0000000
-Time to get trace    0.00 (s)
-Time to bcast fullGraph    0.00 (s)
-t Iter     1.93 (s)
-
-
-|||| Adaptive iter: 3 ||||
-Time to  bcast DM_cpu_np    0.00 (s) 0
-Core and halos indices for every part:
-  N atoms in core/coreHalo      0 :    200    264
-  N atoms in core/coreHalo      1 :    296    372
-  N atoms in core/coreHalo      2 :    196    253
-  N atoms in core/coreHalo      3 :    192    238
-Time to compute halos    0.01 (s)
-Time to updt DM and mod graphs    0.01 (s)
-Time to updt DM and mod graphs    0.10 (s)
-Time to updt DM and mod graphs    0.00 (s)
-Time to bcast DM and mod graphs    0.00 (s) 0
-Rank 0 part 0 : h1elNonDi    0.077 | idxi&idxj    0.005 | TETCI&DiI    0.328 | diIndsExp    0.008 | h1elDiUpd    0.008 | P_sub_from_contr    0.014 | FulSubFock    0.111 | En    0.005 | eVals/dVals    0.047 | TOT    0.604
-Rank 1 part 2 : h1elNonDi    0.078 | idxi&idxj    0.006 | TETCI&DiI    0.328 | diIndsExp    0.008 | h1elDiUpd    0.008 | P_sub_from_contr    0.019 | FulSubFock    0.107 | En    0.004 | eVals/dVals    0.041 | TOT    0.606
-Rank 1 part 3 : h1elNonDi    0.072 | idxi&idxj    0.005 | TETCI&DiI    0.307 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.019 | FulSubFock    0.092 | En    0.005 | eVals/dVals    0.039 | TOT    0.558
-Rank 0 part 1 : h1elNonDi    0.104 | idxi&idxj    0.006 | TETCI&DiI    0.338 | diIndsExp    0.009 | h1elDiUpd    0.012 | P_sub_from_contr    0.023 | FulSubFock    0.165 | En    0.015 | eVals/dVals    0.088 | TOT    0.771
-
-Calculating mu:
-Iter, mu, g:
-     0 -4.61627657 0.00043565
-Final mu, g: 2 -4.65917071 -0.00000000
-Time to get_singlePoint    1.52 (s)
-eElec:   -1698229.81890857 | ΔE| 1535.00337689
-HERE_DM_1
- MAX |ΔDM_ij|:  0.0482689 at SubSy     1
- Σ   |ΔDM_ij|: 139.5346734
-HERE_DM_1
- MAX |ΔDM_ij|:  0.0527228 at SubSy     1
- Σ   |ΔDM_ij|: 192.5662912
-Time to updt DM    0.15 (s)
-Time to add graphs    0.01 (s)
-DM TRACE: 2264.0000000
-Time to get trace    0.01 (s)
-Time to bcast fullGraph    0.00 (s)
-t Iter     1.83 (s)
-
-
-|||| Adaptive iter: 4 ||||
-Time to  bcast DM_cpu_np    0.00 (s) 0
-Core and halos indices for every part:
-  N atoms in core/coreHalo      0 :    200    264
-  N atoms in core/coreHalo      1 :    296    372
-  N atoms in core/coreHalo      2 :    196    253
-  N atoms in core/coreHalo      3 :    192    238
-Time to compute halos    0.01 (s)
-Time to updt DM and mod graphs    0.02 (s)
-Time to updt DM and mod graphs    0.11 (s)
-Time to updt DM and mod graphs    0.00 (s)
-Time to bcast DM and mod graphs    0.00 (s) 0
-Rank 0 part 0 : h1elNonDi    0.076 | idxi&idxj    0.005 | TETCI&DiI    0.310 | diIndsExp    0.007 | h1elDiUpd    0.010 | P_sub_from_contr    0.020 | FulSubFock    0.103 | En    0.006 | eVals/dVals    0.059 | TOT    0.597
-Rank 1 part 2 : h1elNonDi    0.079 | idxi&idxj    0.006 | TETCI&DiI    0.329 | diIndsExp    0.007 | h1elDiUpd    0.008 | P_sub_from_contr    0.019 | FulSubFock    0.104 | En    0.004 | eVals/dVals    0.041 | TOT    0.605
-mpirun: Forwarding signal 20 to job
-Rank 1 part 3 : h1elNonDi    0.071 | idxi&idxj    0.005 | TETCI&DiI    0.305 | diIndsExp    0.007 | h1elDiUpd    0.031 | P_sub_from_contr    0.040 | FulSubFock    0.137 | En    0.005 | eVals/dVals    0.044 | TOT    0.658
-HERE_DM_1
- MAX |ΔDM_ij|:  0.0229967 at SubSy     1
- Σ   |ΔDM_ij|: 69.7810990
-Rank 0 part 1 : h1elNonDi    0.111 | idxi&idxj    0.006 | TETCI&DiI    0.386 | diIndsExp    0.010 | h1elDiUpd    0.014 | P_sub_from_contr    0.023 | FulSubFock    0.168 | En    0.014 | eVals/dVals    0.083 | TOT    0.820
-
-Calculating mu:
-Iter, mu, g:
-     0 -4.65917071 0.00025601
-Final mu, g: 2 -4.69712888 0.00000000
-Time to get_singlePoint    1.56 (s)
-eElec:   -1698701.80039667 | ΔE| 471.98148810
-HERE_DM_1
- MAX |ΔDM_ij|:  0.0225726 at SubSy     1
- Σ   |ΔDM_ij|: 98.3138535
-Time to updt DM    0.15 (s)
-Time to add graphs    0.01 (s)
-DM TRACE: 2264.0000000
-Time to get trace    0.01 (s)
-Time to bcast fullGraph    0.00 (s)
-t Iter     1.88 (s)
-
-
-|||| Adaptive iter: 5 ||||
-Time to  bcast DM_cpu_np    0.00 (s) 0
-Core and halos indices for every part:
-  N atoms in core/coreHalo      0 :    200    264
-  N atoms in core/coreHalo      1 :    296    372
-  N atoms in core/coreHalo      2 :    196    253
-  N atoms in core/coreHalo      3 :    192    238
-Time to compute halos    0.01 (s)
-Time to updt DM and mod graphs    0.01 (s)
-Time to updt DM and mod graphs    0.11 (s)
-Time to updt DM and mod graphs    0.00 (s)
-Time to bcast DM and mod graphs    0.00 (s) 0
+  Process name: [[1296,1],0]
+  Exit code:    1
+--------------------------------------------------------------------------

@@ -483,11 +483,18 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         print("Time to init mod graphs {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
         tic = time.perf_counter()
-        P_contr = torch.zeros(sy.nats*sdc.maxDeg,4,4, dtype=eng.torch_dt, device=device)  # contracted density matrix
-        P_contr[graph_maskd] = get_diag_guess_pyseqm(molecule_whole, sy) # diagonal initial guess
-        P_contr = P_contr.reshape(sy.nats, sdc.maxDeg, 4,4).transpose(0,1) # (n_atoms, max_deg, 4, 4). A rectangle of 4x4 square blocks.
-        P_contr_size = P_contr.size()
-        P_contr_nbytes = P_contr.numel() * P_contr.element_size()
+        if sdc.UHF:
+            P_contr = torch.zeros(2, sy.nats*sdc.maxDeg,4,4, dtype=eng.torch_dt, device=device)  # contracted density matrix
+            P_contr[:,graph_maskd] = get_diag_guess_pyseqm(molecule_whole, sy) # diagonal initial guess
+            P_contr = P_contr.reshape(2, sy.nats, sdc.maxDeg, 4,4).transpose(1,2) # (2, n_atoms, max_deg, 4, 4). A rectangle of 4x4 square blocks.
+            P_contr_size = P_contr.size()
+            P_contr_nbytes = P_contr.numel() * P_contr.element_size()
+        else:
+            P_contr = torch.zeros(sy.nats*sdc.maxDeg,4,4, dtype=eng.torch_dt, device=device)  # contracted density matrix
+            P_contr[graph_maskd] = get_diag_guess_pyseqm(molecule_whole, sy) # diagonal initial guess
+            P_contr = P_contr.reshape(sy.nats, sdc.maxDeg, 4,4).transpose(0,1) # (n_atoms, max_deg, 4, 4). A rectangle of 4x4 square blocks.
+            P_contr_size = P_contr.size()
+            P_contr_nbytes = P_contr.numel() * P_contr.element_size()
         print("Time to init DM {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
         # graphNL = collect_graph_from_rho(None, sdc.overlap_whole, sdc.gthreshinit, sy.nats, sdc.maxDeg, [i for i in range(0,sy.nats)],hindex)
         del graphNL

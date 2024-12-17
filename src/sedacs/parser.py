@@ -50,6 +50,8 @@ class Input:
         self.orbs = self.get_a_dict("Orbitals=", {"Bl": 1}, keyVals, validKeys, verb)
         ## Valency per atom type
         self.valency = self.get_a_dict("Valency=",{"Bl":1},keyVals,validKeys,verb)
+        ## Flag to run open shell calc 
+        self.UHF = self.get_a_bool("UHF=", False, keyVals, validKeys, verb=False)
         ## Electronic temperature 
         self.Tel = self.get_a_real("Tel=",0.0,keyVals,validKeys,verb)
         ## do scf on cpu or gpu 
