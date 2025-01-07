@@ -162,7 +162,7 @@ def get_singlePoint(sdc, eng,  partsPerGPU, partsPerNode, node_id, node_rank, ra
         Q_LIST = [Q_list]
         for i in range(1, gpu_comm.Get_size()):
             Q_LIST.append(gpu_comm.recv(source=i, tag=0))
-    print("Time Q_LIST send/recv {:>9.4f} (s)".format(time.perf_counter() - tic))
+    print("Time Q_LIST send/recv {:>9.4f} (s)".format(time.perf_counter() - tic), rank)
 
     tic = time.perf_counter()
     full_dVals = None
