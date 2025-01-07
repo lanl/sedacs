@@ -961,7 +961,7 @@ def spectral_clustering_partition(graph,nparts, coords, do_xyz, max_cluster_size
     if do_xyz: # on xyz
         print('  Computing spectral_clustering_partition on XYZ data.')
         clustering = SpectralClustering(n_clusters=nparts, affinity="nearest_neighbors",random_state=0,
-                                        n_neighbors=8, n_jobs=1, n_init=10) # or 'rbf' 'nearest_neighbors'
+                                        n_neighbors=400, n_jobs=1, n_init=10) # or 'rbf' 'nearest_neighbors'
         cluster_labels = clustering.fit_predict(coords)
         parts = [np.where(cluster_labels == i)[0].tolist() for i in range(nparts)]
 
@@ -983,14 +983,13 @@ def spectral_clustering_partition(graph,nparts, coords, do_xyz, max_cluster_size
 
         # Use k-means clustering on the selected eigenvectors
         clustering = SpectralClustering(n_clusters=nparts, affinity="rbf",random_state=0,
-                                        n_neighbors=20, n_jobs=32, n_init=20) # or 'rbf' 'nearest_neighbors'
+                                        n_neighbors=10, n_jobs=32, n_init=20) # or 'rbf' 'nearest_neighbors'
         cluster_labels = clustering.fit_predict(eigenvectors[:, :nparts])
         parts = [np.where(cluster_labels == i)[0].tolist() for i in range(nparts)]
 
     # Ensure clusters do not exceed max_cluster_size
     if max_cluster_size:
         parts = enforce_max_cluster_size_spectral(parts, adjacencyMatrixGraph, max_cluster_size)
-
 
     return parts
 
