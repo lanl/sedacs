@@ -89,7 +89,7 @@ def get_full_fock_pyseqm(nmol, molsize, P, M, maskd, mask, idxi, idxj, w, W, gss
     return fock(nmol, molsize, P, M, maskd, mask, idxi, idxj, w, W, gss, gpp, gsp, gp2, hsp,
          themethod, zetas, zetap, zetad, Z, F0SD, G2SD)
 
-def get_fock_pyseqm_2(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, parameters, maskd_sub, mask_sub):
+def get_fock_pyseqm(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, parameters, maskd_sub, mask_sub):
     '''
     Function returns Fock matrix for CH. In 4x4 block pyseqm format
     P: diagonal dm blocks of the whole system
@@ -177,27 +177,26 @@ def get_fock_pyseqm_2(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, pa
                            2.0, 2.0, 1.0,
                            2.0, 2.0, 2.0, 1.0],dtype=dtype, device=device).reshape((-1,10))
 
-    PA_test = (P[idxi[idxj_sub_ovrlp_with_rest]][...,(0,0,1,0,1,2,0,1,2,3),(0,1,1,2,2,2,3,3,3,3)]*weight).reshape((-1,10,1))
-    PB_test = (P[idxj[idxi_sub_ovrlp_with_rest]][...,(0,0,1,0,1,2,0,1,2,3),(0,1,1,2,2,2,3,3,3,3)]*weight).reshape((-1,1,10))
+    PA = (P[idxi[idxj_sub_ovrlp_with_rest]][...,(0,0,1,0,1,2,0,1,2,3),(0,1,1,2,2,2,3,3,3,3)]*weight).reshape((-1,10,1))
+    PB = (P[idxj[idxi_sub_ovrlp_with_rest]][...,(0,0,1,0,1,2,0,1,2,3),(0,1,1,2,2,2,3,3,3,3)]*weight).reshape((-1,1,10))
 
     #w_2_inj=w_2[where_isinj]
-    suma_test = torch.einsum('ijk,ijk->ik',PA_test,w_2[where_isinj])
-    sumA_test = torch.zeros(torch.sum(isinj),4,4,dtype=dtype, device=device)
-    sumA_test[...,(0,0,1,0,1,2,0,1,2,3),(0,1,1,2,2,2,3,3,3,3)] = suma_test
+    suma = torch.einsum('ijk,ijk->ik',PA,w_2[where_isinj])
+    sumA = torch.zeros(torch.sum(isinj),4,4,dtype=dtype, device=device)
+    sumA[...,(0,0,1,0,1,2,0,1,2,3),(0,1,1,2,2,2,3,3,3,3)] = suma
     jjj = lookup_tensor[loc_j]
     indj_of_new_diag_in_old = maskd_sub[jjj]
-    F.index_add_(0,indj_of_new_diag_in_old, sumA_test)
-
-    del PA_test, where_isinj, suma_test, jjj, loc_j, indj_of_new_diag_in_old, sumA_test
+    F.index_add_(0,indj_of_new_diag_in_old, sumA)
+    del PA, where_isinj, suma, jjj, loc_j, indj_of_new_diag_in_old, sumA
 
     #w_2_ini=w_2[where_isini]
-    sumb_test = torch.einsum('ijk,ijk->ij',PB_test,w_2[where_isini])
-    sumB_test = torch.zeros(torch.sum(isini),4,4,dtype=dtype, device=device)
-    sumB_test[...,(0,0,1,0,1,2,0,1,2,3),(0,1,1,2,2,2,3,3,3,3)] = sumb_test
+    sumb = torch.einsum('ijk,ijk->ij',PB,w_2[where_isini])
+    sumB = torch.zeros(torch.sum(isini),4,4,dtype=dtype, device=device)
+    sumB[...,(0,0,1,0,1,2,0,1,2,3),(0,1,1,2,2,2,3,3,3,3)] = sumb
     iii=lookup_tensor[loc_i]
     indi_of_new_diag_in_old = maskd_sub[iii]
-    F.index_add_(0,indi_of_new_diag_in_old, sumB_test)
-    del PB_test, where_isini, sumb_test, iii, loc_i, indi_of_new_diag_in_old, sumB_test
+    F.index_add_(0,indi_of_new_diag_in_old, sumB)
+    del PB, where_isini, sumb, iii, loc_i, indi_of_new_diag_in_old, sumB
 
     ####################################################
     ### Populate off-diagonal ###
@@ -212,13 +211,13 @@ def get_fock_pyseqm_2(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, pa
     # Pp =P[mask], P_{mu \in A, lambda \in B}
     Pp = -0.5*P_sub[mask_sub] #* (rij.unsqueeze(-1).unsqueeze(-1) < 2.5) #*(rij > 2.0)
     w2_sub_inds=w_2[sub_inds]
+
     for i in range(4):
         for j in range(4):
             #\sum_{nu \in A} \sum_{sigma \in B} P_{nu, sigma} * (mu nu, lambda, sigma)
             a1=w2_sub_inds[...,ind[i],:][...,:,ind[j]]
             summ[...,i,j] = torch.einsum('ijk,ijk->i',Pp,a1)#torch.sum(Pp*a1,dim=(1,2))
     del Pp
-
     F.index_add_(0,mask_sub,summ)
     del summ
 
@@ -226,6 +225,155 @@ def get_fock_pyseqm_2(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, pa
                      .reshape(nmol, 4*len(block_indices), 4*len(block_indices))
     F0.add_(F0.triu(1).transpose(1,2));       
     return F0
+
+def get_fock_pyseqm_u(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, parameters, maskd_sub, mask_sub):
+    '''
+    Function returns Fock matrix for CH. In 4x4 block pyseqm format
+    P: diagonal dm blocks of the whole system
+    P_sub: subsystem dm
+    M: 1elec hamiltonian of subsystem
+    w_2: 2c2e ints. subsystem-subsystem and subsystem-outer. no outer-outer
+    block_indices: subsystem atom numbers
+    nmol: number of molecules in a batch. Always 1 in SEDACS.
+    idxi, idxj: unique pairs between atoms in subsystem or between an atom in subsystem and in the outer system.
+    rij: distances for unique pairs
+    parameters: seqm atomic params
+    maskd_sub: indices of diagonal blocks in subsystem
+    mask_sub: indices of off-diagonal blocks in subsystem
+    '''
+    idx_to_idx_mapping = {value: idx for idx, value in enumerate(block_indices)}
+    max_key = max(idx_to_idx_mapping.keys())
+    lookup_tensor = torch.zeros(max_key + 1, dtype=torch.long, device = P_sub.device)
+    # Populate the lookup tensor
+    for key, value in idx_to_idx_mapping.items():
+        lookup_tensor[key] = value
+    max_i = idxi.max()
+    max_j = idxj.max()
+    atom_max = max(max_i,max_j)
+    in_block_mask = torch.zeros(atom_max+1,dtype=torch.bool, device = P_sub.device)
+    in_block_mask[block_indices]=True
+
+    isini = in_block_mask[idxi]#.to(torch.bool)
+    where_isini = torch.nonzero(isini).squeeze()
+
+    isinj = in_block_mask[idxj]#.to(torch.bool)
+    where_isinj = torch.nonzero(isinj).squeeze()
+
+    loc_i = idxi[isini]
+    loc_j = idxj[isinj]
+
+    ### first doing idxi because its sorted
+    #     idxi_sub_ovrlp_with_rest = torch.isin(idxi, block_indices) # <- insted of this
+    # Searchsorted gives you the indices where the elements should be placed to maintain order. Works with idxi (sorted) but not with idxj (not sorted)
+    pos = torch.searchsorted(block_indices, idxi)
+    # Ensure the indices are within bounds
+    pos = torch.clamp(pos, max=len(block_indices) - 1)
+    # Check if the positions are valid and match
+    idxi_sub_ovrlp_with_rest = (pos < len(block_indices)) & (block_indices[pos] == idxi)
+
+    ### second, doing indx i because its a sequence of sorted maxtrix triangle rows
+    #     idxj_sub_ovrlp_with_rest = torch.isin(idxj, block_indices) # <- instead of this
+    # start_ind = 0
+    # end_ind = len(P) - 1
+    # idxj_sub_ovrlp_with_rest = torch.zeros(int((len(P)*(len(P)-1)/2)), dtype=torch.bool, device=P.device)
+    # tmp_j = idxj[start_ind:end_ind]
+    # pos = torch.searchsorted(block_indices, tmp_j)
+    # pos = torch.clamp(pos, max=len(block_indices) - 1)
+    # valid_top_row = (pos < len(block_indices)) & (block_indices[pos] == tmp_j)
+    # del tmp_j, pos
+    # for i in range(0,len(P)): ### $$$ needs vecorization
+    #     idxj_sub_ovrlp_with_rest[start_ind:end_ind] = valid_top_row[i:]
+    #     start_ind = end_ind
+    #     end_ind = end_ind + len(P) - i - 2
+    idxj_sub_ovrlp_with_rest = torch.isin(idxj, block_indices)
+
+    P_sum_ab = P_sub[0]+P_sub[1]
+
+    PAlpha_ = P_sub
+
+    
+    ### Populate diagonal 1c ###
+    F = M.expand(2,-1,-1,-1).clone()
+    Pptot = P_sum_ab[...,1,1]+P_sum_ab[...,2,2]+P_sum_ab[...,3,3]
+    PAlpha_ptot_ = PAlpha_[...,1,1]+PAlpha_[...,2,2]+PAlpha_[...,3,3]
+    #(s,s)
+    TMP = torch.zeros_like(F)
+    TMP[:,maskd_sub,0,0] = PAlpha_[[1,0]][:,maskd_sub,0,0]*parameters['g_ss'][block_indices] + Pptot[maskd_sub]*parameters['g_sp'][block_indices] - PAlpha_ptot_[:,maskd_sub]*parameters['h_sp'][block_indices]
+    for i in range(1,4):
+        #(p,p)
+        TMP[:,maskd_sub,i,i] = P_sum_ab[maskd_sub,0,0]*parameters['g_sp'][block_indices]-PAlpha_[:,maskd_sub,0,0]*parameters['h_sp'][block_indices] + PAlpha_[[1,0]][:,maskd_sub,i,i]*parameters['g_pp'][block_indices] \
+                        +(Pptot[maskd_sub]-P_sum_ab[maskd_sub,i,i])*parameters['g_p2'][block_indices] - 0.5*(PAlpha_ptot_[:,maskd_sub]-PAlpha_[:,maskd_sub,i,i])*(parameters['g_pp'][block_indices]-parameters['g_p2'][block_indices])
+
+        #(s,p) = (p,s) upper triangle
+        TMP[:,maskd_sub,0,i] = 2*P_sum_ab[maskd_sub,0,i]*parameters['h_sp'][block_indices] - PAlpha_[:,maskd_sub,0,i]*(parameters['h_sp'][block_indices]+parameters['g_sp'][block_indices])
+    #(p,p*)
+    for i,j in [(1,2),(1,3),(2,3)]:
+        TMP[:,maskd_sub,i,j] = P_sum_ab[maskd_sub,i,j] * (parameters['g_pp'][block_indices] - parameters['g_p2'][block_indices]) - 0.5*PAlpha_[:,maskd_sub,i,j]*(parameters['g_pp'][block_indices] + parameters['g_p2'][block_indices])
+
+    F.add_(TMP)
+    del TMP, Pptot, PAlpha_ptot_
+
+    ##############################################
+    ### Populate diagonal 2c ###
+    dtype = P.dtype
+    device = P.device
+    weight = torch.tensor([1.0,
+                           2.0, 1.0,
+                           2.0, 2.0, 1.0,
+                           2.0, 2.0, 2.0, 1.0],dtype=dtype, device=device).reshape((-1,10))
+
+    PA = ((P[0]+P[1])[idxi[idxj_sub_ovrlp_with_rest]][...,(0,0,1,0,1,2,0,1,2,3),(0,1,1,2,2,2,3,3,3,3)]*weight).reshape((-1,10,1))
+    PB = ((P[0]+P[1])[idxj[idxi_sub_ovrlp_with_rest]][...,(0,0,1,0,1,2,0,1,2,3),(0,1,1,2,2,2,3,3,3,3)]*weight).reshape((-1,1,10))
+
+    #w_2_inj=w_2[where_isinj]
+    suma = torch.sum(PA*w_2[where_isinj],dim=1)
+    sumA = torch.zeros(torch.sum(isinj),4,4,dtype=dtype, device=device)
+    sumA[...,(0,0,1,0,1,2,0,1,2,3),(0,1,1,2,2,2,3,3,3,3)] = suma
+    jjj = lookup_tensor[loc_j]
+    indj_of_new_diag_in_old = maskd_sub[jjj]
+    F[0].index_add_(0,indj_of_new_diag_in_old, sumA)
+    F[1].index_add_(0,indj_of_new_diag_in_old, sumA)
+    del PA, where_isinj, suma, jjj, loc_j, indj_of_new_diag_in_old, sumA
+
+    #w_2_ini=w_2[where_isini]
+    sumb = torch.einsum('ijk,ijk->ij',PB,w_2[where_isini])
+    sumB = torch.zeros(torch.sum(isini),4,4,dtype=dtype, device=device)
+    sumB[...,(0,0,1,0,1,2,0,1,2,3),(0,1,1,2,2,2,3,3,3,3)] = sumb
+    iii=lookup_tensor[loc_i]
+    indi_of_new_diag_in_old = maskd_sub[iii]
+    F[0].index_add_(0,indi_of_new_diag_in_old, sumB)
+    F[1].index_add_(0,indi_of_new_diag_in_old, sumB)
+    del PB, where_isini, sumb, iii, loc_i, indi_of_new_diag_in_old, sumB
+
+    ####################################################
+    ### Populate off-diagonal ###
+    sub_inds = idxi_sub_ovrlp_with_rest * idxj_sub_ovrlp_with_rest
+
+    summ = torch.zeros(2, w_2[sub_inds].shape[0],4,4,dtype=dtype, device=device)
+    ind = torch.tensor([[0,1,3,6],
+                        [1,2,4,7],
+                        [3,4,5,8],
+                        [6,7,8,9]],dtype=torch.int64, device=device)
+
+    # Pp =P[mask], P_{mu \in A, lambda \in B}
+    w2_sub_inds=w_2[sub_inds]
+    for i in range(4):
+        for j in range(4):
+            #\sum_{nu \in A} \sum_{sigma \in B} P_{nu, sigma} * (mu nu, lambda, sigma)
+            # a1=w2_sub_inds[...,ind[i],:][...,:,ind[j]]
+            # summ[...,i,j] = torch.einsum('ijk,ijk->i',-PAlpha_,a1)#torch.sum(Pp*a1,dim=(1,2))
+            summ[...,i,j] = torch.sum(-PAlpha_[:,mask_sub]*w2_sub_inds[...,ind[i],:][...,:,ind[j]],dim=(2,3))
+
+    F.index_add_(1,mask_sub,summ)
+    del summ
+
+    F0 = F.reshape(2, nmol, len(block_indices), len(block_indices), 4, 4) \
+                 .transpose(3,4) \
+                 .reshape(2, nmol, 4*len(block_indices), 4*len(block_indices)).transpose(0,1)
+    
+    F0.add_(F0.triu(1).transpose(2,3))
+    return F0
+
 
 def get_hcore_pyseqm(coords,symbols,atomTypes, device='cpu', verb=False):
   print('Creating Hcore.')
@@ -353,6 +501,7 @@ def get_molecule_pyseqm(sdc, coords, symbols, atomTypes, do_large_tensors=True, 
                     #'parameter_file_dir' : '../seqm/params/', # file directory for other required parameters
                     'pair_outer_cutoff' : 1.0e10, # consistent with the unit on coordinates
                     'eig' : True, # store orbital energies
+                    'UHF': sdc.UHF,
                     }
 
   # Charge does not matter. Assigned to avoid internal pyseqm error.
@@ -362,10 +511,10 @@ def get_molecule_pyseqm(sdc, coords, symbols, atomTypes, do_large_tensors=True, 
      charges = -1
      
   molecule = Molecule(const, seqm_parameters, coordinates, species, charges=charges, do_large_tensors=do_large_tensors).to(device)  
-  return molecule, molecule.nocc.item()
+  return molecule, molecule.nocc
 
 
-def get_eVals_pyseqm(H, Nocc, core_indices_in_sub_expanded_packed, molecule, verb=False, calcD=False):
+def get_eVals_pyseqm(sdc, H, Nocc, core_indices_in_sub_expanded_packed, molecule, verb=False, calcD=False):
   '''
   Function returns eigenvalues, dVals, eigenvectors, list of [number_of_heavy_atoms, number_of_hydrogens, dim_of_coreHalo_ham]
   H: hamiltonian, 4x4 blocks
@@ -376,22 +525,28 @@ def get_eVals_pyseqm(H, Nocc, core_indices_in_sub_expanded_packed, molecule, ver
 
   E_val, Q = sym_eig_trunc( H, molecule.nHeavy, molecule.nHydro, Nocc, eig_only=True)
   Q = Q[0]
-  N = len(Q)
-  E_val = E_val[0,:N]
 
-  homoIndex = Nocc - 1
-  lumoIndex = Nocc
-  #mu_test = 0.5*(E_val[homoIndex] + E_val[lumoIndex]) #don't need it 
-  #print(' SubSys HOMO/LUMO:', np.round(E_val[homoIndex].item(),4), np.round(E_val[lumoIndex].item(),4), end=" ")
+  if sdc.UHF: # open shell
+    N = Q.shape[-1]
+    dVals = torch.sum(Q[:, core_indices_in_sub_expanded_packed, :] ** 2, dim=1)
+    return E_val[0,:,:N], dVals.cpu().numpy(), Q
+  else: # closed shell
+    N = len(Q)
+    E_val = E_val[0,:N]
 
-  # rho = Q@f_vector@Q.T
-  # or
-  # rho_ij = SUM_k Q_ik * f_kk * Q_jk
-  dVals = torch.sum(Q[core_indices_in_sub_expanded_packed, :] ** 2, dim=0)
-  return E_val, dVals.cpu().numpy(), Q, [molecule.nHeavy, molecule.nHydro, H.shape[-1]]
+    #homoIndex = Nocc - 1
+    #lumoIndex = Nocc
+    #mu_test = 0.5*(E_val[homoIndex] + E_val[lumoIndex]) #don't need it 
+    #print(' SubSys HOMO/LUMO:', np.round(E_val[homoIndex].item(),4), np.round(E_val[lumoIndex].item(),4), end=" ")
+
+    # rho = Q@f_vector@Q.T
+    # or
+    # rho_ij = SUM_k Q_ik * f_kk * Q_jk
+    dVals = torch.sum(Q[core_indices_in_sub_expanded_packed, :] ** 2, dim=0)
+    return E_val, dVals.cpu().numpy(), Q
 
 
-def get_densityMatrix_renormalized_pyseqm(E_val, Q, Tel, mu0, NH_Nh_Hs):
+def get_densityMatrix_renormalized_pyseqm(sdc, E_val, Q, Tel, mu0, NH_Nh_Hs):
   '''
   Function returns dm corrected by fermi occupancies
   E_val: eigenvalues
@@ -403,12 +558,19 @@ def get_densityMatrix_renormalized_pyseqm(E_val, Q, Tel, mu0, NH_Nh_Hs):
   
   kB = 8.61739e-5 # eV/K, kB = 6.33366256e-6 Ry/K, kB = 3.166811429e-6 Ha/K, #kB = 3.166811429e-6 #Ha/K
   beta = 1./(kB*Tel)
-  f = 1/(torch.exp(beta*(E_val - mu0)) + 1)
+
   
   # two lines below are vectorization of this: D = 2*sum(torch.outer(Q[:, i],Q[:, i]*f[i]) for i in range(Nocc))
-  Q_weighted = Q * f  # Broadcasting multiplication
-  D = 2 * Q @ Q_weighted.T
-  D = unpack(D, NH_Nh_Hs[0], NH_Nh_Hs[1], NH_Nh_Hs[2])
+  if sdc.UHF:
+    f = (1/(torch.exp(beta*(E_val - np.expand_dims(mu0, axis=1))) + 1)).unsqueeze(1)
+    Q_weighted = Q * f  # Broadcasting multiplication
+    D = Q @ Q_weighted.transpose(-2,-1)
+    D = unpack(D, NH_Nh_Hs[0].repeat_interleave(2), NH_Nh_Hs[1].repeat_interleave(2), NH_Nh_Hs[2])
+  else:
+    f = 1/(torch.exp(beta*(E_val - mu0)) + 1)
+    Q_weighted = Q * f  # Broadcasting multiplication
+    D = 2 * Q @ Q_weighted.T
+    D = unpack(D, NH_Nh_Hs[0], NH_Nh_Hs[1], NH_Nh_Hs[2])
   return D
 
 

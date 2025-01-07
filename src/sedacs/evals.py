@@ -60,9 +60,9 @@ def get_eVals(eng, sdc, sy, ham, coords, symbols, types, Tel, mu0,
         # core_indices_in_sub_expanded is core indices of core+halo hamiltonian in 4x4 blocks form (pyseqm format)
         # core_indices_in_sub_expanded_packed is core indices of core+halo hamiltonian in normal form corresponding to the number of AOs per atom. We need this one for parsing eigenvectors.
 
-        eVals, dVals, Q, NH_Nh_Hs = get_eVals_pyseqm(ham, occ, core_indices_in_sub_expanded_packed, molecule=molecule_sub, verb=False)
+        eVals, dVals, Q = get_eVals_pyseqm(sdc, ham, occ, core_indices_in_sub_expanded_packed, molecule=molecule_sub, verb=False)
         # We will call proxyA directly as it will be loaded as a module.
     else:
         print("ERROR!!!: Interface type not recognized. Use any of the following: Module,File,Socket,MDI")
         exit()
-    return eVals, dVals, Q, NH_Nh_Hs
+    return eVals, dVals, Q, [molecule_sub.nHeavy, molecule_sub.nHydro, ham.shape[-1], molecule_sub.nocc]

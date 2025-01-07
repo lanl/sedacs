@@ -8,7 +8,7 @@ import sys
 import time
 from sedacs.interface_files import get_hamiltonian_files
 from sedacs.interface_modules import get_hamiltonian_module
-from sedacs.interface_pyseqm import get_fock_pyseqm_2, get_molecule_pyseqm
+from sedacs.interface_pyseqm import get_fock_pyseqm, get_fock_pyseqm_u, get_molecule_pyseqm
 from seqm.seqm_functions.two_elec_two_center_int import two_elec_two_center_int as TETCI
 from seqm.seqm_functions.hcore import hcore
 from seqm.seqm_functions.pack import pack
@@ -92,10 +92,10 @@ def get_hamiltonian(sdc, eng, coords, types, symbols,
         #mask_sub_lower_TEST = torch.cat([torch.arange(i * block_size + i-1, i * block_size-1, -1) for i in range(block_size-1, 0,-1)])
 
         if doForces: # pyseqm molecule object for core+halo
-            molSub = get_molecule_pyseqm(eng, molecule_whole.coordinates[:,partsCoreHaloIndex], symbols, types, device=P_contr.device)[0]
+            molSub = get_molecule_pyseqm(sdc, molecule_whole.coordinates[:,partsCoreHaloIndex], symbols, types, device=P_contr.device)[0]
         else:
             with torch.no_grad():
-                molSub = get_molecule_pyseqm(eng, molecule_whole.coordinates[:,partsCoreHaloIndex], symbols, types, device=P_contr.device)[0]
+                molSub = get_molecule_pyseqm(sdc, molecule_whole.coordinates[:,partsCoreHaloIndex], symbols, types, device=P_contr.device)[0]
         M_sub, _, __, ___ = hcore(molSub, doTETCI=False) # off-diagonal h1elec
         del _, __, ___
         ham_timing['h1elNonDi'] = time.time() - tic
@@ -322,47 +322,81 @@ def get_hamiltonian(sdc, eng, coords, types, symbols,
         tic = time.time()
         graph_for_pairs = torch.from_numpy(graph_for_pairs).to(P_contr.device, dtype=eng.torch_int_dt)
         
-        P_sub_from_contr = torch.zeros(len(block_indices)*len(block_indices),4,4, device = P_contr.device, dtype=eng.torch_dt)
-        P_sub_from_contr = P_sub_from_contr.reshape(len(block_indices), len(block_indices), 4,4)
+        if sdc.UHF: # open shell
+            P_sub_from_contr = torch.zeros(2, len(block_indices)*len(block_indices),4,4, device = P_contr.device, dtype=eng.torch_dt)
+            P_sub_from_contr = P_sub_from_contr.reshape(2, len(block_indices), len(block_indices), 4,4)
 
-        parts_mask = torch.isin(block_indices, torch.tensor(partsIndex, device=block_indices.device))
-        max_len = graph_for_pairs[partsIndex[0]][0]
-        P_sub_from_contr[:,parts_mask] = P_contr[:max_len, block_indices[parts_mask]]
+            parts_mask = torch.isin(block_indices, torch.tensor(partsIndex, device=block_indices.device))
+            max_len = graph_for_pairs[partsIndex[0]][0]
+            P_sub_from_contr[:,:,parts_mask] = P_contr[:,:max_len, block_indices[parts_mask]]
 
-        for i in range(len(parts_mask)): ### $$$ needs vecorization
-            if not parts_mask[i]:
-                tmp = graph_for_pairs[block_indices[i]][1:graph_for_pairs[block_indices[i]][0]+1]
-                pos = torch.searchsorted(block_indices, tmp)
-                # Ensure the indices are within bounds
-                pos = torch.clamp(pos, max=len(block_indices) - 1)
-                # Check if the positions are valid and match
-                mask_for_lookup = (pos < len(block_indices)) & (block_indices[pos] == tmp)
-                P_sub_from_contr[lookup_tensor[tmp[mask_for_lookup]],i] = \
-                    P_contr[:graph_for_pairs[block_indices[i]][0],block_indices[i]][mask_for_lookup]
-                del pos, tmp, mask_for_lookup
-        del parts_mask
+            for i in range(len(parts_mask)): ### $$$ needs vecorization
+                if not parts_mask[i]:
+                    tmp = graph_for_pairs[block_indices[i]][1:graph_for_pairs[block_indices[i]][0]+1]
+                    pos = torch.searchsorted(block_indices, tmp)
+                    # Ensure the indices are within bounds
+                    pos = torch.clamp(pos, max=len(block_indices) - 1)
+                    # Check if the positions are valid and match
+                    mask_for_lookup = (pos < len(block_indices)) & (block_indices[pos] == tmp)
+                    P_sub_from_contr[:,lookup_tensor[tmp[mask_for_lookup]],i] = \
+                        P_contr[:,:graph_for_pairs[block_indices[i]][0],block_indices[i]][:,mask_for_lookup]
+                    del pos, tmp, mask_for_lookup
+            del parts_mask
 
-        P_sub_from_contr = P_sub_from_contr.reshape(len(block_indices)*len(block_indices), 4,4)
-        P_diag_contr = P_contr.transpose(0,1).reshape(molecule_whole.molsize*(len(graph_for_pairs[0])-1), 4,4)[graph_maskd]#.transpose(0,1)
+            P_sub_from_contr = P_sub_from_contr.reshape(2,len(block_indices)*len(block_indices), 4,4)
+            P_diag_contr = P_contr.transpose(1,2).reshape(2,molecule_whole.molsize*(len(graph_for_pairs[0])-1), 4,4)[:,graph_maskd]#.transpose(1,2)
+
+        else: # closed shell
+            P_sub_from_contr = torch.zeros(len(block_indices)*len(block_indices),4,4, device = P_contr.device, dtype=eng.torch_dt)
+            P_sub_from_contr = P_sub_from_contr.reshape(len(block_indices), len(block_indices), 4,4)
+
+            parts_mask = torch.isin(block_indices, torch.tensor(partsIndex, device=block_indices.device))
+            max_len = graph_for_pairs[partsIndex[0]][0]
+            P_sub_from_contr[:,parts_mask] = P_contr[:max_len, block_indices[parts_mask]]
+
+            for i in range(len(parts_mask)): ### $$$ needs vecorization
+                if not parts_mask[i]:
+                    tmp = graph_for_pairs[block_indices[i]][1:graph_for_pairs[block_indices[i]][0]+1]
+                    pos = torch.searchsorted(block_indices, tmp)
+                    # Ensure the indices are within bounds
+                    pos = torch.clamp(pos, max=len(block_indices) - 1)
+                    # Check if the positions are valid and match
+                    mask_for_lookup = (pos < len(block_indices)) & (block_indices[pos] == tmp)
+                    P_sub_from_contr[lookup_tensor[tmp[mask_for_lookup]],i] = \
+                        P_contr[:graph_for_pairs[block_indices[i]][0],block_indices[i]][mask_for_lookup]
+                    del pos, tmp, mask_for_lookup
+            del parts_mask
+
+            P_sub_from_contr = P_sub_from_contr.reshape(len(block_indices)*len(block_indices), 4,4)
+            #P_sub_from_contr = P_sub_from_contr.reshape(len(block_indices)*4, len(block_indices)*4)
+            P_diag_contr = P_contr.transpose(0,1).reshape(molecule_whole.molsize*(len(graph_for_pairs[0])-1), 4,4)[graph_maskd]#.transpose(0,1)
         ham_timing['P_sub_from_contr'] = time.time() - tic
-        #print("P_sub_from_contr {:>7.3f} |".format(time.time() - tic), end=" ")
         tic = time.time()
 
-        if eng.use_pyseqm_lt:
-            ham_contr = get_fock_pyseqm_2(P_diag_contr, P_sub_from_contr, M_sub, coulInts_test, block_indices,
-                    molecule_whole.nmol, molecule_whole.idxi[subIndsUnion], molecule_whole.idxj[subIndsUnion], molSub.rij,
-                    molecule_whole.parameters, maskd_sub, mask_sub) # slowest part
-        else:
-            ham_contr = get_fock_pyseqm_2(P_diag_contr, P_sub_from_contr, M_sub, coulInts_test, block_indices,
-                    molecule_whole.nmol, iii, jjj, molSub.rij,
-                    molecule_whole.parameters, maskd_sub, mask_sub) # slowest part
-
+        if sdc.UHF: # open shell
+            if eng.use_pyseqm_lt:
+                ham_contr = get_fock_pyseqm_u(P_diag_contr, P_sub_from_contr, M_sub, coulInts_test, block_indices,
+                        molecule_whole.nmol, molecule_whole.idxi[subIndsUnion], molecule_whole.idxj[subIndsUnion], molSub.rij,
+                        molecule_whole.parameters, maskd_sub, mask_sub) # slowest part
+            else:
+                ham_contr = get_fock_pyseqm_u(P_diag_contr, P_sub_from_contr, M_sub, coulInts_test, block_indices,
+                        molecule_whole.nmol, iii, jjj, molSub.rij,
+                        molecule_whole.parameters, maskd_sub, mask_sub) # slowest part
+        else: # closed shell
+            if eng.use_pyseqm_lt:
+                ham_contr = get_fock_pyseqm(P_diag_contr, P_sub_from_contr, M_sub, coulInts_test, block_indices,
+                        molecule_whole.nmol, molecule_whole.idxi[subIndsUnion], molecule_whole.idxj[subIndsUnion], molSub.rij,
+                        molecule_whole.parameters, maskd_sub, mask_sub) # slowest part
+            else:
+                ham_contr = get_fock_pyseqm(P_diag_contr, P_sub_from_contr, M_sub, coulInts_test, block_indices,
+                        molecule_whole.nmol, iii, jjj, molSub.rij,
+                        molecule_whole.parameters, maskd_sub, mask_sub) # slowest part
 
         # #Define a wrapper function for the checkpointed function with required gradients
         # def checkpointed_get_fock(M_sub, coulInts_test, idxi_grad, idxj_grad, rij_grad, 
         #                         P_diag_contr, P_sub_from_contr, block_indices, nmol, 
         #                         parameters, maskd_sub, mask_sub):
-        #     return get_fock_pyseqm_2(P_diag_contr, P_sub_from_contr, M_sub, coulInts_test, 
+        #     return get_fock_pyseqm(P_diag_contr, P_sub_from_contr, M_sub, coulInts_test, 
         #                             block_indices, nmol, idxi_grad, idxj_grad, rij_grad, 
         #                             parameters, maskd_sub, mask_sub)
         # # Use checkpoint with only the tensors requiring gradients
@@ -395,11 +429,19 @@ def get_hamiltonian(sdc, eng, coords, types, symbols,
                 .transpose(2,3) \
                 .reshape(molSub.nmol, 4*molSub.molsize, 4*molSub.molsize) 
         h1elec_sub = h1elec_sub.triu()+h1elec_sub.triu(1).transpose(1,2)
+        #print(ham_contr)
 
-        dm_contr = P_sub_from_contr.reshape(molSub.nmol, molSub.molsize, molSub.molsize,4,4) \
+        if sdc.UHF:
+            dm_contr = P_sub_from_contr.reshape(2, molSub.nmol, molSub.molsize, molSub.molsize,4,4) \
+                .transpose(3,4) \
+                .reshape(2, molSub.nmol, 4*molSub.molsize, 4*molSub.molsize).transpose(0,1)
+            eElec_contr  = 0.5*((dm_contr[:,0,:,core_indices_in_sub_expanded]+dm_contr[:,1,:,core_indices_in_sub_expanded])*h1elec_sub[:,:,core_indices_in_sub_expanded] + \
+                                dm_contr[:,0,:,core_indices_in_sub_expanded]*ham_contr[:,0,:,core_indices_in_sub_expanded] + dm_contr[:,1,:,core_indices_in_sub_expanded]*ham_contr[:,1,:,core_indices_in_sub_expanded]).sum()
+        else:
+            dm_contr = P_sub_from_contr.reshape(molSub.nmol, molSub.molsize, molSub.molsize,4,4) \
                 .transpose(2,3) \
                 .reshape(molSub.nmol, 4*molSub.molsize, 4*molSub.molsize)
-        eElec_contr  = 0.5*(dm_contr[:,:,core_indices_in_sub_expanded]*(h1elec_sub[:,:,core_indices_in_sub_expanded]+ham_contr[:,:,core_indices_in_sub_expanded])).sum()
+            eElec_contr  = 0.5*(dm_contr[:,:,core_indices_in_sub_expanded]*(h1elec_sub[:,:,core_indices_in_sub_expanded]+ham_contr[:,:,core_indices_in_sub_expanded])).sum()
         del dm_contr, h1elec_sub, P_sub_from_contr, M_sub, molSub
         ham_timing['En'] = time.time() - tic
         #print("En {:>7.3f} (s)|".format(time.time() - tic), end=" ")

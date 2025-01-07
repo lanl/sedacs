@@ -25,7 +25,7 @@ __all__ = ["get_density_matrix"]
 # @param ham Hamiltonian matrix
 # @verbose Verbosity
 #
-def get_density_matrix_renorm(eng, Tel, mu0, P_contr, graph_for_pairs,
+def get_density_matrix_renorm(sdc, eng, Tel, mu0, P_contr, graph_for_pairs,
                               eVals, Q, NH_Nh_Hs, core_indices_in_sub_expandedm, verbose=False):
     if eng.interface == "None":
         print("ERROR!!! - Write your own Hamiltonian")
@@ -38,7 +38,7 @@ def get_density_matrix_renorm(eng, Tel, mu0, P_contr, graph_for_pairs,
         if(PYSEQM == False):
             print("ERROR: No PySEQM installed")
             exit()
-        rho = get_densityMatrix_renormalized_pyseqm(eVals, Q, Tel, mu0, NH_Nh_Hs)
+        rho = get_densityMatrix_renormalized_pyseqm(sdc, eVals, Q, Tel, mu0, NH_Nh_Hs)
         maxDif = None
         sumDif = None
 

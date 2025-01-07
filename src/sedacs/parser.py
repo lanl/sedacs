@@ -52,6 +52,10 @@ class Input:
         self.valency = self.get_a_dict("Valency=",{"Bl":1},keyVals,validKeys,verb)
         ## Flag to run open shell calc 
         self.UHF = self.get_a_bool("UHF=", False, keyVals, validKeys, verb=False)
+        ## Total charge
+        self.charge = self.get_an_int("charge=", 0, keyVals, validKeys, verb)
+        ## Multiplicity
+        self.mult = self.get_an_int("mult=", 1, keyVals, validKeys, verb)
         ## Electronic temperature 
         self.Tel = self.get_a_real("Tel=",0.0,keyVals,validKeys,verb)
         ## do scf on cpu or gpu 

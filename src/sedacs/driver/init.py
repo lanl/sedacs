@@ -112,6 +112,23 @@ def init(args):
 
         # Get hindex (the orbital index for each atom in the system)
         sy.norbs, sy.orbs, hindex, sy.numel = get_hindex(sdc.orbs, sdc.valency, sy.symbols, sy.types)
+        sy.numel -= sdc.charge
+        if sdc.UHF:
+            sy.nocc_alpha = sy.numel/2. + (sdc.mult-1)/2.
+            sy.nocc_beta  = sy.numel/2. - (sdc.mult-1)/2.
+            if ((sy.nocc_alpha%1 != 0) or (sy.nocc_beta%1 != 0)):
+                raise ValueError("Invalid charge/multiplicity combination!")
+            else:
+                sy.nocc_alpha = np.int64(sy.nocc_alpha)
+                sy.nocc_beta  = np.int64(sy.nocc_beta)
+            sy.nocc = np.array([sy.nocc_alpha,sy.nocc_beta], dtype=np.int64)
+        else:
+            sy.nocc = sy.numel/2
+            if (sy.nocc%1 != 0):
+                raise ValueError("Odd number of electron in a closed shell!")
+            else:
+                sy.nocc = np.int64(sy.nocc)
+
     else:
         sdc = None
         eng = None

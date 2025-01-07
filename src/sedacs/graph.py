@@ -465,7 +465,7 @@ def get_random_adjacency_matrix(n_nodes, density = .1, degreeOnDiagonal = False)
 # @param P_contr (tensor): Old density matrix.
 # @param graph_for_pairs (list): old graph of communities.
 # @param new_graph_for_pairs (list): new graph of communities.
-def update_dm_contraction(sy, P_contr, graph_for_pairs, new_graph_for_pairs, device):
+def update_dm_contraction(sdc, sy, P_contr, graph_for_pairs, new_graph_for_pairs, device):
     P_contr_new = torch.zeros_like(P_contr, device=device)
     for i in range(sy.nats):
         tmp1 = graph_for_pairs[i][1:graph_for_pairs[i][0]+1]
@@ -484,8 +484,12 @@ def update_dm_contraction(sy, P_contr, graph_for_pairs, new_graph_for_pairs, dev
         mask_isin_o_in_n = (pos < len(tmp2)) & (tmp2[pos] == tmp1)
         #print('PC', (np.isin(tmp1, tmp2) == mask_isin_o_in_n).all())
 
-        P_contr_new[:,i][  :new_graph_for_pairs[i][0]  ][   mask_isin_n_in_o   ] = \
-            P_contr[:,i][:graph_for_pairs[i][0]][   mask_isin_o_in_n   ] 
+        if sdc.UHF:
+            P_contr_new[:,:,i][:,:new_graph_for_pairs[i][0]  ][:,   mask_isin_n_in_o   ] = \
+                P_contr[:,:,i][:,:graph_for_pairs[i][0]][:,   mask_isin_o_in_n   ] 
+        else:
+            P_contr_new[:,i][:new_graph_for_pairs[i][0]  ][   mask_isin_n_in_o   ] = \
+                P_contr[:,i][:graph_for_pairs[i][0]][   mask_isin_o_in_n   ] 
     P_contr[:] = P_contr_new[:]
     del P_contr_new
 

@@ -7,7 +7,6 @@ this will be done interfacing with an engine.
 import sys
 
 from sedacs.interface_modules import get_density_matrix_modules
-from sedacs.interface_pyseqm import get_molecule_pyseqm
 try:
     import seqm; PYSEQM = True
     from seqm.seqm_functions.make_dm_guess import make_dm_guess
@@ -39,7 +38,6 @@ def get_density_matrix(eng, nocc, ham, coords, symbols, types, Tel, verbose):
         if(PYSEQM == False):
             print("ERROR: No PySEQM installed")
             exit()
-        #molecule_sub, occ = get_molecule_pyseqm(coords, symbols, types)
         
         # We will call proxyA directly as it will be loaded as a module.
         rho = get_density_matrix_modules(eng, nocc, ham, verb=False)
