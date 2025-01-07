@@ -961,7 +961,7 @@ def spectral_clustering_partition(graph,nparts, coords, do_xyz, max_cluster_size
     if do_xyz: # on xyz
         print('  Computing spectral_clustering_partition on XYZ data.')
         clustering = SpectralClustering(n_clusters=nparts, affinity="nearest_neighbors",random_state=0,
-                                        n_neighbors=8, n_jobs=1, n_init=10) # or 'rbf' 'nearest_neighbors'
+                                        n_neighbors=300, n_jobs=1, n_init=10) # or 'rbf' 'nearest_neighbors'
         cluster_labels = clustering.fit_predict(coords)
         parts = [np.where(cluster_labels == i)[0].tolist() for i in range(nparts)]
 
