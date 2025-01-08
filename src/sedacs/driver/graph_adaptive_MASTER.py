@@ -729,24 +729,19 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             partsPerRank = int(sdc.nparts / node_numranks)
             partIndex1 = 0 * partsPerRank
             partIndex2 = (0 + 1) * partsPerRank
-            #Q_list_on_rank = Q_list[partIndex1:partIndex2]  # Root rank processes its own part
+            Q_list_on_rank = Q_list[partIndex1:partIndex2]  # Root rank processes its own part
             for r in range(1, node_numranks):
                 partIndex1 = r * partsPerRank
                 partIndex2 = (r + 1) * partsPerRank
                 # Send only the necessary slice to each rank
-                #node_comm.send(Q_list[partIndex1:partIndex2], dest=r, tag=0)
+                node_comm.send(Q_list[partIndex1:partIndex2], dest=r, tag=0)
             print("Time send Q_list slice {:>7.2f} (s)".format(time.perf_counter() - tic))
 
-        # if rank < node_numranks and rank != 0:
-        #     Q_list_on_rank = node_comm.recv(source=0, tag=0)
+        if rank < node_numranks and rank != 0:
+            Q_list_on_rank = node_comm.recv(source=0, tag=0)
 
         if rank < node_numranks:
             tic = time.perf_counter()
-            Q_list = node_comm.bcast(Q_list, root=0)
-            partIndex1 = rank * partsPerRank
-            partIndex2 = (rank + 1) * partsPerRank
-
-            Q_list_on_rank = Q_list[partIndex1:partIndex2]
             ### BCAST DATA across ranks on node 0 ###
             eValOnRank_list = node_comm.bcast(eValOnRank_list, root=0)
             NH_Nh_Hs_list = node_comm.bcast(NH_Nh_Hs_list, root=0)
