@@ -167,7 +167,7 @@ def get_singlePoint(sdc, eng,  partsPerGPU, partsPerNode, node_id, node_rank, ra
     # print("Time Q_LIST send/recv {:>9.4f} (s)".format(time.perf_counter() - tic), rank)
 
     tic = time.perf_counter()
-    torch.save(Q_list, 'Q/Q_list_{}.pt'.format(rank))
+    torch.save(Q_list, 'Q/Q_list_{}.pt'.format(rank)) #### oldR
     print("Time to save Q_list {:>9.4f} (s)".format(time.perf_counter() - tic), rank)
 
 
@@ -187,6 +187,7 @@ def get_singlePoint(sdc, eng,  partsPerGPU, partsPerNode, node_id, node_rank, ra
             recvcounts = [2 * size for size in eValOnRank_SIZES]
         else:
             full_dVals = np.empty(np.sum(eValOnRank_SIZES), dtype=eValOnRank.dtype)
+            full_eVals = np.empty(np.sum(eValOnRank_SIZES), dtype=eValOnRank.dtype) #### oldR
 
     if sdc.UHF:
         dValOnRank_flat = dValOnRank.flatten()
@@ -196,6 +197,7 @@ def get_singlePoint(sdc, eng,  partsPerGPU, partsPerNode, node_id, node_rank, ra
             root=0)
     else:
         gpu_comm.Gatherv(dValOnRank, [full_dVals, eValOnRank_SIZES], root=0)
+        gpu_comm.Gatherv(eValOnRank, [full_eVals, eValOnRank_SIZES], root=0) #### oldR
 
     eVal_LIST = gpu_comm.gather(eValOnRank_list, root=0)
     dVal_LIST = gpu_comm.gather(dValOnRank_list, root=0)
@@ -223,8 +225,10 @@ def get_singlePoint(sdc, eng,  partsPerGPU, partsPerNode, node_id, node_rank, ra
 
     if rank == 0:
         tic = time.perf_counter()
-        # print(full_dVals)
-        # exit()
+        #######
+        #######
+        mu0 = get_mu(mu0, full_dVals, full_eVals, sdc.Tel, sy.numel/2) #### oldR
+
         mu0 = get_mu(mu0, np.concatenate(dVal_LIST, axis = -1), torch.cat(eVal_LIST, dim = -1), sdc.Tel, sy.nocc) # chemical potential calculation
         print("Time mu0 {:>9.4f} (s)".format(time.perf_counter() - tic))
 
