@@ -229,7 +229,7 @@ def get_singlePoint(sdc, eng,  partsPerGPU, partsPerNode, node_id, node_rank, ra
         #######
         mu0 = get_mu(mu0, full_dVals, full_eVals, sdc.Tel, sy.numel/2) #### oldR
 
-        mu0 = get_mu(mu0, np.concatenate(dVal_LIST, axis = -1), torch.cat(eVal_LIST, dim = -1), sdc.Tel, sy.nocc) # chemical potential calculation
+        #mu0 = get_mu(mu0, np.concatenate(dVal_LIST, axis = -1), torch.cat(eVal_LIST, dim = -1), sdc.Tel, sy.nocc) # chemical potential calculation
         print("Time mu0 {:>9.4f} (s)".format(time.perf_counter() - tic))
 
     return EELEC, eVal_LIST, Q_LIST, NH_Nh_Hs_LIST, core_indices_in_sub_expanded_LIST, Nocc_LIST, mu0
