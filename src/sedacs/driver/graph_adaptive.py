@@ -155,17 +155,25 @@ def get_singlePoint(sdc, eng,  partsPerGPU, partsPerNode, node_id, node_rank, ra
         print('Rank', rank, 'part', partIndex, ':', formatted_string)
 
 
+    ##########
+    ##########
+    # tic = time.perf_counter()
+    # if rank != 0:
+    #     gpu_comm.send(Q_list, dest=0, tag=0)
+    # else:
+    #     Q_LIST = [Q_list]
+    #     for i in range(1, gpu_comm.Get_size()):
+    #         Q_LIST.append(gpu_comm.recv(source=i, tag=0))
+    # print("Time Q_LIST send/recv {:>9.4f} (s)".format(time.perf_counter() - tic), rank)
+
     tic = time.perf_counter()
-    if rank != 0:
-        gpu_comm.send(Q_list, dest=0, tag=0)
-    else:
-        Q_LIST = [Q_list]
-        for i in range(1, gpu_comm.Get_size()):
-            Q_LIST.append(gpu_comm.recv(source=i, tag=0))
-    print("Time Q_LIST send/recv {:>9.4f} (s)".format(time.perf_counter() - tic), rank)
+    torch.save(Q_list, 'Q/Q_list_{}.pt'.format(rank))
+    print("Time to save Q_list {:>9.4f} (s)".format(time.perf_counter() - tic), rank)
+
 
     tic = time.perf_counter()
     full_dVals = None
+    full_eVals = None
     eValOnRank_size = np.array(eValOnRank.shape[-1], dtype=int)
     eValOnRank_SIZES = None
     recvcounts = None
@@ -176,7 +184,6 @@ def get_singlePoint(sdc, eng,  partsPerGPU, partsPerNode, node_id, node_rank, ra
     if rank == 0:
         if sdc.UHF:
             full_dVals = np.empty((2, np.sum(eValOnRank_SIZES)), dtype=eValOnRank.dtype)
-            displacements = np.insert(np.cumsum(eValOnRank_SIZES[:-1]), 0, 0) * 2  # Multiply by 2 for row-major layout
             recvcounts = [2 * size for size in eValOnRank_SIZES]
         else:
             full_dVals = np.empty(np.sum(eValOnRank_SIZES), dtype=eValOnRank.dtype)
@@ -196,7 +203,13 @@ def get_singlePoint(sdc, eng,  partsPerGPU, partsPerNode, node_id, node_rank, ra
     core_indices_in_sub_expanded_LIST = gpu_comm.gather(core_indices_in_sub_expanded_list, root=0)
     Nocc_LIST = gpu_comm.gather(Nocc_list, root=0)
 
+    #######
+    #######
     if rank == 0:
+        Q_LIST = []
+        for i in range(gpu_comm.Get_size()):
+            Q_LIST.append(torch.load('Q/Q_list_{}.pt'.format(i)))
+
         # Flatten the nested list of lists into a single list of tensors. One tensor per CH.
         eVal_LIST = list(itertools.chain(*eVal_LIST))
         dVal_LIST = list(itertools.chain(*dVal_LIST))
