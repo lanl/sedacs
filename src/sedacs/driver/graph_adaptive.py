@@ -725,6 +725,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             np.save('graph_maskd', graph_maskd)
 
         if rank == 0: # this defines what part of density matrix will be updated by each rank on node 0.
+            tic = time.perf_counter()
             partsPerRank = int(sdc.nparts / node_numranks)
             partIndex1 = 0 * partsPerRank
             partIndex2 = (0 + 1) * partsPerRank
@@ -734,6 +735,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                 partIndex2 = (r + 1) * partsPerRank
                 # Send only the necessary slice to each rank
                 node_comm.send(Q_list[partIndex1:partIndex2], dest=r, tag=0)
+            print("Time send Q_list slice {:>7.2f} (s)".format(time.perf_counter() - tic))
 
         if rank < node_numranks and rank != 0:
             Q_list_on_rank = node_comm.recv(source=0, tag=0)

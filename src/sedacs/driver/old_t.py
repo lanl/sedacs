@@ -676,7 +676,6 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
 
         if sdc.restartLoad:
             sdc.restartLoad = False
-            
             if node_rank == 0:
                 P_contr[:] = torch.load('P_contr.pt')
             with open('parts.pkl','rb') as f:
