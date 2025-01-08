@@ -743,6 +743,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         if rank < node_numranks:
             tic = time.perf_counter()
             Q_list = node_comm.bcast(Q_list, root=0)
+            partsPerRank = int(sdc.nparts / node_numranks)
             partIndex1 = rank * partsPerRank
             partIndex2 = (rank + 1) * partsPerRank
 
