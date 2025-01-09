@@ -520,7 +520,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     if node_rank == 0:
         tic = time.perf_counter()
         if rank == 0: print('Computing cores.')
-        parts = graph_partition(eng, fullGraph, sdc.partitionType, sdc.nparts, sy.coords, sdc.verb) # cores
+        parts = graph_partition(sdc, eng, fullGraph, sdc.partitionType, sdc.nparts, sy.coords, sdc.verb) # cores
         if rank == 0: print("Time to compute cores {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
         tic = time.perf_counter()

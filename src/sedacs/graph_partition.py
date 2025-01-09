@@ -35,7 +35,7 @@ DEBUG_LEVEL = 1  # > 0 gives assert statements, > 1 gives print statements.
 # @param verb Verbosity level
 # @return parts Partition containing a "list of parts" where every
 # part is a list of nodes
-def graph_partition(eng, graph, partitionType, nparts, coords, verb=False):
+def graph_partition(sdc, eng, graph, partitionType, nparts, coords, verb=False):
     if partitionType == "Regular":
         parts = regular_partition(graph, nparts, verb)
     elif partitionType == "Metis":
@@ -43,7 +43,7 @@ def graph_partition(eng, graph, partitionType, nparts, coords, verb=False):
     elif partitionType == "MinCut":
         parts = mincut_partition(graph, nparts, verb)
     elif(partitionType == "SpectralClustering"):
-        parts = spectral_clustering_partition(graph, nparts, coords, do_xyz=True)
+        parts = spectral_clustering_partition(sdc, graph, nparts, coords, do_xyz=True)
 
     if(eng.interface == "PySEQM"):
         for i in range(len(parts)):
@@ -952,7 +952,7 @@ def mincut_partition(graph, nparts, verb, numSwapRuns = 20):
 # part is a list of nodes
 #
 
-def spectral_clustering_partition(graph,nparts, coords, do_xyz, max_cluster_size=None, verb=False):
+def spectral_clustering_partition(sdc, graph,nparts, coords, do_xyz, max_cluster_size=None, verb=False):
     if(SpectralClusteringLib == False):
          print("\n ERROR: Consider installing sklearn.cluster.SpectralClustering library \n")
          exit(0)
@@ -961,7 +961,7 @@ def spectral_clustering_partition(graph,nparts, coords, do_xyz, max_cluster_size
     if do_xyz: # on xyz
         print('  Computing spectral_clustering_partition on XYZ data.')
         clustering = SpectralClustering(n_clusters=nparts, affinity="nearest_neighbors",random_state=0,
-                                        n_neighbors=8, n_jobs=1, n_init=10) # or 'rbf' 'nearest_neighbors'
+                                        n_neighbors=sdc.SpecClustNN, n_jobs=1, n_init=10) # or 'rbf' 'nearest_neighbors'
         cluster_labels = clustering.fit_predict(coords)
         parts = [np.where(cluster_labels == i)[0].tolist() for i in range(nparts)]
 

@@ -31,6 +31,8 @@ class Input:
         ## Coordinates file name
         self.partitionType = self.get_a_string("PartitionType=", "regular", keyVals, validKeys, verb)
         ## Max degree for the grpah
+        self.SpecClustNN = self.get_an_int("SpecClustNN=", 8, keyVals, validKeys, verb)
+        ## Max degree for the grpah
         self.maxDeg = self.get_an_int("MaxDeg=", 100, keyVals, validKeys, verb)
         ## Number of parts to perform graph partitioning
         self.nparts = self.get_an_int("NumParts=", 1, keyVals, validKeys, verb)
