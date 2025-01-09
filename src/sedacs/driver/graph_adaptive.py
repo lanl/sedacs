@@ -157,18 +157,18 @@ def get_singlePoint(sdc, eng,  partsPerGPU, partsPerNode, node_id, node_rank, ra
 
     ##########
     ##########
-    # tic = time.perf_counter()
-    # if rank != 0:
-    #     gpu_comm.send(Q_list, dest=0, tag=0)
-    # else:
-    #     Q_LIST = [Q_list]
-    #     for i in range(1, gpu_comm.Get_size()):
-    #         Q_LIST.append(gpu_comm.recv(source=i, tag=0))
-    # print("Time Q_LIST send/recv {:>9.4f} (s)".format(time.perf_counter() - tic), rank)
-
     tic = time.perf_counter()
-    torch.save(Q_list, 'Q/Q_list_{}.pt'.format(rank)) #### oldR
-    print("Time to save Q_list {:>9.4f} (s)".format(time.perf_counter() - tic), rank)
+    if rank != 0:
+        gpu_comm.send(Q_list, dest=0, tag=0)
+    else:
+        Q_LIST = [Q_list]
+        for i in range(1, gpu_comm.Get_size()):
+            Q_LIST.append(gpu_comm.recv(source=i, tag=0))
+    print("Time Q_LIST send/recv {:>9.4f} (s)".format(time.perf_counter() - tic), rank)
+
+    # tic = time.perf_counter()
+    # torch.save(Q_list, 'Q/Q_list_{}.pt'.format(rank)) #### oldR
+    # print("Time to save Q_list {:>9.4f} (s)".format(time.perf_counter() - tic), rank)
 
 
     tic = time.perf_counter()
@@ -208,9 +208,9 @@ def get_singlePoint(sdc, eng,  partsPerGPU, partsPerNode, node_id, node_rank, ra
     #######
     #######
     if rank == 0:
-        Q_LIST = []
-        for i in range(gpu_comm.Get_size()):
-            Q_LIST.append(torch.load('Q/Q_list_{}.pt'.format(i)))
+        # Q_LIST = []
+        # for i in range(gpu_comm.Get_size()):
+        #     Q_LIST.append(torch.load('Q/Q_list_{}.pt'.format(i)))
 
         # Flatten the nested list of lists into a single list of tensors. One tensor per CH.
         eVal_LIST = list(itertools.chain(*eVal_LIST))
@@ -729,25 +729,19 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             partsPerRank = int(sdc.nparts / node_numranks)
             partIndex1 = 0 * partsPerRank
             partIndex2 = (0 + 1) * partsPerRank
-            #Q_list_on_rank = Q_list[partIndex1:partIndex2]  # Root rank processes its own part
+            Q_list_on_rank = Q_list[partIndex1:partIndex2]  # Root rank processes its own part
             for r in range(1, node_numranks):
                 partIndex1 = r * partsPerRank
                 partIndex2 = (r + 1) * partsPerRank
                 # Send only the necessary slice to each rank
-                #node_comm.send(Q_list[partIndex1:partIndex2], dest=r, tag=0)
+                node_comm.send(Q_list[partIndex1:partIndex2], dest=r, tag=0)
             print("Time send Q_list slice {:>7.2f} (s)".format(time.perf_counter() - tic))
 
-        # if rank < node_numranks and rank != 0:
-        #     Q_list_on_rank = node_comm.recv(source=0, tag=0)
+        if rank < node_numranks and rank != 0:
+            Q_list_on_rank = node_comm.recv(source=0, tag=0)
 
         if rank < node_numranks:
             tic = time.perf_counter()
-            Q_list = node_comm.bcast(Q_list, root=0)
-            partsPerRank = int(sdc.nparts / node_numranks)
-            partIndex1 = rank * partsPerRank
-            partIndex2 = (rank + 1) * partsPerRank
-
-            Q_list_on_rank = Q_list[partIndex1:partIndex2]
             ### BCAST DATA across ranks on node 0 ###
             eValOnRank_list = node_comm.bcast(eValOnRank_list, root=0)
             NH_Nh_Hs_list = node_comm.bcast(NH_Nh_Hs_list, root=0)
