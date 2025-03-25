@@ -1,0 +1,80 @@
+[project]
+name = "sedacs"
+version = "0.1.0"
+description = "Scalable Ecosystem, Driver, and Analyzer for Complex Chemistry Simulations (SEDACS) enablesmassively parallel atomistic simulations that can seamlessly integrate with a diverserange of available and emerging quantum chemistry codes at different levelsof theory."
+authors = [
+    {name = "Christian Francisco Negre", email = "christianfannegre@gmail.com"},
+    {name = "Joshua David Finkelstein", email = "finkeljos@gmail.com"},
+    {name = "Michael E. Wall", email = "mewall@lanl.gov"},
+    {name = "Qi Zhang", email = "singularitti@outlook.com"},
+    {name = "Anders Niklasson", email = "amn@lanl.gov"},
+    {name = "Maksim Kulichenko", email = "maxim@lanl.gov"},
+    {name = "Mehmet Cagri Kaymak", email = "mkaymak@lanl.gov"},
+    {name = "Alejandro Lopez-Bezanilla", email = "alopezb@cadejo.lanl.gov"},
+]
+dependencies = [
+    "scipy>=1",
+    "numpy>=1",
+    "torch>=2",
+]
+requires-python = ">=3.10"
+readme = "README.md"
+license = {text = "BSD-3-Clause"}
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Education",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Scientific/Engineering :: Chemistry",
+]
+
+[project.optional-dependencies]
+mdtraj = [
+    "mdtraj>=1",
+]
+mpi = [
+    "mpi4py>=3",
+]
+graph = [
+    "metis>=0.2a5"
+]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+
+[tool.pdm]
+distribution = true
+
+[tool.pdm.dev-dependencies]
+dev = [
+    "ipython>=8",
+    "tox-pdm>=0.7.2",
+]
+test = [
+    "pytest>=8",
+    "pytest-cov>=5",
+    "matscipy==1.1.1",
+    "absl-py",
+]
+doc = [
+    "sphinx>=7",
+    "myst-parser>=4.0.0",
+    "sphinx-press-theme>=0.9.1",
+]
+
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
