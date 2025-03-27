@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      # 1) Check out source code
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      # 2) Install Miniconda
+      - name: Set up Miniconda
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          auto-activate-base: false
+          channel-priority: strict
+          channels: conda-forge
+          python-version: "3.10"
+
+      # 3) Initialize conda in bash
+      - name: Initialize conda
+        shell: bash -l {0}
+        run: conda init bash
+
+      # 4) Create your Conda environment (bash login shell!)
+      - name: Create environment
+        shell: bash -l {0}
+        run: conda create --name myenv python="3.10" -y
+
+      # 5) Install PDM + project dependencies (again, login shell)
+      - name: Install dependencies
+        shell: bash -l {0}
+        run: |
+          conda activate myenv
+          pip install pdm
+          pdm install
+
+      # 6) Run tests
+      - name: Test
+        shell: bash -l {0}
+        run: |
+          conda activate myenv
+          pip install ruff tox
+          pip install --editable ".[test]"
+          tox -e py
