@@ -3,6 +3,7 @@ import torch
 import numpy as np
 import time
 from typing import Optional, Tuple
+from .util import CONV_FACTOR
     
 @torch.compile  
 def ewald_real(
@@ -342,18 +343,19 @@ def ewald_energy(
                                                     positions,
                                                     calculate_forces,
                                                     calculate_dq)
-    #self_e, self_dq = ewald_self_energy(charges, alpha, calculate_dq)
+    
+    self_e, self_dq = ewald_self_energy(charges, alpha, calculate_dq)
 
     if calculate_forces:
-        forces = my_f_real + my_f_kspace
+        forces = (my_f_real + my_f_kspace) * CONV_FACTOR
     else:
         forces = None
     if calculate_dq:
-        dq = my_dq_kspace + my_dq_real
+        dq = (my_dq_kspace + my_dq_real + self_dq) * CONV_FACTOR
     else:
         dq = None
     
-    total_ewald_e = my_e_real + total_e_kspace
+    total_ewald_e = (my_e_real + total_e_kspace + self_e) * CONV_FACTOR
 
     # if user provided [N,3] positions, tranpose the forces to [N, 3]
     if transpose and calculate_forces:

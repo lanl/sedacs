@@ -7,6 +7,7 @@ from .ewald_torch import ewald_real as torch_ewald_real
 from .ewald_torch import ewald_kspace_part1 as torch_ewald_kspace_part1
 from .ewald_torch import ewald_kspace_part2 as torch_ewald_kspace_part2
 from .ewald_torch import ewald_self_energy
+from .util import CONV_FACTOR
 from typing import Optional, Tuple
 
 def get_autotune_config():
@@ -632,13 +633,13 @@ def ewald_energy(
                                                     calculate_forces,
                                                     calculate_dq,
                                                     low_memory_mode=low_memory_mode)
-    #self_e, self_dq = ewald_self_energy(charges, alpha, calculate_dq)
+    self_e, self_dq = ewald_self_energy(charges, alpha, calculate_dq)
     if calculate_forces:
-        forces = my_f_real + my_f_kspace
+        forces = (my_f_real + my_f_kspace) * CONV_FACTOR
     else:
         forces = None
     if calculate_dq:
-        dq = my_dq_kspace + my_dq_real
+        dq = (my_dq_kspace + my_dq_real + self_dq) * CONV_FACTOR
     else:
         dq = None
 
@@ -646,7 +647,7 @@ def ewald_energy(
     if transpose and calculate_forces:
         forces = forces.T.contiguous()
     
-    total_ewald_e = my_e_real + total_e_kspace
+    total_ewald_e = (my_e_real + total_e_kspace + self_e) * CONV_FACTOR
     return total_ewald_e, forces, dq
 
 
