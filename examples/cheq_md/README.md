@@ -2,7 +2,7 @@
 
 This script performs molecular dynamics (MD) simulations with an optional long-range electrostatics treatment (Ewald or PME) and electronegativity equalization (QEQ). It uses a neural-network-based short-range model (via `hippynn`) combined with a QEQ solver for partial charges and optionally includes Shadow MD integration to improve long-term energy conservation.
 
-## Features & Workflow
+## Features
 
 1. **Short-range interactions**  
    - Modeled by a neural network (`hippynn` framework).  
