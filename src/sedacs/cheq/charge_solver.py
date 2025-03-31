@@ -49,7 +49,7 @@ def QEQ_solver(
         total_ch = np.sum(q)
         charges = torch.from_numpy(q).type(dtype).to(device)
         dq = ewald_vec_func(charges)
-        dq = dq.cpu().numpy()
+        dq = dq.detach().cpu().numpy()
         res[:-1] = dq + elect + h_u * q
         res[-1] = total_ch
         return res

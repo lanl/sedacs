@@ -53,7 +53,8 @@ def PME_ewald_vec_create(R, cell, nbr_inds, nbr_disps, nbr_dists, PME_data, alph
                                 nbr_inds, nbr_disps, nbr_dists, 
                                 alpha,
                                 cutoff,
-                                nbr_dists, calculate_forces = 0, calculate_dq = 1)[2].to(dtype)
+                                PME_data,
+                                calculate_forces = 0, calculate_dq = 1)[2].to(dtype)
     return ewald_vec
 
 def calculate_energy_and_forces(system, NN_params, cheq_params, init=False, ewald_method="Ewald", update_shadow_history=True):
@@ -104,7 +105,7 @@ def calculate_energy_and_forces(system, NN_params, cheq_params, init=False, ewal
         if ewald_method == "Ewald":
             ewald_vec = ewald_vec_create(pos_T, system.cell, nbr_inds, disps, dists, kvecs, I, alpha, long_nbr_state.cutoff)
         else:
-            ewald_vec = PME_ewald_vec_create(system.positions, system.cell, nbr_inds, disps, dists, PME_data, 
+            ewald_vec = PME_ewald_vec_create(pos_T, system.cell, nbr_inds, disps, dists, PME_data, 
                                              alpha, long_nbr_state.cutoff, dtype=system.positions.dtype)
         if init == True or system.use_shadow == False:
             rtol = 1e-6 if system.use_shadow else rtol
@@ -129,7 +130,7 @@ def calculate_energy_and_forces(system, NN_params, cheq_params, init=False, ewal
                                 calculate_forces = 1,
                                 calculate_dq = 0)
             else:
-                ewald_e, forces1, dq =  calculate_PME_ewald(system.positions, q, system.cell, 
+                ewald_e, forces1, dq =  calculate_PME_ewald(pos_T, q, system.cell, 
                                         nbr_inds, disps, dists, 
                                         alpha,
                                         cutoff,
@@ -178,8 +179,8 @@ def calculate_energy_and_forces(system, NN_params, cheq_params, init=False, ewal
                                 calculate_forces = 1,
                                 calculate_dq = 1)
             else:
-                ewald_e1, forces1, dq_p1 =  calculate_PME_ewald(system.positions.to(torch.float64), p1.to(torch.float64), system.cell.to(torch.float64), 
-                                        nbr_inds, disps.to(torch.float64), dists.to(torch.float64), 
+                ewald_e1, forces1, dq_p1 =  calculate_PME_ewald(pos_T, p1, system.cell, 
+                                        nbr_inds, disps, dists, 
                                         alpha,
                                         cutoff,
                                         PME_data, calculate_forces = 1, calculate_dq = 1)
@@ -335,7 +336,7 @@ if args.ewald_method == "Ewald":
     my_chi, my_hu, nbr_state, rtol, cutoff)
 else:
     alpha, grid_dimensions = calculate_alpha_and_num_grids(lattice_vecs_np, cutoff, t_err)
-    PME_data = init_PME_data(grid_dimensions, lattice_vecs.to(torch.float64), alpha, PME_order)
+    PME_data = init_PME_data(grid_dimensions, lattice_vecs, alpha, PME_order)
     cheq_params = (PME_data, alpha, my_hu_np, b_vec, 
         my_chi, my_hu, nbr_state, rtol, cutoff)
     
