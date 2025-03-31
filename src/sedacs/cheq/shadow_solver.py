@@ -166,11 +166,11 @@ def shadow_QEQ_solver(
         vec = torch.from_numpy(vec).to(dtype).to(device)
         res = jacob_mat_vec(vec)
         iter_cnt += 1
-        return res.cpu().numpy().astype(np_dtype)
+        return res.cpu().detach().numpy().astype(np_dtype)
     device = b.device
     dtype = b.dtype
     N = len(b)
-    b_np = b.cpu().numpy().astype(np_dtype)
+    b_np = b.detach().cpu().numpy().astype(np_dtype)
     A = LinearOperator((N,N), matvec=mv)
     if precond != None:
         precond = precond.cpu().numpy().astype(np_dtype)

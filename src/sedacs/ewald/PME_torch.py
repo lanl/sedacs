@@ -210,15 +210,14 @@ def calculate_PME_ewald(
         pme_e.backward()
 
     if calculate_forces:
-        forces = (-1.0 * positions.grad + my_f_real) * CONV_FACTOR
+        forces = (-1.0 * positions.grad + my_f_real).detach() * CONV_FACTOR
         if transpose:
             forces = forces.T 
+        positions.requires_grad = False
     if calculate_dq:
-        dq = (charges.grad + my_dq_real + self_dq) * CONV_FACTOR
+        dq = (charges.grad + my_dq_real + self_dq).detach() * CONV_FACTOR  
+        charges.requires_grad = False
     
-    charges.requires_grad = False
-    positions.requires_grad = False
-
     total_ewald_e = (my_e_real + pme_e + self_e) * CONV_FACTOR
     return total_ewald_e, forces, dq
 
