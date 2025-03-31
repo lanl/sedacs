@@ -10,13 +10,8 @@ __all__ = ["SystemState", "NVEState", "create_NVE_integrator", "create_NVT_integ
 
 @torch.compile
 def map2central(coordinates, cell, inv_cell):
-    # Step 1: convert coordinates from standard cartesian coordinate to unit
-    # cell coordinates
     coordinates_cell = torch.matmul(coordinates, inv_cell)
-    # Step 2: wrap cell coordinates into [0, 1)
     coordinates_cell -= coordinates_cell.floor()
-    # Step 3: convert from cell coordinates back to standard cartesian
-    # coordinate
     return torch.matmul(coordinates_cell, cell)
 
 def maxwell_boltzman_dist(masses, temp_in_K):
