@@ -183,9 +183,7 @@ def setup_graph(energy, charges=None, extra_properties=None):
     return mod, min_radius
 
 def create_hippynn_model(parent, device, dtype):
-    structure = load_checkpoint(f"{parent}/experiment_structure.pt", f"{parent}/best_checkpoint.pt", weights_only=False)
-    training_modules = structure["training_modules"]
-    model, loss, evaluator = training_modules 
+    model = torch.load(f"{parent}/model.pt", weights_only=False, map_location=device)
     model = model.to(device)
     model = model.double()
     energy_node = model.node_from_name("energy")
