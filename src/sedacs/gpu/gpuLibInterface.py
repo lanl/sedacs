@@ -1,3 +1,10 @@
+"""
+gpuLibInterface.py
+====================================
+python interface to GPU/AI-hardware library written in C++/CUDA
+
+"""
+
 import ctypes
 import time
 
@@ -5,7 +12,7 @@ import numpy as np
 #from juliacall import Main as jl
 from numpy.ctypeslib import ndpointer
 
-#__all__ = ["invOverlapFactor", "dmDiag", "dmMLSP2", "dmDNNSP2", "dmDNNPRT", "dmCheby"]
+__all__ = ["dev_alloc", "host_alloc_pinned", "get_device", "set_device", "memcpyasyncHtoD", "memcpyasyncDtoH","memcpyHtoD", "memcpyDtoH", "set_stream", "cublasInit", "dev_free", "dmDiag", "dmMLSP2", "dmMovingMuSP2", "dmGoldenSP2", "dmDNNSP2", "dmDNNPRT", "dmCheby"]
 
 
 def dev_alloc(size, lib):
