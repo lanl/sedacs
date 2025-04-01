@@ -15,7 +15,7 @@ def dev_alloc(size, lib):
 
     Parameters
     ----------
-    lib  : ctypes library
+    lib : ctypes library
         Imported gpu library .so file   
     size : int
         Number of bytes to allocate on device
@@ -23,7 +23,7 @@ def dev_alloc(size, lib):
     Returns 
     -------
     C pointer
-        Pointer to allocated device memory
+        Void pointer to allocated device memory
 
     """
 
@@ -44,7 +44,7 @@ def host_alloc_pinned(size, lib):
 
     Parameters
     ----------
-    lib  : ctypes library
+    lib : ctypes library
         Imported gpu library .so file   
     size : int
         Number of bytes to allocate on device
@@ -52,7 +52,7 @@ def host_alloc_pinned(size, lib):
     Returns 
     -------
     C pointer
-        Pointer to allocated pinned host memory
+        Void pointer to allocated pinned host memory
 
     """
     ## copies scalar data to C data structures
@@ -98,7 +98,7 @@ def set_device(device, lib):
     ----------
     size : int
         Device id number to use
-    lib  : ctypes library
+    lib : ctypes library
         Imported gpu library .so file   
     
     Returns 
@@ -122,13 +122,13 @@ def memcpyasyncHtoD(dest_ptr, source_ptr, size, lib):
 
     Parameters
     ----------
-    dest_ptr   : C pointer
+    dest_ptr : void C pointer
         Destination device pointer 
-    source_ptr : C pointer
+    source_ptr : numpy double pointer
         Source host pointer
-    size       : int
+    size : int
         Number of bytes to copy
-    lib        : ctypes library
+    lib : ctypes library
         Imported gpu library .so file   
     
     Returns 
@@ -155,13 +155,13 @@ def memcpyasyncDtoH(dest_ptr, source_ptr, size, lib):
 
     Parameters
     ----------
-    dest_ptr   : C pointer
+    dest_ptr : numpy double pointer
         Destination host pointer 
-    source_ptr : C pointer
+    source_ptr : void C pointer
         Source device pointer
-    size       : int
+    size : int
         Number of bytes to copy
-    lib        : ctypes library
+    lib : ctypes library
         Imported gpu library .so file   
     
     Returns 
@@ -189,13 +189,13 @@ def memcpyHtoD(dest_ptr, source_ptr, size, lib):
 
     Parameters
     ----------
-    dest_ptr   : C pointer
+    dest_ptr : void C pointer
         Destination device pointer 
-    source_ptr : C pointer
+    source_ptr : numpy double pointer
         Source host pointer
-    size       : int
+    size : int
         Number of bytes to copy
-    lib        : ctypes library
+    lib : ctypes library
         Imported gpu library .so file   
     
     Returns 
@@ -224,7 +224,7 @@ def memcpyDtoH(dest_ptr, source_ptr, size, lib):
     ----------
     dest_ptr   : C pointer
         Destination host pointer 
-    source_ptr : C pointer
+    source_ptr : void C pointer
         Source device pointer
     size       : int
         Number of bytes to copy
@@ -274,7 +274,7 @@ def set_stream(lib):
     Returns 
     -------
     C pointer
-        Pointer to device stream
+        Void pointer to device stream
 
     """
     ## set C function return types
@@ -298,7 +298,7 @@ def cublasInit(lib):
     Returns 
     -------
     C pointer
-        Pointer to cublas handle
+        Void pointer to cublas handle
 
     """
 
@@ -311,6 +311,22 @@ def cublasInit(lib):
     return ptr
 
 def dev_free(devptr, lib):
+    """
+    This function wraps cudaFree to free 
+    previously allocated memory on device.
+
+    Parameters
+    ----------
+    devptr : C pointer
+        Device pointer to memory to free 
+    lib    : ctypes library
+        Imported gpu library .so file   
+    
+    Returns 
+    -------
+    NULL
+
+    """
     lib.dev_free(devptr)
 
 
@@ -327,15 +343,37 @@ def dev_free(devptr, lib):
 # @return dm Desnity matrix.
 #
 def dmDiag(ham, dm, matSize, nocc, kbt, lib):
-    ## copies scalar data to C data structures
+    """
+    This function constructs the density matrix
+    on the device using double precision 
+    divide-and-conquer diagonalization.
+
+    Parameters
+    ----------
+    ham : void C pointer
+        Device pointer to Hamiltonian matrix
+    dm : void C pointer
+        Device pointer to density matrix
+    matSize : int
+        Size of Hamiltonian/density matrices
+    nocc : int
+        Number of occupied orbitals
+    kbt : double
+        Value of k_b*T
+    lib : ctypes library
+        Imported gpu library .so file   
+    
+    Returns 
+    -------
+    double
+        Time to compute dm 
+
+    """
+
+    # copies scalar data to C data structures
     kbt_c = ctypes.c_double(kbt)
     matSize_c = ctypes.c_int(matSize)
     nocc_c = ctypes.c_int(nocc)
-
-    ## set C function arg types
-    # lib.dm_diag.argtypes = [ndpointer(np.float64,flags='aligned, c_contiguous'), \
-    #                        ndpointer(np.float64,flags='aligned, c_contiguous'), \
-    #                        ctypes.c_double, ctypes.c_int, ctypes.c_int]
 
     lib.dm_diag.argtypes = [
         ctypes.POINTER(ctypes.c_void_p),
@@ -344,15 +382,14 @@ def dmDiag(ham, dm, matSize, nocc, kbt, lib):
         ctypes.c_int,
         ctypes.c_int,
     ]
-    ## time call
+
+    # time call
     tic = time.perf_counter()
     lib.dm_diag(ham, dm, kbt_c, matSize_c, nocc_c)
     toc = time.perf_counter()
     timer = toc - tic
 
-    # print(f"Time for lib call = {toc - tic:0.4f} seconds")
     return timer
-    # return list(dm),timer
 
 
 ## gpuLib API call to ML-SP2 denisty matrix solver.
@@ -414,6 +451,33 @@ def dmMLSP2(ham, dm, matSize, nocc, lib):
 # @return dm Density matrix that was constructed.
 #
 def dmMovingMuSP2(ham, dm, matSize, mu, handle, lib):
+    """
+    This function constructs the density matrix
+    on the device using the moving-mu SP2 method
+    with tensor core acceleration. In this version 
+    of SP2, only mu is known a prioi, not nocc.
+
+    Parameters
+    ----------
+    ham : void C pointer
+        Device pointer to Hamiltonian matrix
+    dm : void C pointer
+        Device pointer to density matrix
+    matSize : int
+        Size of Hamiltonian/density matrices
+    mu : double
+        Chemical potential
+    handle : void C pointer
+        cublas Handle
+    lib : ctypes library
+        Imported gpu library .so file   
+    
+    Returns 
+    -------
+    double
+        Time to compute dm 
+
+    """
 
     ## copies scalar data to C data structures
     matSize_c = ctypes.c_int(matSize)
@@ -428,7 +492,12 @@ def dmMovingMuSP2(ham, dm, matSize, mu, handle, lib):
         ctypes.POINTER(ctypes.c_void_p),
     ]
 
+    # time call
+    tic = time.perf_counter()
     lib.dm_movingmusp2(ham, dm, matSize_c, mu_c, handle)
+    toc = time.perf_counter()
+    timer = toc - tic
+
     return timer
 
 
@@ -444,10 +513,33 @@ def dmMovingMuSP2(ham, dm, matSize, mu, handle, lib):
 # @return dm Density matrix that was constructed.
 #
 def dmGoldenSP2(ham, dm, matSize, mu, handle, lib):
+    """
+    This function constructs the density matrix
+    on the device using the golden SP2 method
+    tensor core acceleration. In this version of SP2, 
+    only mu is known a prioi, not nocc.
 
-    print("\n\n")
-    print("Golden SP2 method")
-    print("-----------------")
+    Parameters
+    ----------
+    ham : void C pointer
+        Device pointer to Hamiltonian matrix
+    dm : void C pointer
+        Device pointer to density matrix
+    matSize : int
+        Size of Hamiltonian/density matrices
+    mu : double
+        Chemical potential
+    handle : void C pointer
+        cublas Handle
+    lib : ctypes library
+        Imported gpu library .so file   
+    
+    Returns 
+    -------
+    double
+        Time to compute dm 
+
+    """
 
     ## copies scalar data to C data structures
     matSize_c = ctypes.c_int(matSize)
@@ -557,10 +649,34 @@ def dmFiniteTSP2(ham, dm, matSize, mu, handle, lib):
 # @return dm Density matrix that was constructed.
 #
 def dmDNNSP2(dev_list, matSize, nocc, handle, stream, lib):
+    """
+    This function constructs the density matrix
+    on the device using the the SP2 method with
+    tensor core acceleration. 
 
-    print("\n\n")
-    print("regular SP2 method")
-    print("------------------")
+    Parameters
+    ----------
+    ham : void C pointer
+        Device pointer to Hamiltonian matrix
+    dm : void C pointer
+        Device pointer to density matrix
+    matSize : int
+        Size of Hamiltonian/density matrices
+    nocc : int
+        Occupation number
+    handle : void C pointer
+        cublas Handle
+    stream : void C pointer
+        Pointer to device stream
+    lib : ctypes library
+        Imported gpu library .so file   
+    
+    Returns 
+    -------
+    double
+        Time to compute dm 
+
+    """
 
     ## copies scalar data to C data structures
     matSize_c = ctypes.c_int(matSize)
@@ -584,7 +700,7 @@ def dmDNNSP2(dev_list, matSize, nocc, handle, stream, lib):
         ctypes.POINTER(ctypes.c_void_p)
     ]
 
-    ## list of dev vars
+    ## list of pre-allocated dev vars
     ham    = dev_list[0]
     dm     = dev_list[1]
     t02    = dev_list[2]
@@ -598,7 +714,20 @@ def dmDNNSP2(dev_list, matSize, nocc, handle, stream, lib):
 
     ## time call
     tic = time.perf_counter()
-    lib.dm_dnnsp2(ham, dm, t02, iden, s0, s02, sbuf1, sbuf2, hbuf1, hbuf2, matSize_c, nocc_c, handle, stream)
+    lib.dm_dnnsp2(ham, 
+                  dm, 
+                  t02, 
+                  iden, 
+                  s0, 
+                  s02, 
+                  sbuf1, 
+                  sbuf2, 
+                  hbuf1, 
+                  hbuf2, 
+                  matSize_c, 
+                  nocc_c, 
+                  handle, 
+                  stream)
     toc = time.perf_counter()
     timer = toc - tic
 
@@ -622,6 +751,38 @@ def dmDNNSP2(dev_list, matSize, nocc, handle, stream, lib):
 # @return dm Response in density matrix that was constructed.
 #
 def dmDNNPRT(ham, prt, dm, rsp, matSize, nocc, handle, lib):
+    """
+    This function constructs the density matrix
+    and its first order response on the device 
+    using the the SP2 method and its extension to
+    density matrix perturbation theory using 
+    tensor core acceleration. 
+
+    Parameters
+    ----------
+    ham : void C pointer
+        Device pointer to Hamiltonian matrix
+    prt : void C pointer
+        Device pointer to perturbation matrix
+    dm : void C pointer
+        Device pointer to density matrix
+    dm : void C pointer
+        Device pointer to response matrix
+    matSize : int
+        Size of Hamiltonian/density matrices
+    nocc : int
+        Occupation number
+    handle : void C pointer
+        cublas Handle
+    lib : ctypes library
+        Imported gpu library .so file   
+    
+    Returns 
+    -------
+    double
+        Time to compute dm 
+
+    """
     ## copies scalar data to C data structures
     matSize_c = ctypes.c_int(matSize)
     nocc_c = ctypes.c_int(nocc)
