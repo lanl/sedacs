@@ -1,0 +1,33 @@
+Parameters 
+
+Element= H NumberOfOrbitals= 1
+OrbitalIndex= 0 OrbitalType= s OnsiteEnergy= -6.5984 HubbardU= 22.2612 NumberOfLobes= 1
+	LobeIndex= 0 kappa0= 1.0 d= 0.0 0.0 0.0 gamma= -1.5 -1.0 -1.0 -1.0 
+Element= C NumberOfOrbitals= 4
+OrbitalIndex= 0 OrbitalType= s OnsiteEnergy= -11.2603 HubbardU= 6.2612 NumberOfLobes= 1
+	LobeIndex= 0 kappa0= -1.0 d= 0.0 0.0 0.0 gamma= -1.0 -1.0 -1.0 -1.0 
+OrbitalIndex= 1 OrbitalType= px OnsiteEnergy= -11.2603 HubbardU= 6.2612 NumberOfLobes= 2
+	LobeIndex= 0 kappa= -1.0 d=  1.0 0.0 0.0 gamma= -1.0 -1.0 -1.0 -1.0 
+	LobeIndex= 1 kappa= -1.0 d= -1.0 0.0 0.0 gamma= -1.0 -1.0 -1.0 -1.0 
+OrbitalIndex= 2 OrbitalType= py OnsiteEnergy= -11.2603 HubbardU= 6.2612 NumberOfLobes= 2
+	LobeIndex= 0 kappa= -1.0 d=  0.0  1.0 0.0 gamma= -1.0 -1.0 -1.0 -1.0 
+	LobeIndex= 1 kappa= -1.0 d=  0.0 -1.0 0.0 gamma= -1.0 -1.0 -1.0 -1.0 
+OrbitalIndex= 3 OrbitalType= pz OnsiteEnergy= -11.2603 HubbardU= 6.2612 NumberOfLobes= 2
+	LobeIndex= 0 kappa= -1.0 d=  0.0 0.0  1.0 gamma= -1.0 -1.0 -1.0 -1.0 
+	LobeIndex= 1 kappa= -1.0 d=  0.0 0.0 -1.0 gamma= -1.0 -1.0 -1.0 -1.0 
+Element= O NumberOfOrbitals= 4
+OrbitalIndex= 0 OrbitalType= s OnsiteEnergy= -15.6181 HubbardU= 2.2612 NumberOfLobes= 1
+        LobeIndex= 0 kappa0= -1.0 d= 0.0 0.0 0.0 gamma= -1.5 -1.0 -1.0 -1.0
+OrbitalIndex= 1 OrbitalType= px OnsiteEnergy= -13.6181 HubbardU= 2.2612 NumberOfLobes= 2
+        LobeIndex= 0 kappa= 1.0 d=  1.0 0.0 0.0 gamma= -1.0 -1.0 -1.0 -1.0
+        LobeIndex= 1 kappa= -1.0 d= -1.0 0.0 0.0 gamma= -1.0 -1.0 -1.0 -1.0
+OrbitalIndex= 2 OrbitalType= py OnsiteEnergy= -13.6181 HubbardU= 2.2612 NumberOfLobes= 2
+        LobeIndex= 0 kappa= 1.0 d=  0.0  1.0 0.0 gamma= -1.0 -1.0 -1.0 -1.0
+        LobeIndex= 1 kappa= -1.0 d=  0.0 -1.0 0.0 gamma= -1.0 -1.0 -1.0 -1.0
+OrbitalIndex= 3 OrbitalType= pz OnsiteEnergy= -13.6181 HubbardU= 2.2612 NumberOfLobes= 2
+        LobeIndex= 0 kappa= 1.0 d=  0.0 0.0  1.0 gamma= -1.0 -1.0 -1.0 -1.0
+        LobeIndex= 1 kappa= -1.0 d=  0.0 0.0 -1.0 gamma= -1.0 -1.0 -1.0 -1.0
+
+
+
+
