@@ -1,5 +1,5 @@
 from sedacs.interface.pyseqm import get_overlap_pyseqm
-    from sedacs.types import ArrayLike
+from sedacs.types import ArrayLike
 from sedacs.engine import Engine
 
 import torch
