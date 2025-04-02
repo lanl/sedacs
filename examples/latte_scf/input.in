@@ -1,0 +1,27 @@
+#Input file for SEDACS
+
+Verbosity= True
+Threshold= 1.0E-7
+#CoordsFile= coords_1299.pdb
+CoordsFile= wat2.xyz
+#CoordsFile= algo.xyz
+#CoordsFile= coords_2955.pdb 
+#CoordsFile= coords_100.pdb 
+#CoordsFile= coords_1032.pdb
+#CoordsFile= water_128.xyz 
+GraphThreshold= 0.01 
+MaxDeg= 500 #Max graph degree
+Rcut= 3.0 #Radius cutoff
+PartitionType= Metis
+#PartitionType= Regular
+#PartitionType= MinCut
+NumParts= 1 
+SCFTol= 1.0E-1
+Overlap= True 
+ElectronicTemperature= 1000
+MuCalculationType=  #FromParts, Dynamical, None
+Orbitals= {"H":1,"O":4} #This has to be know for each engine
+NumAdaptiveIter= 100 #Number of graph adaptive iterations
+Engine= {"Name":"LATTE","InterfaceType":"Module","Path":"/home/cnegre/sedacs-Qi/proxies/python/","Executable":"/home/cnegre/","RhoSolverMethod":"Diag","Accelerator":"No","AcceleratorPath":"/home/finkeljo/vescratch/sedacs-gpmdsp2/src/sedacs/gpu/nvda"} #The name of the external code
+#Engine= {"Name":"ProxyAFortran","InterfaceType":"Module","Path":"/home/cnegre/sedacs-Qi/proxies/fortran/","Executable":"/home/cnegre/"} #The name of the external code
+

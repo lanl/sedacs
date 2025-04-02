@@ -4,6 +4,7 @@ import torch
 import time
 from .ewald_torch import ewald_energy as torch_ewald_energy
 from .ewald_torch import ewald_real as torch_ewald_real
+from .ewald_torch import ewald_real_screening as torch_ewald_real_screening
 from .ewald_torch import ewald_kspace_part1 as torch_ewald_kspace_part1
 from .ewald_torch import ewald_kspace_part2 as torch_ewald_kspace_part2
 from .ewald_torch import ewald_self_energy
@@ -470,6 +471,143 @@ def ewald_real_space_kernel(out_en_ptr, out_f_ptr,
     real_energy = tl.sum(res) / 2.0
     tl.atomic_add(out_en_ptr, real_energy)
 
+@triton.jit
+def ewald_real_space_screening_kernel(out_en_ptr, out_f_ptr,
+                            out_dq_ptr,
+                            nbrs_ptr, nbr_dists_ptr,
+                            dx_ptr, dy_ptr, dz_ptr,
+                            q_ptr, hubbard_u_ptr, atomtypes_ptr,
+                            alpha: float,
+                            cutoff: float,
+                            N: int, M: int,
+                            calculate_forces: tl.constexpr,
+                            calculate_dq: tl.constexpr,
+                            BLOCK_SIZE: tl.constexpr):
+    '''
+    Assumes tensors to be allocated in a contiguous manner
+    '''
+    row_idx = tl.program_id(0)
+    pi = 3.141592653589793
+    KECONST = 14.3996437701414
+    
+    row_stride = M
+    dist_start_ptr = nbr_dists_ptr + row_idx * row_stride
+    col_offsets = tl.arange(0, BLOCK_SIZE)
+    dist_ptrs = dist_start_ptr + col_offsets
+    my_dists = tl.load(dist_ptrs, mask=col_offsets < M, other=0.0) # will be multiplied by 0 if out of bound
+    nbr_start_ptr = nbrs_ptr + row_idx * row_stride
+    nbr_ptrs = nbr_start_ptr + col_offsets
+    my_nbrs = tl.load(nbr_ptrs, mask=col_offsets < M, other=N)
+
+    atomtype = tl.load(atomtypes_ptr + row_idx, mask=row_idx < N, other=-1)
+    mask = (col_offsets < M) & (my_nbrs < N) & (my_nbrs != -1) & (my_dists < cutoff)
+    atomtypes = tl.load(atomtypes_ptr + my_nbrs, mask= mask, other=-1)
+    same_element_mask = mask & (atomtype == atomtypes)  
+    different_element_mask = mask & ~same_element_mask
+
+    nbr_qs = tl.load(q_ptr + my_nbrs, mask=mask, other=0.0)
+    my_q = tl.load(q_ptr + row_idx, mask=row_idx < N, other=0.0)
+
+    TFACT  = 16.0 / (5.0 * KECONST)
+    TI = tl.load(hubbard_u_ptr + row_idx, mask=row_idx < N, other=0.0)
+    #TI = TFACT * tl.where(mask, TI, 1.0)
+    #TI = tl.where(mask, TFACT * TI, 1.0)
+    TI = TFACT * TI 
+    TI2 = TI * TI
+    TI3 = TI2 * TI
+    TI4 = TI2 * TI2
+    TI6 = TI4 * TI2
+
+    SSA = TI
+    SSB = TI3 / 48.0
+    SSC = 3.0 * TI2 / 16.0
+    SSD = 11.0 * TI / 16.0
+    SSE = 1.0
+
+    MAGR = tl.where(mask, my_dists, 0.0)
+    MAGR2 = MAGR * MAGR
+    Z = tl.abs(alpha * MAGR)
+    NUMREP_ERFC = 1.0 - tl.erf(Z)
+
+    J0 = tl.where(mask, NUMREP_ERFC / my_dists, 0.0)
+
+    EXPTI = tl.exp(-TI * MAGR)
+
+    J0 = J0 - tl.where(same_element_mask, (EXPTI * \
+                        (SSB * MAGR2 + SSC * MAGR + SSD + SSE / MAGR)), 0.0)
+
+    TJ = tl.load(hubbard_u_ptr + my_nbrs, mask = different_element_mask, other=0.0)
+    #TJ = TFACT * tl.load(hubbard_u_ptr + my_nbrs, mask = different_element_mask, other=1.0)
+    #TJ = tl.where(different_element_mask, TFACT * TJ, 1.0) 
+    TJ = TFACT * TJ
+    TJ2 = TJ * TJ
+    TJ4 = TJ2 * TJ2
+    TJ6 = TJ4 * TJ2
+    EXPTJ = tl.exp(-TJ * MAGR) 
+    TI2MTJ2 = TI2 - TJ2
+    TI2MTJ2 = tl.where(different_element_mask, TI2MTJ2, 1.0)
+    SA = TI
+    SB = EXPTI * TJ4 * TI / 2.0 / TI2MTJ2 / TI2MTJ2 
+    SC = EXPTI * (TJ6 - 3.0 * TJ4 * TI2) / TI2MTJ2 / TI2MTJ2 / TI2MTJ2
+    SD = TJ
+    SE = EXPTJ * TI4 * TJ / 2.0 / TI2MTJ2 / TI2MTJ2 
+    SF = EXPTJ * (-(TI6 - 3.0 * TI4 * TJ2)) / TI2MTJ2 / TI2MTJ2 / TI2MTJ2 
+
+    J0 = J0 - tl.where(different_element_mask, (1.0 * (SB - SC / MAGR) + \
+                1.0 * (SE - SF / MAGR)), 0.0)
+
+    energy = my_q * J0 * nbr_qs
+
+    # Force calculation
+    if calculate_forces:
+        disp_x_ptrs = dx_ptr + row_idx * row_stride + col_offsets 
+        disp_y_ptrs = dy_ptr + row_idx * row_stride + col_offsets 
+        disp_z_ptrs = dz_ptr + row_idx * row_stride + col_offsets 
+        dx_disps = tl.load(disp_x_ptrs, mask=col_offsets < M)
+        dy_disps = tl.load(disp_y_ptrs, mask=col_offsets < M)
+        dz_disps = tl.load(disp_z_ptrs, mask=col_offsets < M)
+
+        alpha2 = alpha * alpha 
+        DC_x = tl.where(mask, dx_disps / my_dists, 0.0)
+        DC_y = tl.where(mask, dy_disps / my_dists, 0.0)
+        DC_z = tl.where(mask, dz_disps / my_dists, 0.0)
+        CA = tl.where(mask, NUMREP_ERFC / MAGR, 0.0)
+        CA = CA + 2.0 * alpha * tl.exp(-alpha2 * MAGR2) / tl.sqrt(pi)
+        factor = tl.where(mask, -my_q * nbr_qs * CA / MAGR, 0.0)
+
+        factor = factor + same_element_mask * my_q * nbr_qs * EXPTI * \
+                    ((tl.where(same_element_mask, SSE / MAGR2, 0.0) - 2.0 * SSB * MAGR - SSC) \
+                    + SSA * (SSB * MAGR2 + SSC * MAGR + SSD + tl.where(same_element_mask, SSE / MAGR, 0.0)))
+        
+        factor = factor + different_element_mask * my_q * nbr_qs * ((1.0 * (SA * (SB - tl.where(different_element_mask, SC / MAGR, 0.0)) - \
+            tl.where(different_element_mask, SC / MAGR2, 0.0))) + (1.0 * (SD * (SE - tl.where(different_element_mask, SF / MAGR, 0.0)) - \
+            tl.where(different_element_mask, SF / MAGR2, 0.0))))
+        fx = factor * DC_x
+        fy = factor * DC_y
+        fz = factor * DC_z
+
+        fx = tl.sum(fx)
+        fy = tl.sum(fy)
+        fz = tl.sum(fz)
+
+        out_fx_ptrs = out_f_ptr + row_idx
+        out_fy_ptrs = out_f_ptr + N + row_idx
+        out_fz_ptrs = out_f_ptr + 2*N + row_idx
+        #TODO: do we really need atomic add here if the block size covers all columns?
+        #      test this to make sure
+        tl.store(out_fx_ptrs, fx, mask=row_idx < N)
+        tl.store(out_fy_ptrs, fy, mask=row_idx < N)
+        tl.store(out_fz_ptrs, fz, mask=row_idx < N)
+    
+    if calculate_dq:
+        COULOMBV = tl.sum(J0 * nbr_qs)
+        out_dq_ptrs = out_dq_ptr + row_idx
+        tl.store(out_dq_ptrs, COULOMBV, mask=row_idx < N)
+
+    #Energy calculation
+    real_energy = tl.sum(energy) / 2.0
+    tl.atomic_add(out_en_ptr, real_energy)
+
 def ewald_real(
     nbr_inds: torch.Tensor,
     nbr_diff_vecs: torch.Tensor,
@@ -547,6 +685,53 @@ def ewald_real(
         BLOCK_SIZE=BLOCK_SIZE,
     )
     return y.item(), out_f, out_dq
+
+def ewald_real_screening(nbr_inds, nbr_diff_vecs, nbr_dists, q_vals, hubbard_u_vals, atomtypes,
+               alpha: float,
+               cutoff: float,
+               calculate_forces: int,
+               calculate_dq: int,
+               out_f = None, out_dq = None):
+    '''
+    nbr_disp_vecs: 3, N, M
+    '''
+    # call the pytorch function if the tensors are on CPU
+    if nbr_dists.device.type == 'cpu':
+        return torch_ewald_real_screening(nbr_inds, nbr_diff_vecs, nbr_dists, q_vals,
+               hubbard_u_vals, atomtypes, alpha, cutoff, calculate_forces,
+               calculate_dq)
+
+    _, M = nbr_inds.shape
+    N = len(q_vals)
+    BLOCK_SIZE = triton.next_power_of_2(M)
+    if calculate_forces and out_f == None:
+        #out_f = torch.zeros((my_lcl_N, 3), device=nbr_dists.device).type(nbr_dists.dtype)
+        out_f = torch.zeros((3, N), device=nbr_dists.device).type(nbr_dists.dtype)
+    if calculate_dq and out_dq == None:
+        out_dq = torch.zeros((N, ), device=nbr_dists.device).type(nbr_dists.dtype)
+    y = torch.zeros((1,), device=nbr_dists.device).type(torch.float64)
+    ewald_real_space_screening_kernel[(N,)](
+        y,
+        out_f,
+        out_dq,
+        nbr_inds,
+        nbr_dists,
+        nbr_diff_vecs[0],
+        nbr_diff_vecs[1],
+        nbr_diff_vecs[2],
+        q_vals,
+        hubbard_u_vals,
+        atomtypes,
+        alpha,
+        cutoff,
+        N,
+        M,
+        calculate_forces,
+        calculate_dq,
+        BLOCK_SIZE=BLOCK_SIZE
+    )
+
+    return y.to(nbr_dists.dtype).item(), out_f, out_dq
 
 def ewald_energy(
     positions: torch.Tensor,
