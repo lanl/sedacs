@@ -24,7 +24,7 @@ __all__ = [
 #
 def read_coords_file(fileName: str,
                      lib: str ="None",
-                     verb=True) -> tuple(ArrayLike, ArrayLike, ArrayLike, ArrayLike):
+                     verb=True) -> tuple[ArrayLike, ArrayLike, ArrayLike, ArrayLike]:
     """
     Reads in atomic structure files, including lattice information.
 
@@ -96,7 +96,7 @@ def read_coords_file(fileName: str,
 #
 def read_xyz_file(fileName: str,
                   lib: str ="None",
-                  verb=True) -> tuple(ArrayLike, ArrayLike, ArrayLike, ArrayLike):
+                  verb=True) -> tuple[ArrayLike, ArrayLike, ArrayLike, ArrayLike]:
     """
     Reads in atomic structure files in XYZ format, including lattice information.
 
@@ -137,7 +137,7 @@ def read_xyz_file(fileName: str,
 
     return latticeVectors, symbols, types, coords
 
-def read_xyz_file_nolib(fileName: str) -> tuple(ArrayLike, ArrayLike, ArrayLike, ArrayLike):
+def read_xyz_file_nolib(fileName: str) -> tuple[ArrayLike, ArrayLike, ArrayLike, ArrayLike]:
     """
     Reads in atomic structure files in XYZ format without the use of external libraries.
 
@@ -233,7 +233,7 @@ def read_xyz_file_nolib(fileName: str) -> tuple(ArrayLike, ArrayLike, ArrayLike,
 
     return latticeVectors, symbols, types, coords
 
-def read_xyz_file_ase(fileName: str) -> tuple(ArrayLike, ArrayLike, ArrayLike, ArrayLike):
+def read_xyz_file_ase(fileName: str) -> tuple[ArrayLike, ArrayLike, ArrayLike, ArrayLike]:
     """
     Reads in atomic structure files in XYZ format without the ASE library.
     Currently this does *not* support lattice vector parsing. This will be added
