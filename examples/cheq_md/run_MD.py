@@ -218,7 +218,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument("--model_folder", type=str, default="model_data", help="Model folder.")
 parser.add_argument("--dt", type=float, default=0.4, help="Timestep size (fs).")
-parser.add_argument("--N", type=int, default=6540, choices=[6540, 10008, 25050, 52320],
+parser.add_argument("--N", type=int, default=6540, choices=[300, 6540, 10008, 25050, 52320],
                     help="System size.")
 parser.add_argument("--use_ewald", type=int, default=1, help="Flag for using long-range computation.")
 parser.add_argument("--use_shadow", type=int, default=1, help="Flag for using shadow MD.")
@@ -396,21 +396,19 @@ for i in tqdm(range(int(total_sim_length / dt_mult))):
     timed_iter_count += benchmark_flags['timing']
     all_iter_count += 1
     state = step_fn(state)
-    if plot_results == False:
+    if plot_results == True:
         all_tot_energy.append(state.system.get_total_energy())
         all_temp.append(state.system.get_temperature())
         all_time.append((i+1) * dt_mult)
         all_pot.append(state.system.get_potential_energy())
 
-    if i % 500 == 0 and plot_results == False:
+    if i % 500 == 0 and plot_results == True:
         all_charges.append(state.system.charges.detach().cpu().numpy())
         all_positions.append(state.system.positions.detach().cpu().numpy())
-    if i % 50 == 0 and plot_results == False:
-        print(all_temp[-1], all_pot[-1], all_tot_energy[-1], all_iters[-1], flush=True)
 
 
 
-if plot_results == False:
+if plot_results == True:
     final_total = all_tot_energy[-1]
     final_kinetic = state.system.get_kinetic_energy()
     final_potential = state.system.get_potential_energy()
@@ -467,15 +465,12 @@ with open(f"{prefix}_timing.txt", 'w') as fptr:
     
     avg_iter = time_data["Num MatVec"] / (timed_iter_count)
     print(f"Avg. Num. MatVec: {avg_iter:.2f}", file = fptr)
-    print(all_iter_count)
-    print(nbr_state_NN.reneighbor_cnt)
-    print(nbr_state.reneighbor_cnt)
     avg_short = nbr_state_NN.reneighbor_cnt / all_iter_count
     avg_long = nbr_state.reneighbor_cnt / all_iter_count
     print(f"Avg. Num. Short Reneighbor: {avg_short:.2f}", file = fptr)
     print(f"Avg. Num. Long Reneighbor: {avg_long:.2f}", file = fptr)
 
-if plot_results == False:
+if plot_results == True:
     plt.figure()
     plt.plot(all_time[:], all_tot_energy[:], label=f"dt={dt_mult}")
     plt.xlabel("Time (fs)")
