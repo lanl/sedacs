@@ -50,6 +50,11 @@ def linear_ChEQ_solver(
     and introduces coupling and constraints through rank-2 corrections. 
     The solution can be found in closed form.
 
+    Defined in Eq. (17) of:
+    Li, Cheng-Han, et al. Shadow Molecular Dynamics with a Machine Learned Flexible Charge Potential
+    (https://doi.org/10.26434/chemrxiv-2025-x8b23)
+
+
     Args:
         ewald_p (torch.Tensor): Tensor of length N, representing Ewald potential
             contributions at each site.
@@ -96,6 +101,10 @@ def calculate_jacob_vec(
     """
     Compute the Jacobian-vector product.
 
+    Defined in Eq. (21) of:
+    Li, Cheng-Han, et al. Shadow Molecular Dynamics with a Machine Learned Flexible Charge Potential
+    (https://doi.org/10.26434/chemrxiv-2025-x8b23)
+
     Args:
         p (torch.Tensor): Tensor of length N, representing current partial charges.
         ewald_vec (torch.Tensor): Tensor of length N, representing differential Ewald
@@ -138,6 +147,10 @@ def shadow_QEQ_solver(
     auxiliary variables without requiring a fully converged solution at each step.
     The iteration tolerance may be relaxed while still preserving good energy
     conservation over many MD steps.
+
+    Solves Eq. (41) of:
+    Li, Cheng-Han, et al. Shadow Molecular Dynamics with a Machine Learned Flexible Charge Potential
+    (https://doi.org/10.26434/chemrxiv-2025-x8b23)
 
     Args:
         jacob_mat_vec (Callable[[torch.Tensor], torch.Tensor]):
