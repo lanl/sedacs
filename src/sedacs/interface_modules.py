@@ -6,6 +6,7 @@ from sedacs.message import *
 import sys 
 from sedacs.engine import Engine
 from sedacs.globals import *
+from sedacs.types import ArrayLike
 
 # import the shared library
 try:
@@ -65,6 +66,10 @@ __all__ = ["get_hamiltonian_module", "get_density_matrix_module",
 
 #Initialize the proxy code
 def init_proxy(symbols,orbs):
+    """
+    Initialize the proxy code.
+    """
+
     init_proxy_proxy(symbols,orbs)
     
 
@@ -81,7 +86,39 @@ def build_coul_ham_module(eng,ham0,vcouls,types,charges,orbital_based,hindex,ove
     return ham
 
 
-def get_hamiltonian_module(eng,coords,atomTypes,symbols,get_overlap=True,verb=False):
+def get_hamiltonian_module(eng: Engine,
+                          coords: ArrayLike,
+                          atomTypes: ArrayLike,
+                          symbols: ArrayLike,
+                          get_overlap: bool = True,
+                          verb: bool = False):
+
+    """
+    Get the Hamiltonian of the system.
+
+    Parameters
+    ----------
+    eng : Engine
+        The engine to use.  
+    coords : ArrayLike (Natoms, 3)  
+        The coordinates of the atoms.
+    atomTypes: ArrayLike (Natoms, )
+        The element type of each atom in the system.
+    symbols: ArrayLike
+        The unique chemical elements in the structure.
+    get_overlap : bool
+        Whether to get the overlap matrix.
+    verb : bool
+        Whether to print verbose output.
+
+    Returns
+    -------
+    hamiltonian : ArrayLike (Norb, Norb)
+        The Hamiltonian matrix.
+
+    overlap : ArrayLike (Norb, Norb)
+        The overlap matrix. Only returned if get_overlap is True.
+    """
 
     
     if eng.name == "ProxyAPython":
@@ -131,7 +168,58 @@ def get_hamiltonian_module(eng,coords,atomTypes,symbols,get_overlap=True,verb=Fa
 
 
 
-def get_density_matrix_modules(eng,hamiltonian,nocc,norbsInCore=None,method="Diag",accel="No",mu=None,etemp=0.0,overlap=None,full_data=False,verb=False):
+def get_density_matrix_modules(eng: Engine,
+                               hamiltonian: ArrayLike,
+                               nocc: int,
+                               norbsInCore: Optional[int] = None,
+                               method: str = "Diag",
+                               accel: str = "No",
+                               mu: Optional[float] = None,
+                               etemp: float = 0.0,
+                               overlap: Optional[ArrayLike] = None,
+                               full_data: bool = False,
+                               verb: bool = False) -> tuple[ArrayLike, ArrayLike, ArrayLike]:
+
+    """
+    Get the density matrix of the system.
+
+    Parameters
+    ----------
+    eng : Engine
+        The sedacs Engine object.
+    hamiltonian : ArrayLike
+        The Hamiltonian matrix.
+    nocc : int
+        The number of occupied orbitals.
+    norbsInCore : Optional[int]
+        The number of orbitals in the core.
+    method : str
+        The method to use.  
+    accel : str
+        The acceleration method to use.
+    mu : Optional[float]
+        The chemical potential.
+    etemp : float
+        The temperature.
+    overlap : Optional[ArrayLike]   
+        The overlap matrix.
+    full_data : bool
+        Whether to return the full data.
+    verb : bool
+        Whether to print verbose output.
+
+    Returns 
+    -------
+    density_matrix : ArrayLike
+        The density matrix.
+    evals : ArrayLike
+        The eigenvalues.
+    dvals : ArrayLike
+        The eigenvectors. ?
+
+
+    """
+
     if eng.name == "ProxyAPython":
         method = eng.method
         accel = eng.accel
@@ -168,21 +256,92 @@ def get_density_matrix_modules(eng,hamiltonian,nocc,norbsInCore=None,method="Dia
         return density_matrix
 
 
-def get_ppot_energy_expo(coords,types):
+def get_ppot_energy_expo(coords: ArrayLike,
+                         types: ArrayLike) -> float:
+    """
+    Get the potential energy from a potential.
+
+    Parameters
+    ----------
+    coords : ArrayLike (Natoms, 3)
+        The coordinates of the atoms.
+    types: ArrayLike (Natoms, )
+        The element type of each atom in the system.
+
+    Returns
+    -------
+    energy : float
+        The potential energy.
+    """
 
     energy = get_ppot_energy_expo_proxy(coords,types)
 
     return energy
 
 
-def get_ppot_forces_expo(coords,types):
+def get_ppot_forces_expo(coords: ArrayLike,
+                         types: ArrayLike) -> ArrayLike:
+    """
+    Get the forces from a potential.
+
+    Parameters
+    ----------
+    coords : ArrayLike (Natoms, 3)
+        The coordinates of the atoms.
+    types: ArrayLike (Natoms, )
+        The element type of each atom in the system.
+
+    Returns
+    -------
+    forces : ArrayLike (Natoms, 3)
+        The forces on each atom.
+    """
 
     forces = get_ppot_forces_expo_proxy(coords,types) 
 
     return forces
 
 
-def get_tb_forces_module(ham,rho,charges,field,coords,atomTypes,symbols,overlap=None,verb=False):
+def get_tb_forces_module(ham: ArrayLike,
+                         rho: ArrayLike,
+                         charges: ArrayLike,
+                         field: ArrayLike, # ?
+                         coords: ArrayLike,
+                         atomTypes: ArrayLike,
+                         symbols: ArrayLike,
+                         overlap: ArrayLike = None,
+                         verb: bool = False):
+
+    """
+
+    Obtain forces from a tight binding model.
+
+    Parameters
+    ----------
+    ham : ArrayLike (Norb, Norb)
+        The Hamiltonian matrix.
+    rho : ArrayLike (Norb, Norb)
+        The density matrix.
+    charges : ArrayLike (Natoms)
+        The charges.
+    field : ArrayLike
+        The applied field.
+    coords : ArrayLike (Natoms, 3)
+        The coordinates of the atoms.
+    symbols: ArrayLike
+        The unique chemical elements in the structure.
+    atomTypes: ArrayLike (Natoms, )
+        The element type of each atom in the system.
+    overlap : ArrayLike (Norb, Norb)
+        The overlap matrix.
+    verb : bool
+        Whether to print verbose output.
+
+    Returns
+    -------
+    forces : ArrayLike (Natoms, 3)
+        The forces on each atom.
+    """
 
     forces = get_tb_forces_proxy(ham,rho,charges,field,coords,atomTypes,symbols,overlap=None,verb=False)
 

@@ -8,6 +8,8 @@ from sedacs.message import *
 from sedacs.periodic_table import PeriodicTable
 import numpy as np
 
+from sedacs.types import ArrayLike
+
 # from sdc_out import *
 try:
     from mpi4py import MPI
@@ -26,16 +28,51 @@ __all__ = [
     "diis_mix",
 ]
 
-## Do DIIS mixing scheme
-# @param 
-# @param 
-# @param verb Verbosity level
-#
-def diis_mix(charges,chargesOld,chargesIn,chargesOut,iteration,verb=False):
+def diis_mix(charges: ArrayLike,
+             chargesOld: ArrayLike,
+             chargesIn: ArrayLike,
+             chargesOut: ArrayLike,
+             iteration: int,
+             verb: bool = False,
+             mStoring: int = 5,
+             mixCoeff: float = 0.2) -> tuple[float, ArrayLike, ArrayLike, ArrayLike, ArrayLike]:
 
+    """
 
-    mStoring = 5 
-    mixCoeff = 0.2 
+    Performs DIIS mixing scheme
+
+    Parameters
+    ----------  
+    charges : ArrayLike (Natoms)
+        The charges of the system.
+    chargesOld : ArrayLike (Natoms)
+        The old charges of the system.
+    chargesIn : ArrayLike (Natoms, mStoring)
+        The input charges of the system.
+    chargesOut : ArrayLike (Natoms, mStoring)
+        The output charges of the system.
+    iteration : int
+        The iteration number.
+    verb : bool
+        Verbosity level.
+    mStoring : int
+        The number of historical charges to store.
+    mixCoeff : float
+        The mixing coefficient.
+
+    Returns
+    -------
+    scfError : float
+        The SCF error.
+    charges : ArrayLike (Natoms)
+        The modified charges of the system.
+    chargesOld : ArrayLike (Natoms)
+        The old charges of the system.
+    chargesIn : ArrayLike (Natoms, mStoring)
+        The input charges of the system.
+    chargesOut : ArrayLike (Natoms, mStoring)
+        The output charges of the system.   
+    """
 
     if(verb):
         status_at("diis_mix","Performing Pulay mixing scheme ...")
@@ -51,13 +88,22 @@ def diis_mix(charges,chargesOld,chargesIn,chargesOut,iteration,verb=False):
     kStoring=min(iteration,mStoring) 
 
     if(iteration <= 0):
-        charges = (1.0 - mixCoeff)*chargesOld + mixCoeff*charges #Linear mixing
+
+        # Linear mixing.
+        charges = (1.0 - mixCoeff)*chargesOld + mixCoeff*charges
+
+        # Compute the SCF error.
         scfError = np.linalg.norm(charges)
+
         if(verb):
             print("SCF error =", scfError)
+
+        # Update the old charges.
         chargesOld[:] = charges[:]
+
     else:
 
+        # Initialize the auxiliary charges.
         chargesAux = np.zeros(nats) #d
         chargesNewIn = np.zeros(nats) #dnew
         chargesNewOut = np.zeros(nats) #dnewOut
@@ -72,8 +118,9 @@ def diis_mix(charges,chargesOld,chargesIn,chargesOut,iteration,verb=False):
             chargesIn[:,iteration-1] = chargesOld[:]
             chargesOut[:,iteration-1] = chargesAux[:]
 
-        if(iteration >= mStoring + 1):
 
+        # Loop once history is full.
+        if(iteration >= mStoring + 1):
             for j in range(0,kStoring-1):
                 chargesIn[:,j] = chargesIn[:,j+1]
                 chargesOut[:,j] = chargesOut[:,j+1]
@@ -136,22 +183,46 @@ def diis_mix(charges,chargesOld,chargesIn,chargesOut,iteration,verb=False):
 
     return scfError, charges, chargesOld, chargesIn, chargesOut
 
-## Do linear mixing 
-# @param mixCoeff Mixing coefficient
-# @param charges System charges
-# @param chargesOld Old system charges
-# @return charges Mofified system charges according to mixing scheme
-# @param verb Verbosity level
-#
-def linear_mix(mixCoeff,charges,chargesOld,iteration):
-    
-    if(iteration == 0):
-        chargesOld = charges
-        scfError = 1.0
-    else:
-        charges = mixCoeff*charges + (1-mixCoeff)*chargesOld
-        scfError = np.linalg.norm(charges -chargesOld)
-        chargesOld = charges
+
+def linear_mix(mixCoeff: float,
+               charges: ArrayLike,
+               chargesOld: ArrayLike,
+               iteration: int) -> tuple[float, ArrayLike, ArrayLike]:
+
+    """
+    Performs linear mixing scheme
+
+    Parameters
+    ----------
+    mixCoeff : float
+        The mixing coefficient.
+    charges : ArrayLike (Natoms)
+        The charges of the system.
+    chargesOld : ArrayLike (Natoms)
+        The old charges of the system.
+    iteration : int
+        The iteration number.
+    verb : bool
+        Verbosity level.
+
+    Returns
+    -------
+    scfError : float
+        The SCF error.
+    charges : ArrayLike (Natoms)
+        The modified charges of the system.
+    chargesOld : ArrayLike (Natoms)
+        The old charges of the system.
+    """
+
+    # Linear mixing scheme.
+    charges = mixCoeff*charges + (1-mixCoeff)*chargesOld
+
+    # Compute the SCF error.
+    scfError = np.linalg.norm(charges -chargesOld)
+
+    # Update the old charges.
+    chargesOld = charges
 
     return scfError,charges,chargesOld
 
