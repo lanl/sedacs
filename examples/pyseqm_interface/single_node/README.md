@@ -66,6 +66,15 @@ It is designed to handle finite systems. Therefore, structures are placed in box
    ```shell
    mpirun -bind-to none -n 2 python -u main.py > out.out 2>&1
    ```
+**Your output forces should match those in ref_forces.npy** 
+This can be checked with:
+```python
+import numpy as np
+f1 = np.load("forces.npy")
+fref = np.load("ref_forces.npy")
+print(np.max(np.abs(fref-f1)))
+```
+
 
 #### Partitioning and GPU Utilization
 
