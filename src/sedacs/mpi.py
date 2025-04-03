@@ -11,16 +11,34 @@ try:
 except ImportError as e:
     mpiLib = False
 
-## Send and receive
-# @brief Very simple send and receive mpi wrapper for integer numpy 2D arrays
-# @param dataSend Date (2D numpy int array) to be sent
-# @param fromRank The rank num from which data will be sent
-# @param toRank The rank num from which data will be received
-# @param rank The number for current mpi execution rank
-# @param comm MPI communicator
-# @return dataRecv Received data
-#
-def send_and_receive(dataSend, fromRank, toRank, rank, comm):
+from sedacs.types import ArrayLike
+
+def send_and_receive(dataSend: np.ndarray,
+                     fromRank: int,
+                     toRank: int,
+                     rank: int,
+                     comm) -> np.ndarray:
+    """
+    Send and receive data between two ranks.
+
+    Parameters
+    ----------
+    dataSend : numpy.ndarray
+        The data to send.
+    fromRank : int
+        The rank number from which data will be sent.
+    toRank : int
+        The rank number from which data will be received.
+    rank : int
+        The current rank number.
+    comm : mpi4py.MPI.Comm
+        The MPI communicator.
+
+    Returns
+    -------
+    dataRecv : numpy.ndarray
+        The received data.
+    """
     dataRecv = None
     if rank == fromRank:
         comm.Send(dataSend, dest=toRank, tag=0)
@@ -28,23 +46,45 @@ def send_and_receive(dataSend, fromRank, toRank, rank, comm):
     elif rank == toRank:
         dataRecv = np.empty((len(dataSend[:, 0]), len(dataSend[0, :])), dtype=int)
         comm.Recv(dataRecv, source=fromRank, tag=0)
+
     return dataRecv
 
+def collect_matrix_from_chunks(chunk: ArrayLike,
+                               nDim: int,
+                               rowsPerChunk: int,
+                               rank: int,
+                               numranks: int,
+                               comm: MPI.Comm) -> ArrayLike:
+    """
+    Collect a full matrix from several "regular" chunks.
 
-## Collect matrix from chunks
-# @brief This will collect a full matrix from severa "regular" chunks.
-# @param chunk Matrix chunk to be collected
-# @param nDim Dimension of the full matrix
-# @param rowsPerChunk Number of rows in the chunk.Typically `rowsPerChunk = int(nDim/numranks)`.
-# It can happen that the last chunk contains more than rowsPerChunk. Basically
-# the last chunk will be used to adjust in case `nDim` is not divisible by numranks. In this case:
-# the last chunk (corresponding to the last rank) will have: `nDim - rowsPerChunk*(numrank-1)`
-# numbers of rows.
-# @param rank The number for current mpi execution rank
-# @param numranks Number of execution ranks
-# @param comm MPI communicator
-#
-def collect_matrix_from_chunks(chunk, nDim, rowsPerChunk, rank, numranks, comm):
+    *NOTE* 
+    It can happen that the last chunk contains more than rowsPerChunk. Basically
+    the last chunk will be used to adjust in case `nDim` is not divisible by numranks. In this case:
+    the last chunk (corresponding to the last rank) will have: `nDim - rowsPerChunk*(numrank-1)`
+    numbers of rows.
+
+    Parameters
+    ----------
+    chunk 
+        The chunk of the matrix to be collected.
+    nDim : int
+        The dimension of the full matrix.
+    rowsPerChunk : int
+        The number of rows in the chunk.
+    rank : int
+        The current rank number.
+    numranks : int
+        The number of execution ranks.
+    comm : MPI.Comm
+        The MPI communicator.
+
+    Returns
+    -------
+    fullMat : numpy.ndarray
+        The full matrix.
+    """ 
+
     if not mpiLib:
         raise ImportError("ERROR: Consider installing mpi4py")
 
@@ -84,7 +124,30 @@ def collect_matrix_from_chunks(chunk, nDim, rowsPerChunk, rank, numranks, comm):
     return fullMat
 
 
-def collect_and_sum_matrices(matOnRank, rank, numranks, comm):
+def collect_and_sum_matrices(matOnRank: ArrayLike,
+                              rank: int,
+                              numranks: int,
+                              comm: MPI.Comm) -> ArrayLike:
+    """
+    Collect and sum matrices from all ranks.
+
+    Parameters
+    ----------
+    matOnRank : numpy.ndarray
+        The matrix to be collected and summed.
+    rank : int
+        The current rank number.
+    numranks : int
+        The number of execution ranks.
+    comm : MPI.Comm
+        The MPI communicator.
+
+    Returns
+    -------
+    fullMat : numpy.ndarray
+        The full matrix.
+    """
+
     if not mpiLib:
         raise ImportError("ERROR: Consider installing mpi4py")
 
@@ -115,7 +178,29 @@ def collect_and_sum_matrices(matOnRank, rank, numranks, comm):
     return fullMat
 
 
-def collect_and_sum_vectors_float(vectOnRank, rank, numranks, comm):
+def collect_and_sum_vectors_float(vectOnRank: ArrayLike,
+                                   rank: int,
+                                   numranks: int,
+                                   comm: MPI.Comm) -> ArrayLike:
+    """
+    Collect and sum vectors from all ranks.
+
+    Parameters
+    ----------
+    vectOnRank : ArrayLike
+        The vector to be collected and summed.
+    rank : int
+        The current rank number.
+    numranks : int
+        The number of execution ranks.
+    comm : MPI.Comm
+        The MPI communicator.
+
+    Returns
+    -------
+    fullVect : ArrayLike
+        The full vector.
+    """
 
     if not mpiLib:
 
@@ -130,10 +215,37 @@ def collect_and_sum_vectors_float(vectOnRank, rank, numranks, comm):
     return fullVect
 
 
-def collect_matrix_from_chunks_v1(chunk, nDim, rowsPerChunk, rank, numranks, comm):
+def collect_matrix_from_chunks_v1(chunk: ArrayLike,
+                                  nDim: int,
+                                  rowsPerChunk: int,
+                                  rank: int,
+                                  numranks: int,
+                                  comm: MPI.Comm) -> ArrayLike:
+    """
+    Collect a full matrix from several "regular" chunks.
+
+    Parameters
+    ----------
+    chunk : ArrayLike
+        The chunk of the matrix to be collected.
+    nDim : int
+        The dimension of the full matrix.   
+    rowsPerChunk : int
+        The number of rows in the chunk.
+    rank : int
+        The current rank number.
+    numranks : int
+        The number of execution ranks.
+    comm : MPI.Comm
+        The MPI communicator.
+
+    Returns
+    -------
+    fullMat : numpy.ndarray
+        The full matrix.    
+    """
     if not mpiLib:
         raise ImportError("\nERROR: Consider installing mpi4py")
-
     if nDim < rowsPerChunk:
         raise ValueError(f"ERROR: nDim should be larger than rowsPerChunk: {nDim, rowsPerChunk}")
 
