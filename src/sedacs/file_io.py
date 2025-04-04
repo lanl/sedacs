@@ -355,7 +355,7 @@ def write_xyz_coordinates(fileName: str,
 #
 def read_xyz_trajectory(fileName: str,
                         lib: str = "None",
-                        verb: bool = True) -> tuple[ArrayLike, ArrayLike, ArrayLike:
+                        verb: bool = True) -> tuple[ArrayLike, ArrayLike, ArrayLike]:
     """
     Reads in atomic structure files in XYZ format without the ASE library.
     TODO: This function could probably use an example for the format in the docs.
