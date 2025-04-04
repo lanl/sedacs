@@ -4,6 +4,9 @@ import scipy.linalg as sp
 from sedacs.system import get_hindex
 import sys
 
+from sedacs.types import ArrayLike
+from sedacs.parser import Input
+
 try:
   import seqm; PYSEQM = True
   from seqm.seqm_functions.constants import Constants
@@ -22,26 +25,54 @@ try:
   seqm.seqm_functions.scf_loop.debug=False
   import torch
   import time
+
 except: PYSEQM = False
 
 class pyseqmObjects(torch.nn.Module):
     '''
     Container for pyseqm objects
     '''
-    def __init__(self, sdc, coords, symbols,atomTypes, do_large_tensors=True, device='cpu'):
+    def __init__(self,
+                 sdc: Input,
+                 coords: ArrayLike,
+                 symbols: ArrayLike,
+                 atomTypes: ArrayLike,
+                 do_large_tensors: bool = True,
+                 device: str = 'cpu'):
         """
-        Constructor
+        Constructor for the pyseqmObjects class.
+
+        Parameters
+        ----------
+        sdc: Input
+            The sedacs driver.
+        coords: ArrayLike (Natoms, 3)
+            The Cartesian coordinates in the system of interest.
+        symbols: ArrayLike
+            The unique chemical elements in the structure.
+        atomTypes: ArrayLike (Natoms, )
+            The element type of each atom in the system.
+        do_large_tensors: bool
+            If False, PySEQM won't calculate large tensors like idxi, idxj, rij, xij, mask.
+        device: str
+            PyTorch device.
+
+        Returns
+        -------
+        None
         """
         super().__init__()
-        # self.M_whole, self.w_whole, self.molecule_whole, self.rho0xi_whole, self.rho0xj_whole = \
-        #     get_hcore_pyseqm(coords, symbols, atomTypes)
-        
+       
         self.M_whole, self.w_whole = None, None
+
+        # Get the full PYSEQM Molecule object from the system information.
         self.molecule_whole = get_molecule_pyseqm(sdc, coords, symbols, atomTypes, do_large_tensors=do_large_tensors, device=device)[0].to(device)
+
+
+        # Grab relevant information if the full tensor is to be used.
         if do_large_tensors: ### some tensors for calculating nuclear forces
           self.w_ssss = torch.zeros_like(self.molecule_whole.idxi)
-          #print('Creating DM guess.')
-          #make_dm_guess(self.molecule_whole, self.molecule_whole.seqm_parameters, mix_homo_lumo=False, mix_coeff=0.3, overwrite_existing_dm=True);
+
           ev = 27.21
           rho_0 = 0.5*ev/self.molecule_whole.parameters['g_ss']
           self.rho0xi_whole = rho_0[self.molecule_whole.idxi].clone()
@@ -51,74 +82,193 @@ class pyseqmObjects(torch.nn.Module):
           self.rho0xi_whole[A] =self.molecule_whole.parameters['rho_core'][self.molecule_whole.idxi][A]
           self.rho0xj_whole[B] =self.molecule_whole.parameters['rho_core'][self.molecule_whole.idxj][B]
 
-def get_coreHalo_ham_inds(partIndex, partCoreHaloIndex, sdc, sy, subSy, device='cpu'):
+def get_coreHalo_ham_inds(partIndex: ArrayLike,
+                          partCoreHaloIndex: ArryayLike,
+                          sdc: Input,
+                          sy,
+                          subSy,
+                          device='cpu') -> tuple[ArrayLike, ArrayLike, ArrayLike]:
     '''
-    partIndex: core indices
-    partCoreHaloIndex: core+halo indices
-    sdc:
+    Gets core-halo indices with respect to the Hamiltonian used for the SEQM calculation.
+
+    Parameters
+    ----------
+    partIndex: ArrayLike
+        Core indices.
+    partCoreHaloIndex:
+        Core + halo indices
+    sdc: Input
+        The sedacs driver.
     sy:
     subSy:
-    Function returns:
-    core_indices_in_sub: core indices of atoms in core+halo
-    core_indices_in_sub_expanded: core indices of core+halo hamiltonian in 4x4 blocks form (pyseqm format)
-    hindex_sub: orbital index for each atom in the CH (in CH numbering)
+
+    Returns 
+    -------
+    core_indices_in_sub: ArrayLike
+        Core indices of atoms in the core+halo.
+    core_indices_in_sub_expanded: ArrayLike
+        Core indices of core+halo hamiltonian in 4x4 blocks form (pyseqm format).
+        PYSEQM format pads the H-atoms as if they had 3 p-orbitals present.
+    hindex_sub: ArrayLike
+        Orbital index for each atom in the CH (in CH numbering)
     '''
-     # generate local indexing of core+halo atoms
+     # Generate local indexing of core+halo atoms
     indices_in_sub = torch.linspace(0, len(partCoreHaloIndex) - 1, len(partCoreHaloIndex), dtype=sdc.torch_int_dt, device=device)
+
     core_indices_in_sub = indices_in_sub[torch.isin(torch.tensor(partCoreHaloIndex, device=device), torch.tensor(partIndex, device=device))] # $$$ torch.searchsorted might be better
     block_size = 4
+
     # Generate the expanded indices for each block
     base_indices = torch.arange(block_size, dtype=sdc.torch_int_dt, device=device)  # Create a base index tensor of size block_size
+
     core_indices_in_sub_expanded = core_indices_in_sub.unsqueeze(1) * block_size + base_indices
     core_indices_in_sub_expanded = core_indices_in_sub_expanded.flatten()
 
-    norbs, norbs_for_every_type, hindex_sub, numel, numel_for_every_type = get_hindex(sdc.orbs, sdc.valency, sy.symbols, subSy.types)
+    norbs, norbs_for_every_type, hindex_sub, numel, numel_for_every_type = get_hindex(sdc.orbs,
+                                                                                      sdc.valency,
+                                                                                      sy.symbols,
+                                                                                      subSy.types)
+
     hindex_sub = torch.from_numpy(hindex_sub).to(device, dtype=sdc.torch_int_dt)
     return core_indices_in_sub, core_indices_in_sub_expanded, hindex_sub
 
-def get_nucAB_energy_pyseqm(Z, const, nmol, ni, nj, idxi, idxj, rij, \
-                                     rho0xi,rho0xj,alp, chi, gam, method, parnuc):
+def get_nucAB_energy_pyseqm(Z,
+                            const,
+                            nmol,
+                            ni,
+                            nj,
+                            idxi,
+                            idxj,
+                            rij,
+                            rho0xi,
+                            rho0xj,
+                            alp,
+                            chi,
+                            gam,
+                            method,
+                            parnuc):
+    """
+    Wrapper function for the pyseqm nuclear repulsion routines. see pyseqm documentation.
+    Not intended for use outside the curated PYSEQM routines.
+    """
    return pair_nuclear_energy(Z, const, nmol, ni, nj, idxi, idxj, rij, \
                                      rho0xi,rho0xj,alp, chi, gam=gam, method=method, parameters=parnuc)
 
-def get_total_energy_pyseqm(nmol, pair_molid, EnucAB, Eelec):
+def get_total_energy_pyseqm(nmol,
+                            pair_molid,
+                            EnucAB,
+                            Eelec):
+    """
+    Wrapper function for the pyseqm total energy routine. see pyseqm documentation.
+    Not intended for use outside the curated PYSEQM routines.
+    """
+
    return total_energy(nmol, pair_molid, EnucAB, Eelec)
    
-def get_full_fock_pyseqm(nmol, molsize, P, M, maskd, mask, idxi, idxj, w, W, gss, gpp, gsp, gp2, hsp,
-         themethod, zetas, zetap, zetad, Z, F0SD, G2SD):
+def get_full_fock_pyseqm(nmol,
+                         molsize,
+                         P,
+                         M,
+                         maskd,
+                         mask,
+                         idxi,
+                         idxj,
+                         w,
+                         W,
+                         gss,
+                         gpp,
+                         gsp,
+                         gp2,
+                         hsp,
+                         themethod,
+                         zetas,
+                         zetap,
+                         zetad,
+                         Z,
+                         F0SD,
+                         G2SD):
+
+    """
+    Wrapper function for the PYSEQM Fock routine. See PYSEQM documentation.
+    Not intended for use outside the curated PYSEQM routines.
+    """
+
     return fock(nmol, molsize, P, M, maskd, mask, idxi, idxj, w, W, gss, gpp, gsp, gp2, hsp,
          themethod, zetas, zetap, zetad, Z, F0SD, G2SD)
 
-def get_fock_pyseqm(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, parameters, maskd_sub, mask_sub):
+def get_fock_pyseqm(P: ArrayLike,
+                    P_sub: ArrayLike,
+                    M: ArrayLike,
+                    w_2: ArrayLike,
+                    block_indices: ArrayLike,
+                    nmol: int,
+                    idxi: ArrayLike,
+                    idxj: ArrayLike,
+                    rij: ArrayLike,
+                    parameters: ArrayLike,
+                    maskd_sub: ArrayLike,
+                    mask_sub: ArrayLike) -> ArrayLike:
     '''
-    Function returns Fock matrix for CH. In 4x4 block pyseqm format
-    P: diagonal dm blocks of the whole system
-    P_sub: subsystem dm
-    M: 1elec hamiltonian of subsystem
-    w_2: 2c2e ints. subsystem-subsystem and subsystem-outer. no outer-outer
-    block_indices: subsystem atom numbers
-    nmol: number of molecules in a batch. Always 1 in SEDACS.
-    idxi, idxj: unique pairs between atoms in subsystem or between an atom in subsystem and in the outer system.
-    rij: distances for unique pairs
-    parameters: seqm atomic params
-    maskd_sub: indices of diagonal blocks in subsystem
-    mask_sub: indices of off-diagonal blocks in subsystem
+    Returns the Fock matrix in the PYSEQM format, with padding on the H-atoms, s.t.
+    they are in the 4x4 block format.
+
+    Parameters
+    ----------
+    P: ArrayLike
+        Diagonal density matrix blocks of the whole system.
+    P_sub: ArrayLike
+        Subsystem density matrices.
+    M: ArrayLike
+        One electron Hamiltonian of the subsystem.
+    w_2: ArrayLike
+        Two-center, two-electron integrals.
+        These are compute for:
+            subsystem-subsystem
+            subsystem-outer
+            NOT outer-outer
+    block_indices: ArrayLike
+        Subsystem atom numbers.
+    nmol: int
+        Number of molecules in a batch. Always 1 in SEDACS.
+    idxi: ArrayLike
+        Unique pairs between atoms in subsystem or between an atom in subsystem and in the outer system.
+    idxj: ArrayLike
+        Unique pairs between atoms in subsystem or between an atom in subsystem and in the outer system.
+    rij: ArrayLike
+        Distances for unique pairs (corresponding to those specified in idxi, and idxj above.
+    parameters:
+        Seqm atomic parameters.
+    maskd_sub:
+        Indices of diagonal blocks in the subsystem.
+    mask_sub:
+        Indices of off-diagonal blocks in the subsystem.
+
+    Returns
+    -------
+    F0 : ArrayLike
+        The Fock matrix.
     '''
+
     idx_to_idx_mapping = {value: idx for idx, value in enumerate(block_indices)}
     max_key = max(idx_to_idx_mapping.keys())
+
+
     lookup_tensor = torch.zeros(max_key + 1, dtype=torch.long, device = P_sub.device)
+
     # Populate the lookup tensor
     for key, value in idx_to_idx_mapping.items():
         lookup_tensor[key] = value
+
+
     max_i = idxi.max()
     max_j = idxj.max()
     atom_max = max(max_i,max_j)
+
     in_block_mask = torch.zeros(atom_max+1,dtype=torch.bool, device = P_sub.device)
     in_block_mask[block_indices]=True
 
     isini = in_block_mask[idxi]#.to(torch.bool)
     where_isini = torch.nonzero(isini).squeeze()
-
     isinj = in_block_mask[idxj]#.to(torch.bool)
     where_isinj = torch.nonzero(isinj).squeeze()
 
@@ -126,7 +276,7 @@ def get_fock_pyseqm(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, para
     loc_j = idxj[isinj]
 
     ### first doing idxi because its sorted
-    #     idxi_sub_ovrlp_with_rest = torch.isin(idxi, block_indices) # <- insted of this
+    # idxi_sub_ovrlp_with_rest = torch.isin(idxi, block_indices) # <- instead of this
     # Searchsorted gives you the indices where the elements should be placed to maintain order. Works with idxi (sorted) but not with idxj (not sorted)
     pos = torch.searchsorted(block_indices, idxi)
     # Ensure the indices are within bounds
@@ -224,23 +374,63 @@ def get_fock_pyseqm(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, para
     F0 = F.reshape(nmol,len(block_indices),len(block_indices),4,4).transpose(2,3) \
                      .reshape(nmol, 4*len(block_indices), 4*len(block_indices))
     F0.add_(F0.triu(1).transpose(1,2));       
+
     return F0
 
-def get_fock_pyseqm_u(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, parameters, maskd_sub, mask_sub):
+def get_fock_pyseqm_u(P: ArrayLike,
+                      P_sub: ArrayLike,
+                      M: ArrayLike,
+                      w_2: ArrayLike,
+                      block_indices: ArrayLike,
+                      nmol: int,
+                      idxi: ArrayLike,
+                      idxj: ArrayLike,
+                      rij: ArrayLike,
+                      parameters: ArrayLike,
+                      maskd_sub: ArrayLike,
+                      mask_sub: ArrayLike):
     '''
-    Function returns Fock matrix for CH. In 4x4 block pyseqm format
-    P: diagonal dm blocks of the whole system
-    P_sub: subsystem dm
-    M: 1elec hamiltonian of subsystem
-    w_2: 2c2e ints. subsystem-subsystem and subsystem-outer. no outer-outer
-    block_indices: subsystem atom numbers
-    nmol: number of molecules in a batch. Always 1 in SEDACS.
-    idxi, idxj: unique pairs between atoms in subsystem or between an atom in subsystem and in the outer system.
-    rij: distances for unique pairs
-    parameters: seqm atomic params
-    maskd_sub: indices of diagonal blocks in subsystem
-    mask_sub: indices of off-diagonal blocks in subsystem
+
+    Returns the Fock matrix in the PYSEQM format (unrestricted case), with padding on the
+    H-atoms, s.t. they are in the 4x4 block format.
+
+    Parameters
+    ----------
+    P: ArrayLike
+        Diagonal density matrix blocks of the whole system.
+    P_sub: ArrayLike
+        Subsystem density matrices.
+    M: ArrayLike
+        One electron Hamiltonian of the subsystem.
+    w_2: ArrayLike
+        Two-center, two-electron integrals.
+        These are compute for:
+            subsystem-subsystem
+            subsystem-outer
+            NOT outer-outer
+    block_indices: ArrayLike
+        Subsystem atom numbers.
+    nmol: int
+        Number of molecules in a batch. Always 1 in SEDACS.
+    idxi: ArrayLike
+        Unique pairs between atoms in subsystem or between an atom in subsystem and in the outer system.
+    idxj: ArrayLike
+        Unique pairs between atoms in subsystem or between an atom in subsystem and in the outer system.
+    rij: ArrayLike
+        Distances for unique pairs (corresponding to those specified in idxi, and idxj above.
+    parameters:
+        Seqm atomic parameters.
+    maskd_sub:
+        Indices of diagonal blocks in the subsystem.
+    mask_sub:
+        Indices of off-diagonal blocks in the subsystem.
+
+    Returns
+    -------
+    F0 : ArrayLike
+        The Fock matrix.
     '''
+
     idx_to_idx_mapping = {value: idx for idx, value in enumerate(block_indices)}
     max_key = max(idx_to_idx_mapping.keys())
     lookup_tensor = torch.zeros(max_key + 1, dtype=torch.long, device = P_sub.device)
@@ -375,7 +565,40 @@ def get_fock_pyseqm_u(P, P_sub, M, w_2, block_indices, nmol, idxi, idxj, rij, pa
     return F0
 
 
-def get_hcore_pyseqm(coords,symbols,atomTypes, device='cpu', verb=False):
+def get_hcore_pyseqm(coords,
+                     symbols,
+                     atomTypes,
+                     device='cpu',
+                     verb=False) -> tuple[ArrayLike, ArrayLike, Molecule, ArrayLike, ArrayLike]:
+  """
+  Get the core Hamiltonian from PYSEQM. Interall calls the PYSEQM hcore routine.
+  TODO: Add support for user-defined PYSEQM parameters.
+
+  Parameters
+  ----------
+  coords: ArrayLike (Natoms, 3)
+      The Cartesian coordinates for all atoms in the system.
+  symbols: ArrayLike
+      The unique chemical elements in the structure.
+  atomTypes: ArrayLike (Natoms, )
+      The element type of each atom in the system.
+  device: str
+      PyTorch device.
+  verb: bool
+      Flag for verbose output.
+
+  Returns
+  -------
+  M: ArrayLike
+    One-electron hamiltonian
+  w: ArrayLike
+    Two-center, two-electron integrals.
+  molecule: Molecule
+    PYSEQM Molecule Object
+  rho0xi: ArrayLike
+  rho0xj: ArrayLike
+  """
+
   print('Creating Hcore.')
   if(PYSEQM == False):
     print("ERROR: No PySEQM installed")
@@ -432,24 +655,46 @@ def get_hcore_pyseqm(coords,symbols,atomTypes, device='cpu', verb=False):
 
   return M, w, molecule, rho0xi, rho0xj
 
-def get_molecule_pyseqm(sdc, coords, symbols, atomTypes, do_large_tensors=True, device='cpu', verb=False):
+def get_molecule_pyseqm(sdc: Input,
+                        coords: ArrayLike,
+                        symbols: ArrayLike,
+                        atomTypes: ArrayLike,
+                        do_large_tensors: bool = True,
+                        device: str = 'cpu',
+                        verb: bool = False) -> tuple[Molecule, int]:
   '''
   Function returns pyseqm molecule object for SEDACS
-  sdc:
-  coords: coordinates array
-  symbols:
-  atomTypes:
-  do_large_tensors: if False, PySEQM won't calculate large tensors like idxi, idxj, rij, xij, mask
+
+  Parameters
+  ----------
+  sdc: Input
+      The SEDACS driver.
+  coords: ArrayLike (Natoms, 3)
+      The Cartesian coordinates for all atoms in the system.
+  symbols: ArrayLike
+      The unique chemical elements in the structure.
+  atomTypes: ArrayLike (Natoms, )
+      The element type of each atom in the system.
+  do_large_tensors: bool
+      If False, PySEQM won't calculate large tensors like idxi, idxj, rij, xij, mask.
+  device: str
+      PyTorch device.
+  verb: bool
+      Flag for verbose output.
+
+  Returns
+  -------
+
+  molecule: Molecule
+    The PYSEQM Molecule object.
+  molecule.nocc: int
+    The number of occupied states in the corresponding Molecule.
   '''
+
   # move to a sep file $$$
   torch.cuda.empty_cache()
-  """PYSEQM"""
-  # COHO
-  # symbols: (C, O, H)
-  # atomsTypes (0,1,2,1)
-  # construc dict: 
   if(PYSEQM == False):
-    print("ERROR: No PySCF installed")
+    print("ERROR: No PYSEQM installed")
 
   symbols_internal = np.array([ "Bl" ,                               
       "H" ,                                     "He",        
@@ -514,12 +759,34 @@ def get_molecule_pyseqm(sdc, coords, symbols, atomTypes, do_large_tensors=True, 
   return molecule, molecule.nocc
 
 
-def get_eVals_pyseqm(sdc, H, Nocc, core_indices_in_sub_expanded_packed, molecule, verb=False, calcD=False):
+def get_eVals_pyseqm(sdc: Input,
+                     H: ArrayLike,
+                     Nocc: int,
+                     core_indices_in_sub_expanded_packed: ArrayLike,
+                     molecule: Molecule,
+                     verb: bool = False,
+                     calcD: bool = False) -> tuple[ArrayLike, ArrayLike, ArrayLike]:
   '''
-  Function returns eigenvalues, dVals, eigenvectors, list of [number_of_heavy_atoms, number_of_hydrogens, dim_of_coreHalo_ham]
-  H: hamiltonian, 4x4 blocks
-  Nocc: number of occupied states
-  core_indices_in_sub_expanded_packed: core indices of core+halo hamiltonian in normal form corresponding to the number of AOs per atom
+  Function returns eigenvalues, dVals, eigenvectors, list of [number_of_heavy_atoms, number_of_hydrogens, dim_of_coreHalo_ham].
+
+
+  Parameters
+  ----------
+  H: ArrayLike
+    Hamiltonian in PYSEQM 4x4 block format.
+  Nocc: int
+    Number of occupied states.
+  core_indices_in_sub_expanded_packed: ArrayLike
+    Core indices of core+halo hamiltonian in normal form corresponding to the number of AOs per atom
+
+  Returns
+  -------
+  E_val: ArrayLike
+    Eigenvalues.
+  dVals: ArrayLike
+    Norm over the core parts of the eigenvectors, Q.
+  Q: ArrayLike
+    Eigenvectors.
   '''
   if(verb): print("Computing eVals/dVals")
 
@@ -546,14 +813,28 @@ def get_eVals_pyseqm(sdc, H, Nocc, core_indices_in_sub_expanded_packed, molecule
     return E_val, dVals.cpu().numpy(), Q
 
 
-def get_densityMatrix_renormalized_pyseqm(sdc, E_val, Q, Tel, mu0, NH_Nh_Hs):
+def get_densityMatrix_renormalized_pyseqm(sdc: Input,
+                                          E_val: ArrayLike,
+                                          Q: ArrayLike,
+                                          Tel: Union[float, torch.Tensor],
+                                          mu0: Union[float, torch.Tensor],
+                                          NH_Nh_Hs: list) -> ArrayLike:
   '''
-  Function returns dm corrected by fermi occupancies
-  E_val: eigenvalues
-  Q: eigenvectors
-  Tel: electronic temperature
-  mu0: chemical potential
-  NH_Nh_Hs: list of [number_of_heavy_atoms, number_of_hydrogens, dim_of_coreHalo_ham]
+  Returns the density matrix corrected by fermi occupancies.
+
+  Parameters
+  ----------
+  E_val: ArrayLike
+    Eigenvalues
+  Q: ArrayLike
+    Eigenvectors
+  Tel: float or single element torch.Tensor
+    Electronic temperature (in Kelvin).
+  mu0: float or single element torch.Tensor
+    Chemical potential (in eV).
+  NH_Nh_Hs: list
+    [number_of_heavy_atoms, number_of_hydrogens, dim_of_coreHalo_ham]
+    Needed for handling the special indexing of hydrogens in PYSEQM.
   '''
   
   kB = 8.61739e-5 # eV/K, kB = 6.33366256e-6 Ry/K, kB = 3.166811429e-6 Ha/K, #kB = 3.166811429e-6 #Ha/K
@@ -571,18 +852,44 @@ def get_densityMatrix_renormalized_pyseqm(sdc, E_val, Q, Tel, mu0, NH_Nh_Hs):
     Q_weighted = Q * f  # Broadcasting multiplication
     D = 2 * Q @ Q_weighted.T
     D = unpack(D, NH_Nh_Hs[0], NH_Nh_Hs[1], NH_Nh_Hs[2])
+
   return D
 
 
-def get_overlap_pyseqm(coords,symbols,atomTypes, hindex, verb=False):
-    '''Overlap matrix from pyseqm. Returned in a packed form (not 4x4 blocks pyseqm format)'''
+def get_overlap_pyseqm(coords: ArrayLike,
+                       symbols: ArrayLike,
+                       atomTypes: ArrayLike,
+                       hindex: ArrayLike,
+                       verb=False) -> ArrayLike:
+    '''
+
+    Gets the overlap matrix from PYSEQM. Returned in a packed form (NOT 4x4 blocks pyseqm format.)
+
+    Parameters
+    ----------
+    coords: ArrayLike (Natoms, 3)
+        The Cartesian coordinates in the system of interest.
+    symbols: ArrayLike
+        The unique chemical elements in the structure.
+    atomTypes: ArrayLike (Natoms, )
+        The element type of each atom in the system.
+    hindex_sub: ArrayLike
+        Orbital index for each atom in the CH (in CH numbering)
+    verb: bool
+        Boolean flag for verbose output.
+
+    Returns
+    -------
+    di_full[0]: ArrayLike
+       The packed (e.g. not 4x4 even for Hydrogens) overlap matrix.
+    '''
 
     # COHO
     # symbols: (C, O, H)
     # atomsTypes (0,1,2,1)
     # construc dict: 
     if(PYSEQM == False):
-        print("ERROR: No PySCF installed")
+        print("ERROR: No PySEQM installed")
     from seqm.seqm_functions.constants import Constants
     from seqm.Molecule import Molecule
     import numpy as np
@@ -677,9 +984,19 @@ def get_overlap_pyseqm(coords,symbols,atomTypes, hindex, verb=False):
     di_full = pack(di_full, molecule.nHeavy, molecule.nHydro)
     return di_full[0]
 
-def get_diag_guess_pyseqm(molecule, sy, verb=False):
+def get_diag_guess_pyseqm(molecule: Molecule,
+                          sy,
+                          verb: bool = False) -> ArrayLike:
     '''
-    Initial guess for dm diagonal
+    Initial diagonal guess for the density matrix.
+
+    Parameters
+    ----------
+    molecule: Molecule
+        PYSEQM Molecule object.
+    sy: 
+    verb: bool
+        Controls verbosity of output.
     '''
     tore = molecule.const.tore
     method = 'PM6_SP'
@@ -697,4 +1014,5 @@ def get_diag_guess_pyseqm(molecule, sy, verb=False):
         P0[:,2,2] = P0[:,0,0]
         P0[:,3,3] = P0[:,0,0]
         P0[molecule.Z==1,0,0] = 1.0        
+
     return P0
