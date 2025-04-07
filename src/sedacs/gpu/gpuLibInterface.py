@@ -12,7 +12,10 @@ import numpy as np
 #from juliacall import Main as jl
 from numpy.ctypeslib import ndpointer
 
-__all__ = ["dev_alloc", "host_alloc_pinned", "get_device", "set_device", "memcpyasyncHtoD", "memcpyasyncDtoH","memcpyHtoD", "memcpyDtoH", "set_stream", "cublasInit", "dev_free", "dmDiag", "dmMLSP2", "dmMovingMuSP2", "dmGoldenSP2", "dmDNNSP2", "dmDNNPRT", "dmCheby"]
+__all__ = ["dev_alloc", "host_alloc_pinned", "get_device", "set_device", \
+           "memcpyasyncHtoD", "memcpyasyncDtoH","memcpyHtoD", "memcpyDtoH", \
+           "set_stream", "cublasInit", "dev_free", "dmDiag", "dmMLSP2", \
+           "dmMovingMuSP2", "dmGoldenSP2", "dmDNNSP2", "dmDNNPRT", "dmCheby"]
 
 
 def dev_alloc(size, lib):
@@ -22,10 +25,10 @@ def dev_alloc(size, lib):
 
     Parameters
     ----------
-    lib : ctypes library
-        Imported gpu library .so file   
     size : int
         Number of bytes to allocate on device
+    lib : ctypes library
+        Imported gpu library .so file   
     
     Returns 
     -------
@@ -51,10 +54,10 @@ def host_alloc_pinned(size, lib):
 
     Parameters
     ----------
-    lib : ctypes library
-        Imported gpu library .so file   
     size : int
         Number of bytes to allocate on device
+    lib : ctypes library
+        Imported gpu library .so file   
     
     Returns 
     -------
@@ -581,10 +584,34 @@ def dmGoldenSP2(ham, dm, matSize, mu, handle, lib):
 # @return factor Computed factor of inverse overlap  matrix, Z^TZ = S^{-1/2}.
 #
 def invOverlapFactor(overlap, guess, factor, matSize, lib):
+    """
+    This function constructs an inverse overlap
+    matrix factorization, Z, such that ZSZ^T=I
+    using mixed precision and Tensor cores. 
+    Method described in JCTC XXXXX.
+
+    Parameters
+    ----------
+    overlap : void C pointer
+        Device pointer to overlap matrix
+    guess : void C pointer
+        Device pointer to initial guess
+    factor : void C pointer
+        Device pointer to matrix factor Z
+    matSize : int
+        Size of Hamiltonian/density matrices
+    lib : ctypes library
+        Imported gpu library .so file   
+    
+    Returns 
+    -------
+    double
+        Time to compute the factor Z
+
+    """
 
     ## copies scalar data to C data structures
     matSize_c = ctypes.c_int(matSize)
-    mu_c = ctypes.c_double(mu)
 
     ## time call
     tic = time.perf_counter()
@@ -593,54 +620,14 @@ def invOverlapFactor(overlap, guess, factor, matSize, lib):
     lib.involap.argtypes = [
         ctypes.POINTER(ctypes.c_void_p),
         ctypes.POINTER(ctypes.c_void_p),
-        ctypes.c_int,
-        ctypes.c_double,
         ctypes.POINTER(ctypes.c_void_p),
+        ctypes.c_int
     ]
 
     # end timer
     toc = time.perf_counter()
     print(f"Time = {toc - tic:0.4f} seconds")
     return list(factor)
-
-
-## gpuLib API call to Golden SP2 denisty matrix solver.
-# This interface function will accept two numpy arrays, the hamiltonian, and the density matrix
-# along with integer matSize and double mu. Function will build the density matrix from
-# the Hamiltonian, which has size matSize, using the Golden-SP2 method. For use with T=0 density
-# matrix calculations.
-# @param ham Hamiltonian matrix.
-# @param dm Density matrix.
-# @param matSize Matrix sizes.
-# @param mu Chemical potential.
-# @return dm Density matrix that was constructed.
-#
-def dmFiniteTSP2(ham, dm, matSize, mu, handle, lib):
-
-    print("\n\n")
-    print("Finite T SP2 method")
-    print("-----------------")
-
-    ## copies scalar data to C data structures
-    matSize_c = ctypes.c_int(matSize)
-    mu_c = ctypes.c_double(mu)
-
-    ## set C function arg types
-    lib.dm_goldensp2.argtypes = [
-        ctypes.POINTER(ctypes.c_void_p),
-        ctypes.POINTER(ctypes.c_void_p),
-        ctypes.c_int,
-        ctypes.c_double,
-        ctypes.POINTER(ctypes.c_void_p),
-    ]
-
-    ## time call
-    tic = time.perf_counter()
-    lib.dm_finitetsp2(ham, dm, matSize_c, mu_c, handle)
-    toc = time.perf_counter()
-    timer = toc - tic
-    return timer
-
 
 
 ## gpuLib API call to DNN-SP2 denisty matrix solver.
@@ -790,6 +777,7 @@ def dmDNNPRT(ham, prt, dm, rsp, matSize, nocc, handle, lib):
         Time to compute dm 
 
     """
+
     ## copies scalar data to C data structures
     matSize_c = ctypes.c_int(matSize)
     nocc_c = ctypes.c_int(nocc)
@@ -825,6 +813,34 @@ def dmDNNPRT(ham, prt, dm, rsp, matSize, nocc, handle, lib):
 # @return dm Density matrix
 #
 def dmCheby(ham, dm, matSize, nocc, kbt, lib):
+    """
+    This function constructs the density matrix
+    at finite (non-zero) electronic temperature 
+    using the Patterson-Stockmeyer form of a 
+    Chebyshev expansion. Method described in
+    JCP XXXX. 
+
+    Parameters
+    ----------
+    ham : void C pointer
+        Device pointer to Hamiltonian matrix
+    dm : void C pointer
+        Device pointer to density matrix
+    matSize : int
+        Size of Hamiltonian/density matrices
+    nocc : int
+        Occupation number
+    kbt : double
+        Value of k_b*T
+    lib : ctypes library
+        Imported gpu library .so file   
+    
+    Returns 
+    -------
+    double
+        Time to compute dm 
+
+    """
     ## convert to C data types
     matSize_c = ctypes.c_int(matSize)
     nocc_c = ctypes.c_int(nocc)
@@ -832,19 +848,17 @@ def dmCheby(ham, dm, matSize, nocc, kbt, lib):
 
     ## set C function arg types
     lib.dm_pscheby.argtypes = [
-        ndpointer(np.float64, flags="aligned, c_contiguous"),
-        ndpointer(np.float64, flags="aligned, c_contiguous"),
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.POINTER(ctypes.c_void_p),
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_double,
     ]
+
     ## time call
     tic = time.perf_counter()
-
-    ## call cheby from .so lib
     lib.dm_pscheby(ham, dm, matSize_c, nocc_c, kbt_c)
-    # end timer
     toc = time.perf_counter()
-    print(f"Time = {toc - tic:0.4f} seconds")
-    return list(dm)
+    
+    return timer
 
