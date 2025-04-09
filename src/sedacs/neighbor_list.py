@@ -573,13 +573,13 @@ def generate_neighbor_list(coords: Tensor, lattice_vectors: Union[Tensor, None],
         is_periodic = False
 
     cell_size_per_dim, cells_per_side, cell_count = calculate_cell_dimensions(lattice_lengths, cutoff)
+    print(coords.shape, cell_size_per_dim.shape)
+
     cell_inds = (coords / cell_size_per_dim[:, None]).to(torch.int32)
     cells_per_side_np = cells_per_side.cpu().numpy()
 
     cell_sizes = count_flattened_cell_sizes(cell_inds, lattice_lengths, cutoff)
     max_cell_capacity = torch.max(cell_sizes)
-    #multiple_of = 8
-    #max_cell_capacity = math.ceil(max_cell_capacity / multiple_of) * multiple_of
 
     cells = populate_cells(cell_inds, cells_per_side, cell_count, max_cell_capacity)
     if use_triton == False:
