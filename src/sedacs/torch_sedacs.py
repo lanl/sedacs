@@ -55,6 +55,9 @@ def build_nlist_torch(coords: np.ndarray,
         TODO handle typing better for this scenario where the user doesn't have a
         parallelized Python interpreter.
 
+    Returns
+    -------
+    nl: torch.Tensor (Natoms, _)
 
     
     """
@@ -188,7 +191,12 @@ def build_nlist_torch(coords: np.ndarray,
         # nlVect = boxneighs[np.where(np.logical_and(distance < rcut,distance > 1.0E-12))]
         nlVect = nlVect[nlVect != -1]
         nlVect = nlVect[nlVect != i]
-        cnt = len(nlVect)
+
+        # cnt bug?
+        print(nlVect.shape)
+        cnt = len(nlVect[i])
+
+
         # Format and pad the list
         nlVect = tf.pad(nlVect, (1, maxneigh - cnt - 1), "constant", value=0)
         nlVect[0] = cnt
@@ -236,7 +244,12 @@ def build_nlist_torch(coords: np.ndarray,
         nlVect = torch.where(nlMask, boxneighs, -1)
         nlVect, indices = torch.sort(nlVect, axis=1, descending=True)
         nlVect = tf.pad(nlVect, (1, maxneigh - nlVect.shape[1] - 1), "constant", value=0)
-        nlVect[:, 0] = torch.count_nonzero(nlMask, axis=1)
+
+        # Just sum over the zero components in the +1 shifted tensor.
+        nlVect[:, 0] = torch.count_nonzero(nlVect + 1, axis=1)
+        # Leaving the old code in case there is some unintended change here
+        # nlVect[:, 0] = torch.count_nonzero(nlMask, axis=1)
+
         t_build_nlvect = time.perf_counter() - tic
 
         # Copy the neighbor list back to the host
