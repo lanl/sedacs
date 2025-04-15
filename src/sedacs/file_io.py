@@ -1,5 +1,6 @@
 import sys
 import pathlib
+from collections import defaultdict
 
 from sedacs.types import ArrayLike
 
@@ -15,13 +16,10 @@ __all__ = [
     "read_pdb_file",
     "write_pdb_coordinates",
     "are_files_equivalent",
+    "read_latte_tbparams"
 ]
 
 
-## Coordinates main reader
-# @brief This will read the coodinates of a chemical system (so far only xyz and pdb
-# are available).
-#
 def read_coords_file(fileName: str,
                      lib: str ="None",
                      verb=True) -> tuple[ArrayLike, ArrayLike, ArrayLike, ArrayLike]:
@@ -345,14 +343,6 @@ def write_xyz_coordinates(fileName: str,
 # N 7.1 14.1 21.1 0.56
 # \endverbatim
 
-#
-# @param fileName File name of the xyz trajectorey. Example: "traj.xyz"
-# @param lib If using a particular library. Default is "None"
-# @param verb Verbosity. If set to True will output relevant information.
-# @return elems Symbol for each atom type. Symbol for first atom type = symbols[0]
-# @return coords Position for every atoms. z-coordinate of atom 1 = coords[0,2]
-# @return values Index type for each atom in the system. Values (e.g. charges) for atoms
-#
 def read_xyz_trajectory(fileName: str,
                         lib: str = "None",
                         verb: bool = True) -> tuple[ArrayLike, ArrayLike, ArrayLike]:
@@ -615,3 +605,41 @@ def are_files_equivalent(file1: str,
             if line1.strip() != line2.strip():
                 return False
     return True
+
+def read_latte_tbparams(file):
+    """
+    Reads the TB parameters for LATTE from a file.
+
+    Parameters
+    ----------
+    file : str
+        Path to the TB parameters file.
+    
+    Returns
+    -------
+    tbparams : dict
+        Dictionary containing the TB parameters for each element.
+        Each element is a key, and its value is another dictionary with the parameters.
+    """
+    tbparams = defaultdict(dict)
+    with open(file, "r") as f:
+        lines = f.readlines()
+    for line in lines[2:]:
+        line = line.split()
+        if len(line) != 13:
+            continue
+        element = line[0]
+        tbparams[element]["basis"] = line[1]
+        tbparams[element]["Numel"] = float(line[2])
+        tbparams[element]["Es"] = float(line[3])
+        tbparams[element]["Ep"] = float(line[4])
+        tbparams[element]["Ed"] = float(line[5])
+        tbparams[element]["Ef"] = float(line[6])
+        tbparams[element]["Mass"] = float(line[7])
+        tbparams[element]["HubbardU"] = float(line[8])
+        tbparams[element]["Wss"] = float(line[9])
+        tbparams[element]["Wpp"] = float(line[10])
+        tbparams[element]["Wdd"] = float(line[11])
+        tbparams[element]["Wff"] = float(line[12])
+
+    return tbparams

@@ -14,7 +14,7 @@ from sedacs.system import System, build_nlist, extract_subsystem, get_hindex, bu
 from sedacs.overlap import get_overlap
 from sedacs.graph import collect_graph_from_rho
 
-from seqm.seqm_functions.pack import pack
+#from seqm.seqm_functions.pack import pack
 import sedacs.globals 
 import os
 
@@ -71,6 +71,7 @@ def get_args():
     args = parser.parse_args()
     if args.use_torch:
         args.device = available_device()
+
     return args
 
 
@@ -116,9 +117,10 @@ def init(args):
         sy.latticeVectors, sy.symbols, sy.types, sy.coords = read_coords_file(sdc.coordsFileName, lib="None", verb=True)
         sy.nats = len(sy.coords[:, 0])
         sy.vels = np.zeros((sy.nats, 3))
+        sy.charges = np.zeros(sy.nats)
 
         # Get hindex (the orbital index for each atom in the system)
-        sy.norbs, sy.orbs, hindex, sy.numel,sy.znuc = get_hindex(sdc.orbs, sdc.valency, sy.symbols, sy.types)
+        sy.norbs, sy.orbs, hindex, sy.numel, sy.znuc = get_hindex(sdc.orbs, sy.symbols, sy.types)
         if eng.interface == "PySEQM": sy.numel = int(sy.numel/2)
         sy.numel -= sdc.charge
         if sdc.UHF:
@@ -207,7 +209,7 @@ def init(args):
     fullGraph[:, :] = graphNL[:, :]
 
     #Initialize proxy/guest code
-    init_proxy(sy.symbols,sy.orbs)
+#    init_proxy(sy.symbols,sy.orbs)
     eng.up = True
 
     return sdc, eng, comm, rank, numranks, sy, hindex, fullGraph, nl, nlTrX, nlTrY, nlTrZ

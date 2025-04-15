@@ -28,6 +28,7 @@ else:
 ewald_energy = impl.ewald_energy
 ewald_energy_torch = torch_impl.ewald_energy
 ewald_real = impl.ewald_real
+ewald_real_screening = impl.ewald_real_screening
 ewald_real_torch = torch_impl.ewald_real
 ewald_kspace_part1 = impl.ewald_kspace_part1
 ewald_kspace_part2 = impl.ewald_kspace_part2

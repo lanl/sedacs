@@ -1348,35 +1348,12 @@ class PeriodicTable:
 
 
     ## Get the atomic number of a paerticular element
-    def get_atomic_number(self, symb: str) -> int:
-        """
-
-        Get the atomic number of a particular element.
-
-        Parameters
-        ----------
-        symb : str
-            The symbol of the element to get the atomic number for.
-
-        Returns
-        -------
-        atnum : int
-            The atomic number of the element.
-        """
+    def get_atomic_number(self, symb):
         return np.where(self.symbols == symb)[0][0]
 
 
-def print_element_data(elementSymbol: str) -> None:
-    """
-    
-    Prints element data for the input symbol.
-    
-    Parameters
-    ----------
-    elementSymbol : str
-        The symbol of the element to print data for.
-
-    """
+def print_element_data(elementSymbol):
+    """Prints element data"""
     pt = PeriodicTable()
     if elementSymbol != "Bl":
         atnum = pt.get_atomic_number(elementSymbol)

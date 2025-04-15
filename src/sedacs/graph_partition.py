@@ -1329,12 +1329,11 @@ def get_coreHaloIndices(core, graph, njumps, eng=None):
             nc1 = nch
             for k in range(nc1):
                 i = coreHalo[k]
-                degI = len(graph[i, :])
-                for kk in range(1, degI):
+                degI = graph[i, 0]
+                for kk in range(1, degI+1):
                     # $$$ also this cycles needs to be interrupted when reaching -1 ???
                     j = graph[i, kk]
-                    if (j != -1) & (nx[j] == False):
-                        # print(i,j)
+                    if (not nx[j]):
                         nch = nch + 1
                         coreHalo.append(j)
                         nx[j] = True

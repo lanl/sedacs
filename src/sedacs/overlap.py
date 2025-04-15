@@ -1,5 +1,10 @@
-from sedacs.interface.pyseqm import get_overlap_pyseqm
 import torch
+
+try:
+    import seqm; PYSEQM = True
+    from sedacs.interface.pyseqm import get_overlap_pyseqm
+
+except: PYSEQM = False
 
 __all__ = ["get_overlap"]
 

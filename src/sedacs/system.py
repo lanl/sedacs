@@ -1191,7 +1191,7 @@ def build_nlist(coords_cart, latticeVectors, rcut, rank=0, numranks=1, verb=Fals
 # @return hindex Orbital index for each atom in the system
 # @retunn numel Total number of electrons
 #
-def get_hindex(orbs_for_every_symbol, valency, symbols, types, verb=False):
+def get_hindex(orbs_for_every_symbol, symbols, types, verb=False):
     nats = len(types[:])
     ntypes = len(symbols)
     hindex = np.zeros((nats + 1), dtype=int)
@@ -1222,13 +1222,7 @@ def get_hindex(orbs_for_every_symbol, valency, symbols, types, verb=False):
             msg = "No number of orbitals provided for species " + symbol \
                     +", Using maxbonds in periodic table instead"
             warning_at("get_hindex",msg)
-        try:
-            numel_for_atom = valency[symbol]
-        except:
-            numel_for_atom = ptable.numel[atomic_number]
-            msg = "No number of valence electrons provided for species " + symbol \
-                    +", Using numel in periodic table instead"
-            warning_at("get_hindex",msg)
+        numel_for_atom = ptable.numel[atomic_number]
         norbs_for_every_type[cnt] = norbs_for_atom
         numel_for_every_type[cnt] = numel_for_atom
         if verb:
@@ -1241,7 +1235,6 @@ def get_hindex(orbs_for_every_symbol, valency, symbols, types, verb=False):
         norbs_for_atom = norbs_for_every_type[types[i]]        
         numel = numel + numel_for_every_type[types[i]]
         norbs = norbs + norbs_for_atom
-        numel += valency[symbols[types[i]]]
     hindex[nats] = norbs
    
     return norbs,norbs_for_every_type,hindex,numel,numel_for_every_type

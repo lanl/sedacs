@@ -6,6 +6,7 @@ import sys
 
 from sedacs.types import ArrayLike
 from sedacs.parser import Input
+import torch
 
 try:
   import seqm; PYSEQM = True
@@ -23,7 +24,6 @@ try:
   from seqm.seqm_functions.pack import *
   from seqm.seqm_functions.energy import *
   seqm.seqm_functions.scf_loop.debug=False
-  import torch
   import time
 
 except: PYSEQM = False
@@ -83,7 +83,7 @@ class pyseqmObjects(torch.nn.Module):
           self.rho0xj_whole[B] =self.molecule_whole.parameters['rho_core'][self.molecule_whole.idxj][B]
 
 def get_coreHalo_ham_inds(partIndex: ArrayLike,
-                          partCoreHaloIndex: ArryayLike,
+                          partCoreHaloIndex: ArrayLike,
                           sdc: Input,
                           sy,
                           subSy,
@@ -151,7 +151,7 @@ def get_nucAB_energy_pyseqm(Z,
     Wrapper function for the pyseqm nuclear repulsion routines. see pyseqm documentation.
     Not intended for use outside the curated PYSEQM routines.
     """
-   return pair_nuclear_energy(Z, const, nmol, ni, nj, idxi, idxj, rij, \
+    return pair_nuclear_energy(Z, const, nmol, ni, nj, idxi, idxj, rij, \
                                      rho0xi,rho0xj,alp, chi, gam=gam, method=method, parameters=parnuc)
 
 def get_total_energy_pyseqm(nmol,
@@ -163,7 +163,7 @@ def get_total_energy_pyseqm(nmol,
     Not intended for use outside the curated PYSEQM routines.
     """
 
-   return total_energy(nmol, pair_molid, EnucAB, Eelec)
+    return total_energy(nmol, pair_molid, EnucAB, Eelec)
    
 def get_full_fock_pyseqm(nmol,
                          molsize,

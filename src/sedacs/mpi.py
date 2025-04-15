@@ -84,7 +84,6 @@ def collect_matrix_from_chunks(chunk: ArrayLike,
     fullMat : numpy.ndarray
         The full matrix.
     """ 
-
     if not mpiLib:
         raise ImportError("ERROR: Consider installing mpi4py")
 
@@ -177,6 +176,32 @@ def collect_and_sum_matrices(matOnRank: ArrayLike,
 
     return fullMat
 
+def collect_and_sum_matrices_float(matOnRank: ArrayLike, comm: MPI.Comm) -> ArrayLike:
+    """
+    Collect and sum matrices from all ranks.
+
+    Parameters
+    ----------
+    matOnRank : ArrayLike
+        The vector to be collected and summed.
+    comm : MPI.Comm
+        The MPI communicator.
+
+    Returns
+    -------
+    fullMat : ArrayLike
+        The full Matrix.
+    """
+    if comm is None:
+        raise ImportError("ERROR: Consider installing mpi4py and initializing MPI")
+
+    # Initialize buffer for the result
+    fullMat = np.zeros_like(matOnRank)
+
+    # Perform element-wise sum across all ranks
+    comm.Allreduce(matOnRank, fullMat, op=MPI.SUM)
+
+    return fullMat 
 
 def collect_and_sum_vectors_float(vectOnRank: ArrayLike,
                                    rank: int,
@@ -211,6 +236,44 @@ def collect_and_sum_vectors_float(vectOnRank: ArrayLike,
     fullVect = np.zeros(nDim, dtype=float)
 
     comm.Allreduce(vectOnRank,fullVect,op=MPI.SUM)
+
+    return fullVect
+
+
+def collect_and_concatenate_vectors(vectOnRank, comm) -> ArrayLike:
+    """
+    Collect and concatenate vectors from all ranks.
+
+    Parameters
+    ----------
+    vectOnRank : ArrayLike
+        The vector to be collected and summed.
+    comm : MPI.Comm
+        The MPI communicator.
+
+    Returns
+    -------
+    fullVect : ArrayLike
+        The full vector.
+    """
+
+    if not MPI.Is_initialized():
+
+        raise ImportError("ERROR: Consider installing mpi4py")
+
+    # Gather the sizes of each vectOnRank
+    local_size = len(vectOnRank)
+    sizes = comm.allgather(local_size)
+
+    # Calculate the displacements for each rank
+    displacements = np.cumsum([0] + sizes[:-1])
+
+    # Create the full vector with the total size
+    total_size = sum(sizes)
+    fullVect = np.zeros(total_size, dtype=float)
+
+    # Gather all vectors into fullVect
+    comm.Allgatherv(vectOnRank, [fullVect, sizes, displacements, MPI.DOUBLE])
 
     return fullVect
 
