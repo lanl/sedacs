@@ -200,8 +200,8 @@ def calculate_PME_ewald(
                                                     cutoff,
                                                     calculate_forces, calculate_dq)
         
-        if my_f_real is not None and my_f_real.device.type == 'cuda':
-            my_f_real = my_f_real.T.contiguous() 
+        # if my_f_real is not None and my_f_real.device.type == 'cuda':
+        #     my_f_real = my_f_real.T.contiguous() 
 
     else:
         my_e_real, my_f_real, my_dq_real = ewald_real(nbr_inds, nbr_disp_vecs, 

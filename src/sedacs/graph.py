@@ -29,7 +29,7 @@ except:
 # a neighbor list.
 # @param coords System coordinates
 # @param nl Neighbor list `nl[i,0]` = total number of neighbors.
-# `nl[i,1:nl[i,0]]` = neigbors of i. Self neighbor i to i is not included explicitly.
+# `nl[i,1:nl[i,0]+1]` = neigbors of i. Self neighbor i to i is not included explicitly.
 # @param radius Radius Cutoff to search for the neighbors
 # @param maxDeg Max degrees allowed for each none
 # @param verb Verbosity mode

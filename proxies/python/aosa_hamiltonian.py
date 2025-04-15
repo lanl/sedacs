@@ -82,7 +82,7 @@ class AOSA_Parameter:
 
                     if(count == self.nl):
                         break
-                
+        parFile.close()  
 
 
 def get_integral(coordsI,symbolI,orbI,coordsJ,symbolJ,orbJ):

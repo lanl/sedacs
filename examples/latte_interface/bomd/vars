@@ -1,21 +1,21 @@
 #!/bin/bash
 THIS_PATH=`pwd`
 export PYTHONPATH=""
-MOD_PATH=$THIS_PATH/../../src/sedacs/
-MOD_PATH1=$THIS_PATH/../../src/
-MOD_PATH2=$THIS_PATH/../../src/sedacs/driver
-PROXYA_FORTRAN_PATH=$THIS_PATH/../../proxies/fortran/build/
-PROXYA_PYTHON_FILES=$THIS_PATH/../../proxies/python/
-PROXYA_PYTHON_FOLDER=$THIS_PATH/../../
-#PROGRESS_PATH=$HOME/qmd-progress/install/lib64/
-#BML_PATH=$HOME/bml/install/lib64/
+MOD_PATH=$THIS_PATH/../../../src/sedacs/
+MOD_PATH1=$THIS_PATH/../../../src/
+MOD_PATH2=$THIS_PATH/../../../src/sedacs/driver
+PROXYA_FORTRAN_PATH=$THIS_PATH/../../../proxies/fortran/build/
+PROXYA_PYTHON_FILES=$THIS_PATH/../../../proxies/python/
+PROXYA_PYTHON_FOLDER=$THIS_PATH/../../../
+PROGRESS_PATH=$HOME/qmd-progress/install/lib64/
+BML_PATH=$HOME/bml/install/lib64/
 export PROXYA_FORTRAN_PATH=$PROXYA_FORTRAN_PATH
 export PROXYA_PYTHON_PATH=$PROXYA_PYTHON_PATH
 export PYTHONPATH=$PYTHONPATH:$MOD_PATH:$MOD_PATH1:$MOD_PATH2:$PROGRESS_PATH:$BML_PATH:$PROXYA_PYTHON_FOLDER:$PROXYA_PYTHON_FILES:$PROXYA_FORTRAN_PATH
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PROGRESS_PATH:$BML_PATH
 export PYTHONWARNINGS="ignore:Unverified HTTPS request"
 
-GPU_PATH=$THIS_PATH/../../src/sedacs/gpu
+GPU_PATH=$THIS_PATH/../../../src/sedacs/gpu
 echo $GPU_PATH
 export PYTHONPATH=$PYTHONPATH:$GPU_PATH
 

@@ -72,34 +72,39 @@ def ewald_real(
     return torch.sum(res) / 2.0, f, de_dq
 
 @torch.compile
-def ewald_real_screening(my_start_ind, my_lcl_N, nbr_inds, nbr_diff_vecs, nbr_dists, charges, hubbard_u, atomtypes,
+def ewald_real_screening(nbr_inds, nbr_diff_vecs, nbr_dists, charges, hubbard_u, atomtypes,
                alpha: float, cutoff: float, calculate_forces: int,
                calculate_dq: int):
-    '''
-    Calculates real part of the ewald sum
-    
-    Inputs:
-        my_inds: Integer Tensor with shape [n,], n is the number of local atoms.
-                Stores the local atom indices.
-        nbr_inds: FP Tensor with shape [n,K], K is the max number of neighbors per atom.
-                Stores the neighbor indices within certain cutoff.
-        nbr_diff_vecs: FP Tensor with shape [3,n,K].
-                Stores the displacement vectors
-        charges: FP Tensor with shape [N,], N is the total number of atoms
-                Charge per atom.
-        alpha: float
-        cutoff: float
-        calculate_forces: int.
-                Returns forces if set to 1, else returns None as forces
-        calculate_dq: int.
-                Returns de/dq if set to 1, else returns None
-    Output:
-        Energy: float
-        forces: FP Tensor with shape [3, n]
-        dq: FP Tensor with shape [n,]
+    """
+    Computes the real-space contribution with the Hubbard-U screening correction to the Ewald summation.
 
-    TODO: If an atom is close to its image, we need to handle it carefully. 
-    '''
+    This function calculates the electrostatic interaction energy in the real-space 
+    portion of the Ewald summation. It also optionally computes forces and derivatives 
+    with respect to charge if `calculate_forces` or `calculate_dq` are set.
+
+    Args:
+        nbr_inds (torch.Tensor): Indices of neighboring atoms. Shape: `(N, K)`, where:
+            - `N` is the number of local atoms.
+            - `K` is the maximum number of neighbors per atom.
+        nbr_diff_vecs (torch.Tensor): Displacement vectors to neighbors. Shape: `(3, N, K)`, where:
+            - `3` represents the x, y, and z components of the displacement.
+            - `N` is the number of local atoms.
+            - `K` is the number of neighbors per atom.
+        nbr_dists (torch.Tensor): Distances to neighboring atoms. Shape: `(N, K)`.
+        hubbard_u (torch.Tensor): Hubbard U values for each atom. Shape: `(N,)`.
+        atomtypes (torch.Tensor): Atomic types for each atom. Shape: `(N,)`.
+        charges (torch.Tensor): Atomic charge values. Shape: `(N,)`.
+        alpha (float): Ewald screening parameter (scalar).
+        cutoff (float): Cutoff distance for interactions (scalar).
+        calculate_forces (int): Flag to compute forces (`1` for True, `0` for False).
+        calculate_dq (int): Flag to compute charge derivatives (`1` for True, `0` for False).
+
+    Returns:
+        Tuple[float, Optional[torch.Tensor], Optional[torch.Tensor]]: 
+            - **(float)** Real-space energy contribution (scalar).
+            - **(torch.Tensor, shape `(3, N)`)** Forces on atoms if `calculate_forces` is enabled, otherwise `None`.
+            - **(torch.Tensor, shape `(N,)`)** Charge derivatives if `calculate_dq` is enabled, otherwise `None`.
+    """
     # TODO: finalize DUMMY_ATOM_IND
     KECONST = 14.3996437701414
     device = nbr_dists.device
@@ -157,7 +162,7 @@ def ewald_real_screening(my_start_ind, my_lcl_N, nbr_inds, nbr_diff_vecs, nbr_di
     J0[different_element_mask] = J0[different_element_mask] - (1.0 * (SB - SC / MAGR) + \
                 1.0 * (SE - SF / MAGR))[different_element_mask]
 
-    energy = charges[my_start_ind:my_start_ind+my_lcl_N, None] * J0 * charges[nbr_inds]
+    energy = charges[:, None] * J0 * charges[nbr_inds]
 
     if calculate_forces:
         nbr_diff_vecs = torch.transpose(nbr_diff_vecs, 0, 2).contiguous()
@@ -166,15 +171,15 @@ def ewald_real_screening(my_start_ind, my_lcl_N, nbr_inds, nbr_diff_vecs, nbr_di
         DC = torch.where(mask.unsqueeze(2), nbr_diff_vecs / nbr_dists.unsqueeze(2), zero)
         CA = torch.where(mask, NUMREP_ERFC / MAGR, zero) 
         CA = CA + 2.0 * alpha * torch.exp(-alpha2 * MAGR2) / math.sqrt(math.pi)
-        FORCE = -torch.sum((charges[my_start_ind:my_start_ind+my_lcl_N, None] * charges[nbr_inds] * \
+        FORCE = -torch.sum((charges[:, None] * charges[nbr_inds] * \
                  torch.where(mask, CA / MAGR, zero)).unsqueeze(2) * \
                  DC * mask.unsqueeze(2), dim=1)
 
-        FORCE = FORCE + torch.sum(((charges[my_start_ind:my_start_ind+my_lcl_N, None] * charges[nbr_inds] * EXPTI) * \
+        FORCE = FORCE + torch.sum(((charges[:, None] * charges[nbr_inds] * EXPTI) * \
                     ((torch.where(same_element_mask, SSE / MAGR2, zero) - 2.0 * SSB * MAGR - SSC) \
                     + SSA * (SSB * MAGR2 + SSC * MAGR + SSD + torch.where(same_element_mask, SSE / MAGR, zero)))).unsqueeze(2) * \
                     DC * same_element_mask.unsqueeze(2), dim=1)
-        FORCE = FORCE + torch.sum((charges[my_start_ind:my_start_ind+my_lcl_N, None] * charges[nbr_inds] * ((1.0 * (SA * (SB - torch.where(different_element_mask, SC / MAGR, zero)) - \
+        FORCE = FORCE + torch.sum((charges[:, None] * charges[nbr_inds] * ((1.0 * (SA * (SB - torch.where(different_element_mask, SC / MAGR, zero)) - \
             torch.where(different_element_mask, SC / MAGR2, zero))) + (1.0 * (SD * (SE - torch.where(different_element_mask, SF / MAGR, zero)) - \
             torch.where(different_element_mask, SF / MAGR2, zero))))).unsqueeze(2) * DC * different_element_mask.unsqueeze(2), dim=1)
 

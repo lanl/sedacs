@@ -149,6 +149,7 @@ class Input:
                         else:
                             break
                     keyVals.update({key: listIn})
+        myFile.close()
         return keyVals
 
     ## Get a string

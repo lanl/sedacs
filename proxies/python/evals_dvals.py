@@ -23,9 +23,6 @@ __all__ = [
 # @param ham Hamiltonian matrix
 # @param nocc Number of occupied orbitals
 # @param core_size Number of atoms in the cores.
-# @param method Type of algorithm used to compute DM
-# @param accel Type of accelerator/special device used to compute DM. Default is No and
-# will only use numpy.
 # @param mu Chemical potential. If set to none, the calculation will use nocc
 # @param etemp Electronic temperature
 # @param overlap Overlap matrix
@@ -33,7 +30,7 @@ __all__ = [
 #
 # @return rho Density matrix
 #
-def get_evals_dvals_proxy(ham, nocc, norbsInCore=None, method="Diag", accel="No", mu=None, etemp=0.0, overlap=None, full_data=False, verb=False, lib=None):
+def get_evals_dvals_proxy(ham, nocc, norbsInCore=None, mu=None, etemp=0.0, verb=False, lib=None):
     """Calcualtion of the evals and dvals from H"""
     if verb:
         print("Computing Evals and Dvals")

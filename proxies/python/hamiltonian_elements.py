@@ -81,6 +81,7 @@ class AOSA_Parameter:
 
                     if(count == self.nl):
                         break
+        parFile.close()
                 
 
 

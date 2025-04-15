@@ -4,6 +4,7 @@ import pathlib
 import numpy as np
 
 from sedacs.system import parameters_to_vectors
+from collections import defaultdict
 
 __all__ = [
     "read_coords_file",
@@ -13,6 +14,7 @@ __all__ = [
     "read_pdb_file",
     "write_pdb_coordinates",
     "are_files_equivalent",
+    "read_latte_tbparams"
 ]
 
 
@@ -237,7 +239,7 @@ def read_xyz_trajectory(fileName, lib="None", verb=True):
         coords = xyzc[:, :, 0:3]
         values = xyzc[:, :, 3]
 
-        return elems[:nats], coords, values
+    return elems[:nats], coords, values
 
 
 ## Read a pdb file
@@ -403,3 +405,41 @@ def are_files_equivalent(file1, file2):
             if line1.strip() != line2.strip():
                 return False
     return True
+
+def read_latte_tbparams(file):
+    """
+    Reads the TB parameters for LATTE from a file.
+
+    Parameters
+    ----------
+    file : str
+        Path to the TB parameters file.
+    
+    Returns
+    -------
+    tbparams : dict
+        Dictionary containing the TB parameters for each element.
+        Each element is a key, and its value is another dictionary with the parameters.
+    """
+    tbparams = defaultdict(dict)
+    with open(file, "r") as f:
+        lines = f.readlines()
+    for line in lines[2:]:
+        line = line.split()
+        if len(line) != 13:
+            continue
+        element = line[0]
+        tbparams[element]["basis"] = line[1]
+        tbparams[element]["Numel"] = float(line[2])
+        tbparams[element]["Es"] = float(line[3])
+        tbparams[element]["Ep"] = float(line[4])
+        tbparams[element]["Ed"] = float(line[5])
+        tbparams[element]["Ef"] = float(line[6])
+        tbparams[element]["Mass"] = float(line[7])
+        tbparams[element]["HubbardU"] = float(line[8])
+        tbparams[element]["Wss"] = float(line[9])
+        tbparams[element]["Wpp"] = float(line[10])
+        tbparams[element]["Wdd"] = float(line[11])
+        tbparams[element]["Wff"] = float(line[12])
+
+    return tbparams

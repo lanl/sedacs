@@ -209,7 +209,7 @@ def init(args):
     fullGraph[:, :] = graphNL[:, :]
 
     #Initialize proxy/guest code
-    init_proxy(sy.symbols,sy.orbs)
+#    init_proxy(sy.symbols,sy.orbs)
     eng.up = True
 
     return sdc, eng, comm, rank, numranks, sy, hindex, fullGraph, nl, nlTrX, nlTrY, nlTrZ

@@ -1,7 +1,7 @@
 """
 evals_dvals.py
 ====================================
-Some functions to compute evals and dvals
+Some functions to collect evals and dvals from multiple system parts at a given MPI rank
 
 So far: Initital "collect_evals" and "collect_dvals"
 for nonorthogonal TB
@@ -15,21 +15,21 @@ __all__ = ["collect_evals", "collect_dvals"]
 
 def collect_evals(evalsOnRank, evals, verb=False):
     """
-    The function will collect eigenvalues (evals) from each core+halo part at the current rank.
+    Collects eigenvalues (evals) from multiple system parts at a given MPI rank.
 
     Paremeters
     ----------
-    evalsOnRank : numpy 1D array
-        A 1D numpy array containing the eigenvalues at the current rank.
+    evalsOnRank : 1D numpy array
+        Eigenvalues which have been collected at the current rank.
     evals : numpy 1D array
-        A 1D numpy array containing the eigenvalues to be collected from each core+halo part.
+        Eigenvalues to be collected from each core+halo part.
     verb : bool, optional
         If set to True information is printed.
 
     Returns
     -------
-    evalsOnRank : numpy 1D array
-        A 1D numpy array containing the eigenvalues at the current rank.
+    evalsOnRank : 1D numpy array
+        Eigenvalues which have been collected at the current rank.
     """
     if verb:
         status_at("collect_evals", "Collecting evals")
@@ -44,21 +44,22 @@ def collect_evals(evalsOnRank, evals, verb=False):
 
 def collect_dvals(dvalsOnRank, dvals, verb=False):
     """
-    The function will collect the contributions (dvals) from each core+halo part to the eigenvectors of the full system at the current rank.
+    Collects dvals from multiple system parts at a given MPI rank.
+    Notes: dvals are the contributions to the eigenvectors of the full system from each core+halo part.
 
     Paremeters
     ----------
-    dvalsOnRank : numpy 1D array
-        A 1D numpy array containing the dvals at the current rank.
+    dvalsOnRank : 1D numpy array
+        Dvals which have been collected at the current rank.
     dvals : numpy 1D array
-        A 1D numpy array containing the dvals to be collected from each core+halo part.
+        Dvals to be collected from each core+halo part.
     verb : bool, optional
         If set to True information is printed.
 
     Returns
     -------
-    dvalsOnRank : numpy 1D array
-        A 1D numpy array containing the dvals at the current rank.
+    dvalsOnRank : 1D numpy array
+        Dvals which have been at the current rank.
     """
     if verb:
         status_at("collect_dvals", "Collecting dvals")

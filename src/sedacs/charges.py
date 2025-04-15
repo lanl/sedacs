@@ -20,7 +20,7 @@ def get_charges(rho, znuc, types, part, hindex, over=None, verb=False):
 
     Parameters
     ----------
-    rho : numpy 2D array
+    rho : 2D numpy array
         A 2D numpy array containing the elements of the Density matrix.
     znuc : int
         Number of valence electrons for every atom type.
@@ -31,15 +31,15 @@ def get_charges(rho, znuc, types, part, hindex, over=None, verb=False):
     hindex : list
         Begining and ending of every index for atomic orbital block.
         Atom i will have its orbitals indexed in between (hindex[i],hindex[i+1])
-    over : numpy 2D array
+    over : 2D numpy array
         A 2D numpy array containing the elements of the Overlap matrix.
-    verb : bool
+    verb : bool, optional
         If set to True information is printed.
 
     Returns
     -------
-    2D numpy array
-        A vector containing the Mulliquen charges is returned.
+    1D numpy array
+        A vector containing the Mulliken charges is returned.
 
     Notes
     -----
@@ -95,13 +95,14 @@ def collect_charges(chargesOnRank, charges, part, nats, verb=False):
         List of atom indices in the part.
     nats : int
         Number of total atoms in the system.
+    verb : bool, optional
+        If set to True information is printed.
 
     Returns
     -------
     1D numpy array
         Returns the same vector chargesOnRank with the
         added charges of the part
-
     """
     if verb:
         status_at("collect_charges", "Collecting charges")

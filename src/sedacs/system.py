@@ -35,7 +35,7 @@ try:
     mpiLib = True
 except ImportError as e:
     mpiLib = False
-from multiprocessing import Pool
+#from multiprocessing import Pool
 
 if mpiLib:
     from sedacs.mpi import *

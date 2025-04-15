@@ -6,9 +6,8 @@ CONTROL{
   DEBUGON= 0
   FERMIM= 6
   CGORLIB= 1 CGTOL= 1.0e-6
-  KBT= 0.0
   NORECS= 1
-  PARAMPATH= '../../parameters/latte/TBparam/' 
+  PARAMPATH= '../../../parameters/latte/TBparam/' 
   ENTROPYKIND= 1
   PPOTON= 1 VDWON= 0
   SPINON= 0 SPINTOL= 1.0e-4
@@ -28,8 +27,8 @@ CONTROL{
   PBCON= 1
   RESTART= 0
   CHARGE= 0
-  XBO= 1
-  XBODISON= 1
+  XBO= 0
+  XBODISON= 0
   XBODISORDER= 5
   NGPU= 2
   KON= 0

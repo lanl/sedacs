@@ -27,6 +27,7 @@ def read_ppots(filename,symbols):
                         for k in range(2,len(info)):
                             ppots[i,j,k-2] = float(info[k])
                     ppots[j,i,:] =  ppots[i,j,:]
+    myfile.close()
 
 
 

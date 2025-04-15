@@ -114,6 +114,17 @@ def collect_and_sum_matrices(matOnRank, rank, numranks, comm):
 
     return fullMat
 
+def collect_and_sum_matrices_float(matOnRank, comm):
+    if comm is None:
+        raise ImportError("ERROR: Consider installing mpi4py and initializing MPI")
+
+    # Initialize buffer for the result
+    fullMat = np.zeros_like(matOnRank)
+
+    # Perform element-wise sum across all ranks
+    comm.Allreduce(matOnRank, fullMat, op=MPI.SUM)
+
+    return fullMat 
 
 def collect_and_sum_vectors_float(vectOnRank, rank, numranks, comm):
 
