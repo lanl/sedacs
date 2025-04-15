@@ -268,7 +268,6 @@ def collect_graph_from_rho_PYSEQM(graph,rho,thresh,nnodes,maxDeg,indices,hindex=
 
     return graph
 
-
 ## Collect a graph from DMs
 # @brief This will build a graph from small DMs
 # @param rho Density matrix. This is a 2D numpy array.

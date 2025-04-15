@@ -7,7 +7,7 @@ this will be done interfacing with an engine.
 import sys
 
 from sedacs.interface_modules import get_density_matrix_modules
-from sedacs.interface_pyseqm import get_densityMatrix_renormalized_pyseqm
+from sedacs.interface.pyseqm import get_densityMatrix_renormalized_pyseqm
 import torch
 try:
     import seqm; PYSEQM = True

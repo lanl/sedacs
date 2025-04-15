@@ -4,6 +4,4 @@ void invovlp(double *S,
              double *Sinvsq,
              int N,
              precision_t precision,
-             refine_t refinement)
-{
-}
+             refine_t refinement);

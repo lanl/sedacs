@@ -1,10 +1,12 @@
 import sys
 import pathlib
+from collections import defaultdict
+
+from sedacs.types import ArrayLike
 
 import numpy as np
 
 from sedacs.system import parameters_to_vectors
-from collections import defaultdict
 
 __all__ = [
     "read_coords_file",
@@ -18,12 +20,39 @@ __all__ = [
 ]
 
 
-## Coordinates main reader
-# @brief This will read the coodinates of a chemical system (so far only xyz and pdb
-# are available).
-#
-def read_coords_file(fileName, lib="None", verb=True):
-    """coords file main parser: Reads in an xyz/pdb file with lattice informations."""
+def read_coords_file(fileName: str,
+                     lib: str ="None",
+                     verb=True) -> tuple[ArrayLike, ArrayLike, ArrayLike, ArrayLike]:
+    """
+    Reads in atomic structure files, including lattice information.
+
+    Parameters
+    ----------
+    fileName: str
+        The name of the file to be parsed (should be xyz, or pdb).
+    lib: str
+        If using an external library to parse the structure (such as ASE, PMG, etc.)
+        *Currently not used.
+    verb: bool
+        Verbosity of the parsing procedure.
+
+    Returns
+    -------
+    latticeVectors: ArrayLike (3, 3)
+        The lattice vectors for the system of interest. Default behavior is for this to be 
+        returned in the full format. Care should be taken if the ASE parser is used on 
+        orthorhombic cells, as the return shape may be (3,) instead of (3,3)
+    symbols: ArrayLike
+        The unique chemical elements in the structure.
+    types: ArrayLike (Natoms, )
+        The element type of each atom in the system.
+    coords: ArrayLike (Natoms, 3)
+        The Cartesian coordinates for all atoms in the system.
+    """
+    
+    if lib not in ["ase", "None"] and lib is not None:
+        raise NotImplementedError("Parsing lib options: ase, 'None', or None")
+
     ext = pathlib.Path(fileName).suffix
     if ext == ".xyz":
         read_fn = read_xyz_file
@@ -63,8 +92,35 @@ def read_coords_file(fileName, lib="None", verb=True):
 # NumberOfAtoms = len(coordinates[:,0])
 # @endcode
 #
-def read_xyz_file(fileName, lib="None", verb=True):
-    """xyz file parser: Reads in an xyz file with lattice informations."""
+def read_xyz_file(fileName: str,
+                  lib: str ="None",
+                  verb=True) -> tuple[ArrayLike, ArrayLike, ArrayLike, ArrayLike]:
+    """
+    Reads in atomic structure files in XYZ format, including lattice information.
+
+    Parameters
+    ----------
+    fileName: str
+        The name of the file to be parsed (should be xyz only).
+    lib: str
+        If using an external library to parse the structure (such as ASE, PMG, etc.)
+        *Currently not used.
+    verb: bool
+        Verbosity of the parsing procedure.
+
+    Returns
+    -------
+    latticeVectors: ArrayLike (3, 3)
+        The lattice vectors for the system of interest. Default behavior is for this to be 
+        returned in the full format. Care should be taken if the ASE parser is used on 
+        orthorhombic cells, as the return shape may be (3,) instead of (3,3)
+    symbols: ArrayLike
+        The unique chemical elements in the structure.
+    types: ArrayLike (Natoms, )
+        The element type of each atom in the system.
+    coords: ArrayLike (Natoms, 3)
+        The Cartesian coordinates for all atoms in the system.
+    """
 
     if lib is None or lib == "None":
         latticeVectors, symbols, types, coords = read_xyz_file_nolib(fileName)
@@ -79,7 +135,37 @@ def read_xyz_file(fileName, lib="None", verb=True):
 
     return latticeVectors, symbols, types, coords
 
-def read_xyz_file_nolib(fileName):
+def read_xyz_file_nolib(fileName: str) -> tuple[ArrayLike, ArrayLike, ArrayLike, ArrayLike]:
+    """
+    Reads in atomic structure files in XYZ format without the use of external libraries.
+
+    ***Lattice information must be in the comment line of the xyz file, prefixed by 
+    'Lattice:'***
+
+    If no lattice information is provided, the returned latticeVectors will simply be
+    determined by the max, min Cartesian positions with 5 Angstrom of padding.
+
+
+
+    Parameters
+    ----------
+    fileName: str
+        The name of the file to be parsed (should be xyz only).
+
+    Returns
+    -------
+    latticeVectors: ArrayLike (3, 3)
+        The lattice vectors for the system of interest. Default behavior is for this to be 
+        returned in the full format. Care should be taken if the ASE parser is used on 
+        orthorhombic cells, as the return shape may be (3,) instead of (3,3)
+    symbols: ArrayLike
+        The unique chemical elements in the structure.
+    types: ArrayLike (Natoms, )
+        The element type of each atom in the system.
+    coords: ArrayLike (Natoms, 3)
+        The Cartesian coordinates for all atoms in the system.
+    """
+
     fileIn = open(fileName, "r")
     count = -1
     latticeVectors = np.zeros((3, 3))
@@ -145,12 +231,40 @@ def read_xyz_file_nolib(fileName):
 
     return latticeVectors, symbols, types, coords
 
-def read_xyz_file_ase(fileName):
+def read_xyz_file_ase(fileName: str) -> tuple[ArrayLike, ArrayLike, ArrayLike, ArrayLike]:
+    """
+    Reads in atomic structure files in XYZ format without the ASE library.
+    Currently this does *not* support lattice vector parsing. This will be added
+    in the future (see TODO below).
+
+    Parameters
+    ----------
+    fileName: str
+        The name of the file to be parsed (should be xyz only).
+
+    Returns
+    -------
+    latticeVectors: ArrayLike (3, 3)
+        The lattice vectors for the system of interest. Default behavior is for this to be 
+        returned in the full format. Care should be taken if the ASE parser is used on 
+        orthorhombic cells, as the return shape may be (3,) instead of (3,3)
+    symbols: ArrayLike
+        The unique chemical elements in the structure.
+    types: ArrayLike (Natoms, )
+        The element type of each atom in the system.
+    coords: ArrayLike (Natoms, 3)
+        The Cartesian coordinates for all atoms in the system.
+    """
+
+
     import ase
     system = ase.io.read(fileName)
     coords = system.get_positions()
     symbols = []  # Symbols for each atom type
     latticeVectors = np.zeros((3, 3))
+
+    # TODO, ASE parses cell info via JSON-style lattice information in the comment line
+    # so we can update this accordingly at some point.
     noBox = True  # Ace xyz reader does not read lattice vectors (system.cell = 0)
     symbolsForEachAtom = system.get_chemical_symbols()
     types = np.zeros(len(symbolsForEachAtom), dtype=int)
@@ -166,15 +280,30 @@ def read_xyz_file_ase(fileName):
             types[count] = symbols.index(symb)
     return latticeVectors, symbols, types, coords
 
-## Write coordinates into an xyz file
-#
-# @param fileName File name
-# @param coords Position for every atoms. z-coordinate of atom 1 = coords[0,2]
-# @param types list of types for every atom in the system.
-# @param symbols Symbols for every atom type
-#
-def write_xyz_coordinates(fileName, coords, types, symbols):
-    """Writes coordinates in simple pdb format"""
+def write_xyz_coordinates(fileName: str,
+                          coords,
+                          types,
+                          symbols) -> None:
+    """
+    Writes structural information to xyz files.
+    TODO, add support for Lattice information.
+
+    Parameters
+    ----------
+    fileName: str
+        The name of the file to be written (should be xyz only).
+    coords: ArrayLike (Natoms, 3)
+        The Cartesian coordinates for all atoms in the system.
+    types: ArrayLike (Natoms, )
+        The element type of each atom in the system.
+    symbols: ArrayLike
+        The unique chemical elements in the structure.
+
+    Returns
+    -------
+    None
+    """
+
     nats = len(coords[:, 1])
     myFileOut = open(fileName, "w")
     print(nats, file=myFileOut)
@@ -213,16 +342,33 @@ def write_xyz_coordinates(fileName, coords, types, symbols):
 # C 6.1 12.1 18.1 0.48
 # N 7.1 14.1 21.1 0.56
 # \endverbatim
-#
-# @param fileName File name of the xyz trajectorey. Example: "traj.xyz"
-# @param lib If using a particular library. Default is "None"
-# @param verb Verbosity. If set to True will output relevant information.
-# @return elems Symbol for each atom type. Symbol for first atom type = symbols[0]
-# @return coords Position for every atoms. z-coordinate of atom 1 = coords[0,2]
-# @return values Index type for each atom in the system. Values (e.g. charges) for atoms
-#
-def read_xyz_trajectory(fileName, lib="None", verb=True):
-    """trajectory file parser: Reads in an xyz trajectory file"""
+
+def read_xyz_trajectory(fileName: str,
+                        lib: str = "None",
+                        verb: bool = True) -> tuple[ArrayLike, ArrayLike, ArrayLike]:
+    """
+    Reads in atomic structure files in XYZ format without the ASE library.
+    TODO: This function could probably use an example for the format in the docs.
+
+    Parameters
+    ----------
+    fileName: str
+        The name of the file to be parsed (should be xyz only).
+    lib: str
+        If using an external library to parse the structure (such as ASE, PMG, etc.)
+    verb: bool
+        Verbosity of the parsing procedure.
+
+    Returns
+    -------
+    elems: ArrayLike
+        Element info.
+    coords: ArrayLike
+        Positional information along the trajectory.
+    values: ArrayLike
+        Chemical information in the fourth column of the XYZ file.
+    """
+
     with open(fileName) as f:
         ext = pathlib.Path(fileName).suffix
         lines = np.array(f.readlines())
@@ -239,7 +385,7 @@ def read_xyz_trajectory(fileName, lib="None", verb=True):
         coords = xyzc[:, :, 0:3]
         values = xyzc[:, :, 3]
 
-    return elems[:nats], coords, values
+        return elems[:nats], coords, values
 
 
 ## Read a pdb file
@@ -258,23 +404,54 @@ def read_xyz_trajectory(fileName, lib="None", verb=True):
 #    END
 # \endverbatim
 #
-# @param fileName File name of the xyz file. Example: "coords.xyz"
-# @param lib If using a particular library. Default is "None"
-# @param verb Verbosity. If set to True will output relevant information.
-# @return latticeVectors Lattice vectors. z-coordinate of the first vector = latticeVectors[0,2]
-# @return symbols Symbol for each atom type. Symbol for first atom type = symbols[0]
-# @return types Index type for each atom in the system. Type for first atom = type[0]
-# @return coords Position for every atoms. z-coordinate of atom 1 = coords[0,2]
 #
 # @code{.unparsed}
 # NumberOfAtomTypes = len(symbols)
 # NumberOfAtoms = len(coordinates[:,0])
 # @endcode
-#
 # @todo Add test!
-#
-def read_pdb_file(fileName, lib="None", resInfo=False, verb=False):
-    """Reads a pdb file"""
+
+
+def read_pdb_file(fileName: str,
+                  lib: str = "None",
+                  resInfo: bool = False,
+                  verb: bool = False):
+    """
+    Reads in atomic structure files in PDB format, including lattice information.
+
+    Parameters
+    ----------
+    fileName: str
+        The name of the file to be parsed (should be pdb only).
+    lib: str
+        If using an external library to parse the structure (such as ASE, PMG, etc.)
+        *Currently not used.
+    resinfo: bool
+        Defaults to false. Whether to change the return signature of the function to include
+        information about the residues.
+    verb: bool
+        Verbosity of the parsing procedure.
+
+    Returns
+    -------
+    latticeVectors: ArrayLike (3, 3)
+        The lattice vectors for the system of interest. Default behavior is for this to be 
+        returned in the full format. Care should be taken if the ASE parser is used on 
+        orthorhombic cells, as the return shape may be (3,) instead of (3,3)
+    symbols: ArrayLike
+        The unique chemical elements in the structure.
+    types: ArrayLike (Natoms, )
+        The element type of each atom in the system.
+    coords: ArrayLike (Natoms, 3)
+        The Cartesian coordinates for all atoms in the system.
+
+    If resinfo is True:
+
+    resIds: ArrayLike
+    resNames: ArrayLike
+        Residue ID and names in the PDB structure.
+    """
+
     if verb:
         print("\nIn read_pdb_file...\n")
     if (lib == "None") or (lib is None):
@@ -349,15 +526,29 @@ def read_pdb_file(fileName, lib="None", resInfo=False, verb=False):
         return latticeVectors, symbols, types, coords
 
 
-## Write coordinates into a pdb file
-#
-# @param coords Position for every atoms. z-coordinate of atom 1 = coords[0,2]
-# @param symbols Symbols for every atom type
-# @types list of types for every atom in the system.
-#
-# @todo Add lattice parameters!
 def write_pdb_coordinates(fileName, coords, types, symbols, molIds=np.zeros((0), dtype=int)):
-    """Writes coordinates in simple pdb format"""
+    """
+    Writes structural information to xyz files.
+    TODO, add support for Lattice information.
+
+    Parameters
+    ----------
+    fileName: str
+        The name of the file to be written (should be xyz only).
+    coords: ArrayLike (Natoms, 3)
+        The Cartesian coordinates for all atoms in the system.
+    types: ArrayLike (Natoms, )
+        The element type of each atom in the system.
+    symbols: ArrayLike
+        The unique chemical elements in the structure.
+    molIds: np.ndarray
+        Identifies for the molecules in the structure.
+
+    Returns
+    -------
+    None
+    """
+
     nats = len(coords[:, 1])
 
     if len(molIds) == 0:
@@ -393,13 +584,22 @@ def write_pdb_coordinates(fileName, coords, types, symbols, molIds=np.zeros((0),
     myFileOut.close()
 
 
-## Compare 2 files
-# @brief Compare two files and report True if they are equal
-# @param fileName1 Name of the first file
-# @param fileName2 Name of the second file
-# @return filesAreEqual True or False depending if the files are equal or not
-#
-def are_files_equivalent(file1, file2):
+def are_files_equivalent(file1: str,
+                         file2: str) -> bool:
+    """
+    Checks if the two files contain the same information
+
+    Parameters
+    ----------
+    file1: str
+        Name of the first file.
+    file2: str
+        Name of the second file.
+
+    Returns
+    -------
+    True or False if files are/are not equivalent.
+    """
     with open(file1, "r") as f1, open(file2, "r") as f2:
         for line1, line2 in zip(f1, f2):
             if line1.strip() != line2.strip():

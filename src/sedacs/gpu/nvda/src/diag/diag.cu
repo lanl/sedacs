@@ -8,7 +8,7 @@
 #include <thrust/host_vector.h>
 #include <error_check.cuh>
 #include <cusolverDn.h>
-#include "nvToolsExt.h"
+//#include "nvToolsExt.h"
 
 // diagonalize a matrix
 void computeEval(double *d_ham, int norb,

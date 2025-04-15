@@ -35,11 +35,14 @@ try:
     mpiLib = True
 except ImportError as e:
     mpiLib = False
-#from multiprocessing import Pool
+from multiprocessing import Pool
 
 if mpiLib:
     from sedacs.mpi import *
 import time
+
+from sedacs.types import ArrayLike
+
 
 __all__ = [
     "System",
@@ -61,9 +64,53 @@ __all__ = [
 # @brief To be used only when really needed!
 #
 class System:
-    """The system type."""
+    """The sedacs System class.
+
+    Attributes
+    ----------
+    nats : int
+        Number of atoms
+    ncores : int
+        Number of core atoms
+    ntypes : int
+        Number of atom types
+    types : ArrayLike (Natoms, )
+        Type for each atom, e.g., the first atom is of type "types[0]"
+    coords : ArrayLike (Natoms, 3)
+        Coordinates for each atom, e.g., z-coordinate of the first atom is coords[0,2]
+    charges : ndarray (Natoms, )
+        Charged (orbital base population) for each atom
+    vels : ArrayLike (Natoms, 3)
+        Velocities for each atom
+    latticeVectors : ndarray
+        3x3 matrix containing the lattice vectors for the simulation box.
+        latticeVectors[1,:] = first lattice vector.
+    symbols : list
+        Symbols for each atom type, e.g, the element symbol of the first atom is symbols[types[0]]
+    coulvs : ArrayLike (Natoms, )
+        Coulombic potentials
+    norbs : int
+        Number of orbitals
+    orbs : ArrayLike (Ntypes, )
+        Number of atomic orbital for each type
+    znuc : (Ntypes, )
+        Number of total valence electrons for each type
+    hindex : ndarray or None
+        Orbital indices. The orbital indices for atom i goes from `hindex[i]` to `hindex[i+1]-1`
+    resNames : list or None
+        Residue names/Molecule name
+    resIds : list or None
+        Residue/molecule id
+
+
+    
+    """
 
     def __init__(self, nats=1):
+        """
+        Constructor for the sedacs System object. This constructor simply initializes all 
+        
+        """
         ## Number of atoms
         self.nats = nats
         ## Number of core atoms
@@ -116,7 +163,10 @@ class System:
 
 
 
-    def print_summary(self):
+    def print_summary(self) -> None:
+        """
+        Prints a summary of the sedacs System object.
+        """
         s = """nats = {nats}
 ncores = {ncores}
 ntypes = {ntypes}
@@ -170,7 +220,25 @@ orbs = {orbs}"""
 class Trajectory:
     """A prototype for the trajectory type."""
 
-    def __init__(self, sys=None, nats=1, nframes=1, timestep=0.00025):
+    def __init__(self,
+                 sys: System = None,
+                 nats: int = 1,
+                 nframes: int = 1,
+                 timestep: float = 0.00025):
+        """
+        Constructor for the sedacs Trajectory class.
+
+        Parameters
+        ----------
+        sys : System
+            The system description with topology info
+        nats : int
+            Number of atoms.
+        nframes : int
+            Number of frames.
+        timestep : float
+            Time step in picoseconds.
+        """
         if sys is None:
             self.system = System(nats)
         else:
@@ -194,7 +262,27 @@ class Trajectory:
             if traj.n_frames >= 2:
                 self.timestep = traj.timestep
 
-    def slice(self, first=0, last=None, skip=1):
+    def slice(self,
+              first: int = 0,
+              last: int = None,
+              skip: int = 1) -> None:
+        """
+        Slices the trajectory.
+
+        Parameters
+        ----------
+        first : int
+            The first frame to slice.
+        last : int
+            The last frame to slice.
+        skip : int
+            The number of frames to skip between images in the slice.
+
+        Returns
+        -------
+        None
+        """
+
         if last is None:
             last = len(self.coords)
         self.coords = self.coords[first : last + 1 : skip]
@@ -205,7 +293,20 @@ class Trajectory:
             self.latticeVectors = self.latticeVectors[first : last + 1 : skip]
         self.timestep = self.timestep * skip
 
-    def load_prg_xyz(self, fname):
+    def load_prg_xyz(self,
+                     fname: str) -> None:
+        """
+        Loads a PRG XYZ file containing an MD trajectory.
+
+        Parameters
+        ----------
+        fname : str
+            The name of the PRG XYZ file.
+
+        Returns
+        -------
+        None
+        """
         with open(fname) as f:
             lines = np.array(f.readlines())
             nats = int(lines[0])
@@ -262,21 +363,43 @@ class Trajectory:
                 f.write(self.coords, cell_lengths=latticeParams[:, 0:3], cell_angles=latticeParams[:, 3:6])
 
 
-## Transforms the lattice parameters into lattice vectors.
-# @param paramA a parameter
-# @param paramB b parameter
-# @param paramC c parameter
-# @param angleAlpha Angle beween second and third lattice vectors
-# @param angleBeta Angle between first and third lattice vectors
-# @param angleGamma Angle between first and second lattice vectors
-# @param latticeVectors 3x3 array containing the lattice vectors.
-# \verbatim
-# latticeVector[0,2] = z-coordinate of the first lattice vector
-# \endverbatim
-# @param verb Verbosity level.
-#
-def parameters_to_vectors(paramA, paramB, paramC, angleAlpha, angleBeta, angleGamma, latticeVectors, verb=False):
-    """Transforms parameters to vectors"""
+def parameters_to_vectors(paramA: float,
+                          paramB: float,
+                          paramC: float,
+                          angleAlpha: float,
+                          angleBeta: float,
+                          angleGamma: float,
+                          latticeVectors: ArrayLike,
+                          verb: bool = False) -> ArrayLike:
+
+    """
+    Transforms lattice parameters to vectors. The inverse function of vectors_to_parameters.
+
+    Parameters
+    ----------
+    paramA : float
+        The first parameter.
+    paramB : float
+        The second parameter.
+    paramC : float
+        The third parameter.
+    angleAlpha : float
+        The angle between the second and third lattice vectors.
+    angleBeta : float
+        The angle between the first and third lattice vectors.
+    angleGamma : float
+        The angle between the first and second lattice vectors.
+    latticeVectors : np.ndarray
+        The lattice vectors.
+    verb : bool
+        Whether to print verbose output.
+
+    Returns
+    -------
+    latticeVectors : np.ndarray (3, 3)
+        The lattice vectors.
+
+    """
 
     # pi = 3.1415926535897932384626433832795
     pi = np.pi
@@ -304,14 +427,29 @@ def parameters_to_vectors(paramA, paramB, paramC, angleAlpha, angleBeta, angleGa
 # @param latticeVectors 3x3 array containing the lattice vectors
 # @param verb Verbosity level.
 #
-def vectors_to_parameters(Amat, verb=False):
-    if Amat.ndim == 3:
-        a = np.sqrt(np.einsum("ij,ij->i", Amat[:, 0], Amat[:, 0]))
-        b = np.sqrt(np.einsum("ij,ij->i", Amat[:, 1], Amat[:, 1]))
-        c = np.sqrt(np.einsum("ij,ij->i", Amat[:, 2], Amat[:, 2]))
-        adotb = np.einsum("ij,ij->i", Amat[:, 0], Amat[:, 1])
-        adotc = np.einsum("ij,ij->i", Amat[:, 0], Amat[:, 2])
-        bdotc = np.einsum("ij,ij->i", Amat[:, 1], Amat[:, 2])
+def vectors_to_parameters(latticeVectors, verb=False):
+    """
+    Transforms latticeVectors to parameters. The inverse function of parameters_to_vectors.
+
+    Parameters
+    ----------
+    latticeVectors : np.ndarray (3, 3)
+        The lattice vectors.
+    verb : bool
+        Whether to print verbose output.
+
+    Returns
+    -------
+    parameters : np.ndarray (6,)
+        The lattice parameters.
+    """
+    if latticeVectors.ndim == 3:
+        a = np.sqrt(np.einsum("ij,ij->i", latticeVectors[:, 0], latticeVectors[:, 0]))
+        b = np.sqrt(np.einsum("ij,ij->i", latticeVectors[:, 1], latticeVectors[:, 1]))
+        c = np.sqrt(np.einsum("ij,ij->i", latticeVectors[:, 2], latticeVectors[:, 2]))
+        adotb = np.einsum("ij,ij->i", latticeVectors[:, 0], latticeVectors[:, 1])
+        adotc = np.einsum("ij,ij->i", latticeVectors[:, 0], latticeVectors[:, 2])
+        bdotc = np.einsum("ij,ij->i", latticeVectors[:, 1], latticeVectors[:, 2])
         alpha = np.arccos(bdotc / b / c) * 180.0 / np.pi
         beta = np.arccos(adotc / a / c) * 180.0 / np.pi
         gamma = np.arccos(adotb / a / b) * 180.0 / np.pi
@@ -319,12 +457,12 @@ def vectors_to_parameters(Amat, verb=False):
         beta[np.abs(alpha - 90.0) <= 1.0e-5] = 90.0
         gamma[np.abs(alpha - 90.0) <= 1.0e-5] = 90.0
     else:
-        a = np.sqrt(np.inner(Amat[0], Amat[0]))
-        b = np.sqrt(np.inner(Amat[1], Amat[1]))
-        c = np.sqrt(np.inner(Amat[2], Amat[2]))
-        adotb = np.inner(Amat[0], Amat[1])
-        adotc = np.inner(Amat[0], Amat[2])
-        bdotc = np.inner(Amat[1], Amat[2])
+        a = np.sqrt(np.inner(latticeVectors[0], latticeVectors[0]))
+        b = np.sqrt(np.inner(latticeVectors[1], latticeVectors[1]))
+        c = np.sqrt(np.inner(latticeVectors[2], latticeVectors[2]))
+        adotb = np.inner(latticeVectors[0], latticeVectors[1])
+        adotc = np.inner(latticeVectors[0], latticeVectors[2])
+        bdotc = np.inner(latticeVectors[1], latticeVectors[2])
         alpha = np.arccos(bdotc / b / c) * 180.0 / np.pi
         beta = np.arccos(adotc / a / c) * 180.0 / np.pi
         gamma = np.arccos(adotb / a / b) * 180.0 / np.pi
@@ -355,15 +493,41 @@ def vectors_to_parameters(Amat, verb=False):
 class RandomNumberGenerator:
     """To generate random numbers."""
 
-    def __init__(self, seed):
+    def __init__(self, seed: int):
+
+        """
+        Constructor for the RandomNumberGenerator class.
+
+        Parameters
+        ----------
+        seed : int
+            The seed for the random number generator.
+        """
+
         self.a = 321
         self.b = 231
         self.c = 13
         self.seed = seed
         self.status = seed * 1000
 
-    def generate(self, low, high):
-        """Get a random real number in between low and high."""
+    def generate(self, low: float, high: float) -> float:
+
+        """
+        Get a random real number in between low and high.
+
+        Parameters
+        ----------
+        low : float
+            The lower bound of the random number.
+        high : float
+            The upper bound of the random number.
+
+        Returns
+        -------
+        rand : float
+            The random number.
+        """
+
         w = high - low
         place = self.a * self.status
         place = int(place / self.b)
@@ -1058,7 +1222,6 @@ def get_hindex(orbs_for_every_symbol, symbols, types, verb=False):
             msg = "No number of orbitals provided for species " + symbol \
                     +", Using maxbonds in periodic table instead"
             warning_at("get_hindex",msg)
-
         numel_for_atom = ptable.numel[atomic_number]
         norbs_for_every_type[cnt] = norbs_for_atom
         numel_for_every_type[cnt] = numel_for_atom

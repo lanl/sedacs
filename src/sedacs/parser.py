@@ -12,7 +12,24 @@ import numpy as np
 class Input:
     """Simple input parser"""
 
-    def __init__(self, fileName, verb=False):
+    def __init__(self,
+                 fileName: str,
+                 verb: bool = False):
+        """
+        Constructor for the Input class.
+
+        Parameters
+        ----------
+        fileName : str
+            The name of the input file. 
+        verb : bool
+            Whether to print the input variables.
+
+        Returns
+        -------
+        None
+        """
+
         if verb:
             print("\nInput variables:")
         ## Keys and values read from the input file
@@ -113,7 +130,25 @@ class Input:
     # @brief Will check to make sure there are only valid key name in the input
     # @return keyVals A dictionary where values are list of characters after the key
     # @param validKeys A list with all the valid accumulated key names
-    def validate_keys(self, keyVals, validKeys):
+    def validate_keys(self,
+                      keyVals: dict,
+                      validKeys: list) -> bool:
+        """
+        Check all the key names.
+
+        Parameters
+        ----------
+        keyVals : dict
+            A dictionary where values are list of characters after the key.
+        validKeys : list
+            A list with all the valid accumulated key names.
+
+        Returns
+        -------
+        err : bool
+            Whether there are only valid key names in the input.
+
+        """
         for key in keyVals.keys():
             err = True
             for valid in validKeys:
@@ -149,7 +184,6 @@ class Input:
                         else:
                             break
                     keyVals.update({key: listIn})
-        myFile.close()
         return keyVals
 
     ## Get a string

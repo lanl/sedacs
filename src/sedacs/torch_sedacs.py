@@ -6,7 +6,6 @@ import time
 MPI = None
 try:
     from mpi4py import MPI
-
     is_mpi_available = True
 except ImportError:
     is_mpi_available = False
@@ -16,7 +15,7 @@ import torch
 import torch.nn.functional as tf
 
 from sedacs.system import collect_matrix_from_chunks, get_volBox
-
+from typing import Union
 
 ## Neighbor list
 # @brief It will bild a neighbor list using an "all to all" approach
@@ -25,12 +24,50 @@ from sedacs.system import collect_matrix_from_chunks, get_volBox
 # @param nl neighbor list type: a simple 2D array indicating the neighbors of each atom.
 # @param rank MPI rank
 #
-def build_nlist_torch(coords, latticeVectors, rcut, device=torch.device("cpu"), rank=0, numranks=1, verb=False):
+def build_nlist_torch(coords: np.ndarray,
+                      latticeVectors: np.ndarray,
+                      rcut: float,
+                      device=torch.device("cpu"),
+                      rank: int = 0,
+                      numranks: int = 1,
+                      verb: bool = False,
+                      comm=None):
+    
+    """
+
+    Builds a neighborlist as atorch tensor in an all-to-all fashion. Units between
+    coords, latticeVectors, and rcut are not enforced to a particular convention,
+    but they must be consistent with one another.
+
+    Parameters
+    ----------
+    coords: np.ndarray (Natoms, 3)
+        Cartesian coordinates for the atoms in the system.
+    latticeVectors: np.ndarray (3, 3)
+        Cell vectors. This only works for orthorhombic boxes (but still
+        requires cells in full format).
+    rcut: float
+        Radial cutoff for the neighborlist.
+    verb: bool
+        Controls the verbosity of the neighblorlist generation routine.
+    comm: None or an MPI communicator.
+        MPI communicator.
+        TODO handle typing better for this scenario where the user doesn't have a
+        parallelized Python interpreter.
+
+    Returns
+    -------
+    nl: torch.Tensor (Natoms, _)
+
+    
+    """
+
     if verb:
         print("Building neighbor list ...")
 
     nats = len(coords[:, 0])
     if numranks > 1:
+        print("NUM RNAKS", numranks)
         comm = MPI.COMM_WORLD
     natsPerRank = int(nats / numranks)
     if rank == numranks - 1:
@@ -154,7 +191,12 @@ def build_nlist_torch(coords, latticeVectors, rcut, device=torch.device("cpu"), 
         # nlVect = boxneighs[np.where(np.logical_and(distance < rcut,distance > 1.0E-12))]
         nlVect = nlVect[nlVect != -1]
         nlVect = nlVect[nlVect != i]
-        cnt = len(nlVect)
+
+        # cnt bug?
+        print(nlVect.shape)
+        cnt = len(nlVect[i])
+
+
         # Format and pad the list
         nlVect = tf.pad(nlVect, (1, maxneigh - cnt - 1), "constant", value=0)
         nlVect[0] = cnt
@@ -202,7 +244,12 @@ def build_nlist_torch(coords, latticeVectors, rcut, device=torch.device("cpu"), 
         nlVect = torch.where(nlMask, boxneighs, -1)
         nlVect, indices = torch.sort(nlVect, axis=1, descending=True)
         nlVect = tf.pad(nlVect, (1, maxneigh - nlVect.shape[1] - 1), "constant", value=0)
-        nlVect[:, 0] = torch.count_nonzero(nlMask, axis=1)
+
+        # Just sum over the zero components in the +1 shifted tensor.
+        nlVect[:, 0] = torch.count_nonzero(nlVect + 1, axis=1)
+        # Leaving the old code in case there is some unintended change here
+        # nlVect[:, 0] = torch.count_nonzero(nlMask, axis=1)
+
         t_build_nlvect = time.perf_counter() - tic
 
         # Copy the neighbor list back to the host
@@ -244,7 +291,7 @@ def build_nlist_torch(coords, latticeVectors, rcut, device=torch.device("cpu"), 
 
     # Gather the neighbor list
     nl = np.empty([nats, maxneigh], dtype=int)
-    if is_mpi_available:
+    if is_mpi_available and comm is not None:
         tic = time.perf_counter()
         nl = collect_matrix_from_chunks(nlChunk, nats, natsPerRank, rank, numranks, comm)
         t_gather_nl = time.perf_counter() - tic
@@ -259,3 +306,4 @@ def build_nlist_torch(coords, latticeVectors, rcut, device=torch.device("cpu"), 
     # comm.Allgather(nlTrChunkZ,nlTrZ)
 
     return nl
+

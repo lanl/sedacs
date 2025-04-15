@@ -5,7 +5,7 @@ This program was produced under U.S. Government contract 89233218CNA000001 for L
 
 extern "C"
 {
-    void dm_diag(double *, double *, double, int, int);
+    void dm_diag(double *, double *, double, int, int, double);
 }
 
 extern "C"

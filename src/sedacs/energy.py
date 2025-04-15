@@ -1,4 +1,4 @@
-from sedacs.interface_pyseqm import get_nucAB_energy_pyseqm, get_total_energy_pyseqm
+from sedacs.interface.pyseqm import get_nucAB_energy_pyseqm, get_total_energy_pyseqm
 import torch
 
 __all__ = ["get_fock"]

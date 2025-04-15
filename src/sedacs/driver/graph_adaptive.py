@@ -9,7 +9,7 @@ print('num_threads',torch.get_num_threads())
 from sedacs.density_matrix import get_density_matrix, get_initDM, get_dmErrs, get_dmTrace
 from sedacs.density_matrix_renorm import get_density_matrix_renorm
 from sedacs.energy import get_eNuc, get_eTot
-from sedacs.molSysData import get_molSysData
+from sedacs.mol_sys_data import get_molSysData
 from sedacs.file_io import write_pdb_coordinates, write_xyz_coordinates
 from sedacs.graph_partition import get_coreHaloIndices, graph_partition, get_coreHaloIndicesPYSEQM
 
@@ -26,7 +26,7 @@ import numpy as np
 from sedacs.evals import get_eVals
 from sedacs.chemical_potential import get_mu
 from sedacs.graph import get_initial_graph, update_dm_contraction, get_ch_graph, get_maskd, collect_graph_from_rho, collect_graph_from_rho_PYSEQM, add_graphs, print_graph, add_mult_graphs
-from sedacs.interface_pyseqm import get_coreHalo_ham_inds, get_diag_guess_pyseqm, pyseqmObjects, get_molecule_pyseqm
+from sedacs.interface.pyseqm import get_coreHalo_ham_inds, get_diag_guess_pyseqm, pyseqmObjects, get_molecule_pyseqm
 import itertools
 import sys
 import psutil
