@@ -1,21 +1,13 @@
-"""Chemical potential. This module will handle functions 
+"""
+chemical_potential.py
+====================================
+Chemical potential. This module will handle functions 
 related to the computation of chemical potential or Fermi 
+Dirac distribution.
+
 """
 
-import os
-import sys
-
 import numpy as np
-import scipy.linalg as sp
-import sedacs.driver
-from sedacs.dev.io import src_path
-from hamiltonian_elements import *
-from sedacs.file_io import read_coords_file, write_xyz_coordinates
-from dnnprt import *
-from proxy_global import *
-from hamiltonian_random import get_random_hamiltonian
-from hamiltonian_random import get_random_coordinates
-from hamiltonian_random import RandomNumberGenerator
 
 
 __all__ = [
@@ -165,50 +157,6 @@ def estimate_mu(ham,etemp,nocc,kB=8.61739e-5,verb=False):
 
     return mu
 
-
-if __name__ == "__main__":
-
-    n = len(sys.argv)
-
-    if n == 1:
-        print("Give the total number of elements. Example:\n")
-        print("proxy_a 100\n")
-        sys.exit(0)
-    else:
-        norbs = int(sys.argv[1])
-
-    verb = True
-
-    #Build random coordinates
-    coords = get_random_coordinates(norbs)
-
-    #Build random Hamiltonian (Anders' version)
-    ham = get_random_hamiltonian(coords)
-    
-    print("\n Hamiltonan:")
-    print(ham)
-
-    nocc = 0.5*norbs
-    etemp = 10000
-
-    #Scale the diagonal elements
-    scalingFactor = 1.0
-    for i in range(norbs):
-        ham[i,i] = scalingFactor*ham[i,i]
-
-    #Estimate mu from the diagonal elements of H
-    muEst = estimate_mu(ham,etemp,nocc,kB=8.61739e-5)
-    print("\n Estimated mu:",muEst)
-
-    #Get eigenvalues and eigenvectors
-    evals, evects = sp.eigh(ham)
-   
-    #Compute exact mu
-    mu0 = 0.0
-    muReal = get_mu(mu0,evals,etemp,nocc,dvals=None,verb=True)
-    print("\n Exact mu:",muEst)
-
-    print("\n Realative error of mu estimation",abs((muReal - muEst)/muReal))
     
 
 

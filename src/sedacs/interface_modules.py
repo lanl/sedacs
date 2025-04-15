@@ -43,7 +43,7 @@ try:
     from proxies.python.hamiltonian import build_coul_ham_proxy
 except Exception as e:
     pythlib = None
-    raise e
+    #raise e
 
 
 __all__ = [
