@@ -78,7 +78,7 @@ def get_evals_dvals(
     # Tight interface using modules or an external code compiled as a library
     elif eng.interface == "Module":
         # We will call proxyA directly as it will be loaded as a module.
-        evals, dvals = get_evals_dvals_modules(
+        evects, evals, dvals = get_evals_dvals_modules(
             eng,
             partIndex,
             nparts,
@@ -99,4 +99,4 @@ def get_evals_dvals(
             "ERROR!!!: Interface type not recognized. Use any of the following: Module,File,Socket,MDI"
         )
 
-    return evals, dvals
+    return evects, evals, dvals

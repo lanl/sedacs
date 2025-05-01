@@ -100,7 +100,7 @@ def collect_charges(chargesOnRank, charges, part, nats, verb=False):
 
     Returns
     -------
-    1D numpy array
+    chargesOnRank : 1D numpy array
         Returns the same vector chargesOnRank with the
         added charges of the part
     """

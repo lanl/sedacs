@@ -37,13 +37,13 @@ if (not fortlib) and (not pylib):
 try:
     from proxies.python.hamiltonian import get_hamiltonian_proxy
     from proxies.python.density_matrix import get_density_matrix_proxy
-    from proxies.python.evals_dvals import get_evals_dvals_proxy
+    #from proxies.python.evals_dvals import get_evals_dvals_proxy
 
     from proxies.python.init_proxy import init_proxy_proxy
     from proxies.python.hamiltonian import build_coul_ham_proxy
 except Exception as e:
     pythlib = None
-    #raise e
+    raise e
 
 
 __all__ = [
@@ -174,6 +174,8 @@ def get_hamiltonian_module(
         The non-SCF Hamiltonian matrix.
     overlap: 2D numpy array, dtype: float, optional
         The overlap matrix, if requested.
+    zmat: 2D numpy array, dtype: float, optional
+        The congruence transform comes with overlap matrix, if requested.
     """
     if eng.name == "ProxyAPython":
         if get_overlap:
@@ -184,6 +186,7 @@ def get_hamiltonian_module(
             hamiltonian = get_hamiltonian_proxy(
                 coords, types, symbols, get_overlap=get_overlap, verb=verb
             )
+        zmat = None
 
     elif eng.name == "ProxyAFortran":
         nats = len(coords[:, 0])
@@ -257,6 +260,8 @@ def get_hamiltonian_module(
         forcesFlat_out = np.zeros(3 * nats)  # Vectorized forces
         hamFlat_out = np.zeros(norbs * norbs)  # Vectorized hamiltonian
         overFlat_out = np.zeros(norbs * norbs)  # Vectorized overlap
+        zmatFlat_out = np.zeros(norbs * norbs)  # Vectorized congruence transform 
+        evectsFlat_out = np.zeros(norbs * norbs)  # Vectorized eigenvectors 
         dmFlat_out = np.zeros(norbs * norbs)  # Vectorized density matrix
         evalsFlat_out = np.zeros(norbs)  # We call this one Flat just for consistency
         dvalsFlat_out = np.zeros(norbs)  # Same here
@@ -296,6 +301,8 @@ def get_hamiltonian_module(
         # Getting pointers to the output arrays
         ham_ptr = hamFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         over_ptr = overFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+        zmat_ptr = zmatFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+        evects_ptr = evectsFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         dm_ptr = dmFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         charges_ptr = chargesFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         evals_ptr = evalsFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
@@ -321,6 +328,8 @@ def get_hamiltonian_module(
             atomicNumbers_ptr,
             ham_ptr,
             over_ptr,
+            zmat_ptr,
+            evects_ptr,
             dm_ptr,
             charges_ptr,
             evals_ptr,
@@ -335,16 +344,18 @@ def get_hamiltonian_module(
         # Initializing 2D numpy arrays for the hamiltonian and overlap matrices
         hamiltonian = np.zeros((norbs, norbs))
         overlap = np.zeros((norbs, norbs))
+        zmat = np.zeros((norbs, norbs))
         # Filling the hamiltonian and overlap matrices with the flattened output arrays from the Fortran function
         for i in range(norbs):
             hamiltonian[:, i] = hamFlat_out[norbs * i : norbs + norbs * i]
             overlap[:, i] = overFlat_out[norbs * i : norbs + norbs * i]
+            zmat[:, i] = zmatFlat_out[norbs * i : norbs + norbs * i]
 
     else:
         error_at("get_hamiltonian_module", "No specific engine type defined")
 
     if get_overlap:
-        return hamiltonian, overlap
+        return hamiltonian, overlap, zmat
     else:
         return hamiltonian
 
@@ -407,6 +418,8 @@ def get_evals_dvals_modules(
 
     Returns
     -------
+    evects: 2D numpy array, dtype: float
+        The eigenvectors of the input hamiltonian matrix.
     evals: 1D numpy array, dtype: float
         The eigenvalues of the input hamiltonian matrix, if requested.
     dvals: 1D numpy array, dtype: float
@@ -459,6 +472,8 @@ def get_evals_dvals_modules(
         forcesFlat_out = np.zeros(3 * nats)  # Vectorized forces
         hamFlat_out = np.zeros(norbs * norbs)  # Vectorized hamiltonian
         overFlat_out = np.zeros(norbs * norbs)  # Vectorized overlap
+        zmatFlat_out = np.zeros(norbs * norbs)  # Vectorized congruence transform 
+        evectsFlat_out = np.zeros(norbs * norbs)  # Vectorized eigenvectors 
         dmFlat_out = np.zeros(norbs * norbs)  # Vectorized density matrix
         evalsFlat_out = np.zeros(norbs)  # We call this one Flat just for consistency
         dvalsFlat_out = np.zeros(norbs)  # Same here
@@ -496,6 +511,8 @@ def get_evals_dvals_modules(
         # Getting pointers to the output arrays
         ham_ptr = hamFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         over_ptr = overFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+        zmat_ptr = zmatFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+        evects_ptr = evectsFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         dm_ptr = dmFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         charges_ptr = chargesFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         evals_ptr = evalsFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
@@ -522,6 +539,8 @@ def get_evals_dvals_modules(
             atomicNumbers_ptr,
             ham_ptr,
             over_ptr,
+            zmat_ptr,
+            evects_ptr,
             dm_ptr,
             charges_ptr,
             evals_ptr,
@@ -539,8 +558,14 @@ def get_evals_dvals_modules(
         # Filling the eigenvalues and dvals arrays with the output arrays from the Fortran function
         evals[:] = evalsFlat_out[:]
         dvals[:] = dvalsFlat_out[:]
+        # Initializing 2D numpy arrays for the eigenvectors
+        evects = np.zeros((norbs, norbs))
+        # Filling the hamiltonian and overlap matrices with the flattened output arrays from the Fortran function
+        for i in range(norbs):
+            evects[:, i] = evectsFlat_out[norbs * i : norbs + norbs * i]
 
-    return evals, dvals
+
+    return evects, evals, dvals
 
 
 def get_density_matrix_modules(
@@ -705,6 +730,8 @@ def get_density_matrix_modules(
         forcesFlat_out = np.zeros(3 * nats)  # Vectorized forces
         hamFlat_out = np.zeros(norbs * norbs)  # Vectorized hamiltonian
         overFlat_out = np.zeros(norbs * norbs)  # Vectorized overlap
+        zmatFlat_out = np.zeros(norbs * norbs)  # Vectorized congruence transform 
+        evectsFlat_out = np.zeros(norbs * norbs)  # Vectorized eigenvectors 
         dmFlat_out = np.zeros(norbs * norbs)  # Vectorized density matrix
         evalsFlat_out = np.zeros(norbs)  # We call this one Flat just for consistency
         dvalsFlat_out = np.zeros(norbs)  # Same here
@@ -742,6 +769,8 @@ def get_density_matrix_modules(
         # Getting pointers to the output arrays
         ham_ptr = hamFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         over_ptr = overFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+        zmat_ptr = zmatFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+        evects_ptr = evectsFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         dm_ptr = dmFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         charges_ptr = chargesFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         evals_ptr = evalsFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
@@ -768,6 +797,8 @@ def get_density_matrix_modules(
             atomicNumbers_ptr,
             ham_ptr,
             over_ptr,
+            zmat_ptr,
+            evects_ptr,
             dm_ptr,
             charges_ptr,
             evals_ptr,
@@ -931,6 +962,8 @@ def get_energy_forces_modules(
         forcesFlat_out = np.zeros(3 * nats)  # Vectorized forces
         hamFlat_out = np.zeros(norbs * norbs)  # Vectorized hamiltonian
         overFlat_out = np.zeros(norbs * norbs)  # Vectorized overlap
+        zmatFlat_out = np.zeros(norbs * norbs)  # Vectorized congruence transform 
+        evectsFlat_out = np.zeros(norbs * norbs)  # Vectorized eigenvectors 
         dmFlat_out = np.zeros(norbs * norbs)  # Vectorized density matrix
         evalsFlat_out = np.zeros(norbs)  # We call this one Flat just for consistency
         dvalsFlat_out = np.zeros(norbs)  # Same here
@@ -968,6 +1001,8 @@ def get_energy_forces_modules(
         # Getting pointers to the output arrays
         ham_ptr = hamFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         over_ptr = overFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+        zmat_ptr = zmatFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+        evects_ptr = evectsFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         dm_ptr = dmFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         charges_ptr = chargesFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         evals_ptr = evalsFlat_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
@@ -994,6 +1029,8 @@ def get_energy_forces_modules(
             atomicNumbers_ptr,
             ham_ptr,
             over_ptr,
+            zmat_ptr,
+            evects_ptr,
             dm_ptr,
             charges_ptr,
             evals_ptr,
