@@ -117,6 +117,7 @@ def init(args):
         sy.latticeVectors, sy.symbols, sy.types, sy.coords = read_coords_file(sdc.coordsFileName, lib="None", verb=True)
         sy.nats = len(sy.coords[:, 0])
         sy.vels = np.zeros((sy.nats, 3))
+        sy.hubbard_u = np.zeros(sy.nats)
         sy.charges = np.zeros(sy.nats)
 
         # Get hindex (the orbital index for each atom in the system)
@@ -208,8 +209,9 @@ def init(args):
     fullGraph = np.zeros((sy.nats, sdc.maxDeg + 1), dtype=int)
     fullGraph[:, :] = graphNL[:, :]
 
-    #Initialize proxy/guest code
-#    init_proxy(sy.symbols,sy.orbs)
+    if "Proxy" in eng.name:
+        #Initialize proxy/guest code
+        init_proxy(sy.symbols,sy.orbs)
     eng.up = True
 
     return sdc, eng, comm, rank, numranks, sy, hindex, fullGraph, nl, nlTrX, nlTrY, nlTrZ
