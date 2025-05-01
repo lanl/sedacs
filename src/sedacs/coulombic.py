@@ -103,6 +103,7 @@ def get_PME_coulvs(
     atomtypes,
     lattice_vecs,
     calculate_forces=0,
+    device="cuda",
 ):
     """
     Get periodic Coulombic potentials using the Particle Mesh Ewald method
@@ -133,7 +134,7 @@ def get_PME_coulvs(
     """
     np_dtype = np.float64
     dtype = torch.float64
-    device = "cuda"
+
     # NOTE: cutoff <= 0.5 * min(box lengths)
     # so if box lengths are [10.0, 10.0, 10.0], cutoff shuold be at most 5.0.
     # because of the minumum image convention.
