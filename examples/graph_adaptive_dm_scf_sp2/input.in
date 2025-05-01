@@ -2,10 +2,10 @@
 
 Verbosity= True
 Threshold= 1.0E-7
-#CoordsFile= coords_1299.pdb
+CoordsFile= coords_1299.pdb
 #CoordsFile= wat.xyz
 #CoordsFile= algo.xyz
-CoordsFile= coords_2955.pdb
+#CoordsFile= coords_2955.pdb
 GraphThreshold= 0.01 
 MaxDeg= 500 #Max graph degree
 Rcut= 4.0 #Radius cutoff
@@ -17,8 +17,8 @@ SCFTol= 1.0E-1
 Overlap= False
 ElectronicTemperature= 0
 MuCalculationType=  #FromParts, Dynamical, None
-Orbitals= {"H":1,"O":4} #This has to be know for each engine
+Orbitals= {"O":4,"H":1} #This has to be know for each engine
 NumAdaptiveIter= 100 #Number of graph adaptive iterations
-Engine= {"Name":"ProxyAPython","InterfaceType":"Module","Path":"/home/cnegre/sedacs-Qi/proxies/python/","Executable":"/home/cnegre/","RhoSolverMethod":"SP2","Accelerator":"TC","AcceleratorPath":"/home/finkeljo/vescratch/sedacs-gpmdsp2/src/sedacs/gpu/nvda"} #The name of the external code
+Engine= {"Name":"ProxyAPython","InterfaceType":"Module","Path":"/home/cnegre/sedacs-Qi/proxies/python/","Executable":"/home/cnegre/","RhoSolverMethod":"SP2","Accelerator":"No","AcceleratorPath":"/home/cheng-hanli/github/sedacs_to_merge/src/sedacs/gpu/nvda"} #The name of the external code
 #Engine= {"Name":"ProxyAFortran","InterfaceType":"Module","Path":"/home/cnegre/sedacs-Qi/proxies/fortran/","Executable":"/home/cnegre/"} #The name of the external code
 
