@@ -39,9 +39,8 @@ graphDH, sy.charges, mu, parts, subSysOnRank = get_adaptiveSCFDM(
     sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu
 )
 # Perform a single-point graph-adaptive calculation of the energy and forces
-graphDH, sy.charges, energy, forces, mu, parts, subSysOnRank = get_adaptive_sp_energy_forces(
+graphDH, sy.charges, energy, forces, mu, parts, partsCoreHalo, subSysOnRank = get_adaptive_sp_energy_forces(
     sdc, eng, comm, rank, numranks, sy, hindex, graphDH, mu
 )
-
 print("total energy:", energy)
 print("forces:", forces[0])

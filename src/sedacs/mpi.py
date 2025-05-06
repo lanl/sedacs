@@ -240,6 +240,43 @@ def collect_and_sum_vectors_float(vectOnRank: ArrayLike,
     return fullVect
 
 
+def collect_and_sum_vectors_int(vectOnRank: ArrayLike,
+                                   rank: int,
+                                   numranks: int,
+                                   comm: MPI.Comm) -> ArrayLike:
+    """
+    Collect and sum vectors from all ranks.
+
+    Parameters
+    ----------
+    vectOnRank : ArrayLike
+        The vector to be collected and summed.
+    rank : int
+        The current rank number.
+    numranks : int
+        The number of execution ranks.
+    comm : MPI.Comm
+        The MPI communicator.
+
+    Returns
+    -------
+    fullVect : ArrayLike
+        The full vector.
+    """
+
+    if not mpiLib:
+
+        raise ImportError("ERROR: Consider installing mpi4py")
+
+    nDim = len(vectOnRank)
+
+    fullVect = np.zeros(nDim, dtype=int)
+
+    comm.Allreduce(vectOnRank,fullVect,op=MPI.SUM)
+
+    return fullVect
+
+
 def collect_and_concatenate_vectors(vectOnRank, comm) -> ArrayLike:
     """
     Collect and concatenate vectors from all ranks.

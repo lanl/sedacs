@@ -8,8 +8,9 @@ Graph adaptive self-consistent charge solver
 import time
 import numpy as np
 from pathlib import Path
+import pickle
 
-from sedacs.graph import add_graphs, collect_graph_from_rho, print_graph
+from sedacs.graph import add_graphs, collect_graph_from_rho, print_graph, multiply_graphs
 from sedacs.graph_partition import get_coreHaloIndices, graph_partition
 from sedacs.sdc_hamiltonian import get_hamiltonian
 from sedacs.sdc_density_matrix import get_density_matrix
@@ -142,7 +143,7 @@ def get_singlePoint_charges(
         print("Number of orbitals in the core =", norbsInCore)
         nocc = int(float(subSy.numel) / 2.0)  # Get the total occupied orbitals
 
-        ham, over = get_hamiltonian(
+        ham, over, zmat = get_hamiltonian(
             eng,
             partIndex,
             sdc.nparts,
@@ -160,7 +161,7 @@ def get_singlePoint_charges(
         print("Time for get_hamiltonian", toc - tic, "(s)")
 
         tic = time.perf_counter()
-        evalsInPart, dvalsInPart = get_evals_dvals(
+        evects, evalsInPart, dvalsInPart = get_evals_dvals(
             eng,
             partIndex,
             sdc.nparts,
@@ -303,25 +304,15 @@ def get_adaptiveSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu):
     chargesIn = None
     chargesOld = None
     chargesOut = None
-    # Get the path of the current file
-    curr_file_path = Path(__file__)
-    # Get the directory of the current file
-    curr_dir = curr_file_path.parent
-    # Get the path of latte parameters
-    latte_param_path = curr_dir / Path(
-        "../../../parameters/latte/TBparam/electrons.dat"
+    # Partition the graph
+    parts = graph_partition(
+        sdc, eng, fullGraph, sdc.partitionType, sdc.nparts, sy.coords, True
     )
-    latte_tbparams = read_latte_tbparams(latte_param_path)
-    hubbard_u = [latte_tbparams[symbol]["HubbardU"] for symbol in sy.symbols]
-    hubbard_u = np.array(hubbard_u)[sy.types]
     for gscf in range(sdc.numAdaptIter):
         msg = "Graph-adaptive iteration" + str(gscf)
         status_at("get_adaptiveSCFDM", msg)
-        # Partition the graph
-        parts = graph_partition(
-            sdc, eng, fullGraph, sdc.partitionType, sdc.nparts, sy.coords, True
-        )
-        njumps = 2
+        
+        njumps = 1
         partsCoreHalo = []
         numCores = []
         # print("\nCore and halos indices for every part:")
@@ -335,7 +326,7 @@ def get_adaptiveSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu):
             sy.coulvs = np.zeros(len(charges))
         else:
             sy.coulvs, ewald_e = get_PME_coulvs(
-                charges, hubbard_u, sy.coords, sy.types, sy.latticeVectors
+                charges, sy.hubbard_u, sy.coords, sy.types, sy.latticeVectors
             )
 
         fullGraphRho, charges, subSysOnRank, mu = get_singlePoint_charges(
@@ -344,15 +335,23 @@ def get_adaptiveSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu):
         # print("Collected charges", charges)
 
         scfError, charges, chargesOld, chargesIn, chargesOut = diis_mix(
-            charges, chargesOld, chargesIn, chargesOut, gscf, verb=True
+            charges, chargesOld, chargesIn, chargesOut, gscf, verb=False
         )
         # scfError,charges,chargesOld = linear_mix(0.25,charges,chargesOld,gscf)
         # if gscf == 0:
         #    scfError = sy.numel
 
         # print_graph(fullGraphRho)
-
-        fullGraph = add_graphs(fullGraphRho, graphNL)
+        # fullGraph = add_graphs(fullGraphRho, graphNL)
+        fullGraph = multiply_graphs(fullGraphRho, graphNL)
+        # with open('graphNL.pkl', 'wb') as f:
+        #     pickle.dump(graphNL, f)
+        # with open('fullGraphRho.pkl', 'wb') as f:
+        #     pickle.dump(fullGraphRho, f)
+        # with open('fullGraph.pkl', 'wb') as f:
+        #     pickle.dump(fullGraph, f)
+        # if gscf == 1:
+        #     breakpoint()
         for i in range(sy.nats):
             print("Charges:", i, sy.symbols[sy.types[i]], charges[i])
         print("SCF ERR =", scfError)
@@ -386,4 +385,4 @@ def get_adaptiveSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu):
             "subSyG_fin.xyz", subSy.coords, subSy.types, subSy.symbols
         )
 
-    return fullGraph, charges, mu, parts, subSysOnRank
+    return fullGraph, charges, mu, parts, partsCoreHalo, subSysOnRank

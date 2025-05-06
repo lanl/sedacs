@@ -81,7 +81,7 @@ def print_graph(graph):
         nodesList = []
         for k in range(1, graph[i, 0] + 1):
             if graph[i, k] != -1:
-                nodesList.append(graph[i, k])
+                nodesList.append(int(graph[i, k]))
         print(i, "(", graph[i, 0], ")", "-", nodesList)
 
 
@@ -302,7 +302,8 @@ def collect_graph_from_rho(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos,
             for j in range(nch):
                 jj = indicesCoreHalos[j]
                 for oj in range(hindex[jj], hindex[jj + 1]):
-                    weights[jj] = weights[jj] + abs(rho[ki, kj])
+                    if abs(rho[ki, kj]) >= thresh: # Elementwise truncation test Anders
+                        weights[jj] = weights[jj] + abs(rho[ki, kj])
                     kj = kj + 1
             ki = ki + 1
 
@@ -409,28 +410,37 @@ def add_mult_graphs(graphs):
 # @param graphA Initial adjacency
 # @param graphB Initial adjacency
 # @return graphC Multiplication result
-def multiply_graphs():
+def multiply_graphs(graphA, graphB):
     if len(graphA[:, 0]) != len(graphB[:, 0]):
         print("!!!ERROR: Graphs have different number of nodes")
     else:
         nnodes = len(graphA[:, 0])
         maxDeg = len(graphA[0, :])
 
+    vectC = np.zeros((nnodes), dtype=bool)
+    graphC = np.zeros((nnodes, maxDeg), dtype=int)
     for i in range(nnodes):
-        myVect[:] = False
-        for j in range(1, graphA[i, 0]):
+        vectC[:] = False
+        for j in range(1, graphB[i, 0] + 1):
+            myK = graphB[i, j]
+            vectC[myK] = True
+        for j in range(1, graphA[i, 0] + 1):
             myK = graphA[i, j]  # All neighbors of i by A
-            for k in range(1, graphB[myK, 0]):
+            vectC[myK] = True
+            for k in range(1, graphB[myK, 0] + 1):
                 myJ = graphB[myK, k]  # All neighbors of myK by B
                 if i != myJ:
+                    # print(i, myJ)
                     vectC[myJ] = True
 
         k = 0
-        for j in range(1, nnodes):
+        for j in range(nnodes):
             if vectC[j]:
                 k = k + 1
                 graphC[i, k] = j
         graphC[i, 0] = k
+
+    return graphC
 
 
 # Get a small graph (>-<)
@@ -616,4 +626,13 @@ def convert_to_adjacency_matrix(graph, graphType='sedacs'):
         return adj
 
 
+def convert_to_graph(adj, maxDeg):
+    nNodes = adj.shape[0]
 
+    graph = np.zeros((nNodes, maxDeg), dtype = int)
+    for i in range(nNodes):
+        connections = adj[i,:].nonzero()[0]
+        graph[i,1:1+len(connections)] = connections[0:len(connections)]
+        graph[i,0] = len(connections)
+
+    return graph
