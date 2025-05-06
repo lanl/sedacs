@@ -26,7 +26,6 @@ from sedacs.mpi import (
 from sedacs.system import System, extract_subsystem, get_hindex
 from sedacs.coulombic import get_PME_coulvs, build_coul_ham
 from sedacs.charges import get_charges, collect_charges
-from sedacs.kernel import collect_kernel
 from sedacs.evals_dvals import collect_evals, collect_dvals
 from sedacs.message import status_at, error_at, warning_at
 from sedacs.mixer import diis_mix, linear_mix
