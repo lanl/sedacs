@@ -36,6 +36,8 @@ import copy
 from seqm.seqm_functions.pack import pack
 import gc
 import numpy as np
+from sedacs.engine import Engine
+
 try:
     from mpi4py import MPI
     is_mpi_available = True
@@ -43,127 +45,283 @@ except ModuleNotFoundError:
     is_mpi_available = False
 __all__ = ["get_occ_singlePoint", "get_adaptiveSCFDM"]
 
-# @brief Construct a connectivity graph based on constructing density matrices of parts of the system.
-def get_singlePoint(sdc, eng,  partsPerGPU, partsPerNode, node_id, node_rank, rank, gpu_comm, parts, partsCoreHalo, sy, hindex, mu0,
-                    molecule_whole, P_contr, graph_for_pairs, graph_maskd):
-    '''
-    Function calculates CH hamiltonians (ham), then eVals and dVals on each rank of gpu_comm.
-    Then it gathers everything on global rank 0, computes chemical potential mu0.
+def get_singlePoint(sdc,
+                    eng,
+                    partsPerGPU,
+                    partsPerNode,
+                    node_id,
+                    node_rank,
+                    rank,
+                    gpu_comm,
+                    parts,
+                    partsCoreHalo,
+                    sy,
+                    hindex,
+                    mu0,
+                    molecule_whole,
+                    P_contr,
+                    graph_for_pairs,
+                    graph_maskd):
+    """
+    Function calculates CH hamiltonians (ham), then eVals and dVals on each
+    rank of gpu_comm. Then it gathers everything on global rank 0, computes
+    chemical potential mu0.
+
+    Note that in this context:
+    eVals -> Eigenvalues
+    Q     -> Eigenvectors
+    dVals -> Norm over the *CORE PART* of the Eigenvectors, Q.
+
+    Parameters
+    ----------
+
     sdc:
-    eng:
-    partsPerGPU: number of CH processed by one rank.
-    partsPerNode: number of CH processed on one node.
+        The SEDACS driver.
+    eng: Engine
+        The SEDACS engine.
+
+    partsPerGPU:
+        number of CH processed by one rank.
+    partsPerNode:
+        number of CH processed on one node.
     node_id:
-    node_rank: local rank on a node. E.g., for [0,1,2,3] [4,5,6,7], global rank 4 is local rank 0.
-    rank: global rank
-    gpu_comm: global communicator for ranks with GPU.
-    If on CPU, all ranks are involved. gpu_comm is identical to master comm. 
-    If on GPU and num_gpus (per node) == node_numranks, gpu_comm is identical to master comm.
-    If on GPU and num_gpus (per node) <= node_numranks, gpu_comm is different form master comm. For example, 8 ranks on two nodes [0,1,2,3] and [4,5,6,7] with 2 GPUs per node. In that case, only ranks [0,1] and [4,5] are involved. They, however, become [0,1] [2,3] within gpu_comm.
-    parts: list of cores
-    partsCoreHalo: list of core+halo
+        Current node identifier.
+    node_rank:
+        Local rank on a node. E.g., for [0,1,2,3] [4,5,6,7],
+        global rank 4 is local rank 0.
+    rank:
+        Global rank.
+    gpu_comm:
+        Global communicator for ranks with GPU.
+        If on CPU, all ranks are involved. gpu_comm is identical to master comm
+        If on GPU and num_gpus (per node) == node_numranks, gpu_comm is
+        identical to master comm.
+        If on GPU and num_gpus (per node) <= node_numranks, gpu_comm is
+        different form master comm. For example, 8 ranks on two nodes [0,1,2,3]
+        and [4,5,6,7] with 2 GPUs per node. In that case, only ranks [0,1] and
+        [4,5] are involved. They, however, become [0,1] [2,3] within gpu_comm.
+    parts:
+        List of core indices.
+    partsCoreHalo:
+        List of core+halo indices.
     sy:
+        System object.
     hindex:
-    mu0: chemical potential
-    molecule_whole: pyseqm molecule object
-    P_contr: contracted dm. (sy.nats, sdc.maxDeg, 4,4)
-    graph_for_pairs: graph of communities. E.g. graph_for_pairs[i] is a whole CH community in which atom i is a core atom, including itself. graph_for_pairs[i][0] is a community size
-    graph_maskd: diagonal mask for P_contr
-    '''
-    ### Instead of this:
-    # partIndex1 = rank * partsPerRank
-    # partIndex2 = (rank + 1) * partsPerRank
-    ### we do this because there might be fewer GPUs per node than ranks per node.
+        Atom->orbtial index mapping.
+    mu0:
+        The chemical potential.
+    molecule_whole:
+        PYSEQM Molecule object.
+    P_contr:
+        Contracted density matrix. (sy.nats, sdc.maxDeg, 4, 4)
+    graph_for_pairs:
+        Graph of communities. E.g. graph_for_pairs[i] is a whole CH community
+        in which atom i is a core atom, including itself. graph_for_pairs[i][0]
+        is a community size.
+    graph_maskd:
+        Diagonal mask for the contracted density matrix, P_contr.
+    """
+    # Handles the scenario where N_GPU < N_ranks_per_node
     partIndex1 = (node_rank) * partsPerGPU + node_id*partsPerNode
     partIndex2 = (node_rank + 1) * partsPerGPU + node_id*partsPerNode
 
-    if sdc.UHF: # open shell
+    # All arrays in thsi code block are flattened 1D numpy arrays.
+    if sdc.UHF:  # Open shell calculation.
         dValOnRank = np.empty((2, 0))
-        eValOnRank = np.empty((2, 0)) # this will store flattened eVals for all CH. 1d np array.
-    else: # closed shell
-        dValOnRank = np.array([]) # this will store flattened dVals for all CH. 1d np array. For mu0
-        eValOnRank = np.array([]) # this will store flattened eVals for all CH. 1d np array.
-    eValOnRank_list = [] # this will store eVals arranged per CH. List of 1D torch tensors. For mu0 and later for dm
-    dValOnRank_list = [] # this will store dVals arranged per CH. List of 1D torch tensors. For mu0 and later for dm
-    Q_list = [] # Eigenvectors for each part
-    Nocc_list = [] # Number of occupied orbitals for each part. It's not used in thermal HF but lets keep this option.
-    core_indices_in_sub_expanded_list = [] # Indices of core hamiltonian in core+halo hamiltonian. Might be useful when core and halo atoms are shuffled to stay sorted, like in PySEQM.
-    NH_Nh_Hs_list = [] # list of [number_of_heavy_atoms, number_of_hydrogens, dim_of_coreHalo_ham, nocc]
-    EELEC = 0.0 # this will sum electronic energy of CHs on the current rank
+        eValOnRank = np.empty((2, 0))
+    else:  # Closed shell calculation.
+        dValOnRank = np.array([])
+        eValOnRank = np.array([])
+
+    # eVals and dVals arranged for each Core-Halo. These are given as a List of
+    # torch Tensors. These are needed for mu0, and later for the density matrix
+    eValOnRank_list = []
+    dValOnRank_list = []
+
+    # Eigenvectors for each partition
+    Q_list = []
+
+    # Number of occupied orbitals for each partition.
+    # NOTE: This is not used for thermal HF.
+    Nocc_list = []
+
+    # Indices of core hamiltonian in core+halo hamiltonian. Might be useful
+    # when core and halo atoms are shuffled to stay sorted, like in PySEQM.
+    core_indices_in_sub_expanded_list = []
+
+    # List -> [number_heavy_atoms, number_hydrogens, dim_H_C+H, N_occupied.
+    NH_Nh_Hs_list = []
+
+    # Result for the summed eletronic energies of C+Hs on the current rank.
+    EELEC = 0.0
+
+    # Loop over the partitions allocated to the current rank.
     for partIndex in range(partIndex1, partIndex2):
+
         ticHam = time.perf_counter()
-        #print("\n Rank, part", rank, partIndex)
+
+        # Extract the subsystem information. (CORE + HALO).
         subSy = System(len(partsCoreHalo[partIndex]))
         subSy.symbols = sy.symbols
-        subSy.coords, subSy.types = extract_subsystem(sy.coords, sy.types, sy.symbols, partsCoreHalo[partIndex])
+        subSy.coords, subSy.types = extract_subsystem(sy.coords,
+                                                      sy.types,
+                                                      sy.symbols,
+                                                      partsCoreHalo[partIndex])
 
+        # Extract the subsystem information. (CORE ONLY).
         subSyCore = System(len(parts[partIndex]))
         subSyCore.symbols = sy.symbols
-        subSyCore.coords,subSyCore.types = extract_subsystem(sy.coords,sy.types,sy.symbols,parts[partIndex])
+        subSyCore.coords, subSyCore.types = extract_subsystem(sy.coords,
+                                                              sy.types,
+                                                              sy.symbols,
+                                                              parts[partIndex])
 
         if sdc.writeGeom:
-            partFileName = "subSy" + str(rank) + "_" + str(partIndex) + ".pdb"
-            write_pdb_coordinates(partFileName, subSy.coords, subSy.types, subSy.symbols)
-            write_xyz_coordinates("subSy" + str(rank) + "_" + str(partIndex) + ".xyz", subSy.coords, subSy.types, subSy.symbols)
-            partCoreFileName = "CoreSubSy"+str(rank)+"_"+str(partIndex)+".pdb"
-            write_pdb_coordinates(partCoreFileName,subSyCore.coords,subSyCore.types,subSyCore.symbols)
-            write_xyz_coordinates("CoreSubSy"+str(rank)+"_"+str(partIndex)+".xyz",subSyCore.coords,subSyCore.types,subSyCore.symbols)
 
-        
+            # Write subsystems to PDB and XYZ (Core+Halo)
+            partFileName = "subSy"+str(rank)+"_"+str(partIndex)+".pdb"
+            write_pdb_coordinates(partFileName,
+                                  subSy.coords,
+                                  subSy.types,
+                                  subSy.symbols)
+            write_xyz_coordinates("subSy"+str(rank)+"_"+str(partIndex)+".xyz",
+                                  subSy.coords,
+                                  subSy.types,
+                                  subSy.symbols)
+
+            # Write cores to PDB and XYZ
+            partCoreFileName = "CoreSubSy"+str(rank)+"_"+str(partIndex)+".pdb"
+            write_pdb_coordinates(partCoreFileName,
+                                  subSyCore.coords,
+                                  subSyCore.types,
+                                  subSyCore.symbols)
+            write_xyz_coordinates("CoreSubSy"+str(rank)+"_"+str(partIndex)+".xyz",
+                                  subSyCore.coords,
+                                  subSyCore.types,
+                                  subSyCore.symbols)
+
+        # Get the core indices, expandide core indices, and orbital indicies
+        # for the current subsystem.
         core_indices_in_sub, core_indices_in_sub_expanded, hindex_sub = \
-            get_coreHalo_ham_inds(parts[partIndex], partsCoreHalo[partIndex], sdc, sy, subSy, device=P_contr.device)
-        
-        # Get CH hamiltonian. If on GPU, temporarily redefine molecule_whole on GPU (its faster than transfering) and send P_contr to GPU.
-        # The idea is to have P_contr in shared memory on each node, then update in parallel on node 0.
-        # If initialized on GPU, then we'll need to transfer it back into shared memory CPU to update in parallel. Ideally, this needs to be fixed.
+            get_coreHalo_ham_inds(parts[partIndex],
+                                  partsCoreHalo[partIndex],
+                                  sdc,
+                                  sy,
+                                  subSy,
+                                  device=P_contr.device)
+
+        # Get CH hamiltonian. If on GPU, temporarily redefine molecule_whole 
+        # on GPU (its faster than transfering) and send P_contr to GPU. The
+        # idea is to have P_contr in shared memory on each node, then update in
+        # parallel on node 0. If initialized on GPU, then well need to transfer
+        # it back into shared memory CPU to update in parallel. Ideally,
+        # this needs to be fixed.
         ham_timing = {}
         if sdc.scfDevice == 'cuda':
             device = 'cuda:{}'.format(node_rank)
-            tmp_molecule_whole = get_molecule_pyseqm(sdc, sy.coords, sy.symbols, sy.types, do_large_tensors = sdc.use_pyseqm_lt, device=device)[0]
-            ham, eElec = get_hamiltonian(sdc, eng, subSy.coords, subSy.types, subSy.symbols, 
-                                  parts[partIndex], partsCoreHalo[partIndex], tmp_molecule_whole, P_contr.to(device), graph_for_pairs, graph_maskd, core_indices_in_sub_expanded, ham_timing, verbose=False)
+
+            # Get the temporary PYSEQM Molecule object for this subsystem.
+            # Simply redefine on the proper device rather than transferring
+            # molecule_whole from CPU.
+            tmp_molecule_whole = get_molecule_pyseqm(sdc,
+                                                     sy.coords,
+                                                     sy.symbols,
+                                                     sy.types,
+                                                     do_large_tensors=sdc.use_pyseqm_lt,
+                                                     device=device)[0]
+
+            # Get the Hamiltonian using the PYSEQM Molecule object for this 
+            # Core+Halo subsystem.
+            ham, eElec = get_hamiltonian(sdc,
+                                         eng,
+                                         subSy.coords,
+                                         subSy.types,
+                                         subSy.symbols,
+                                         parts[partIndex],
+                                         partsCoreHalo[partIndex],
+                                         tmp_molecule_whole,
+                                         P_contr.to(device),
+                                         graph_for_pairs,
+                                         graph_maskd,
+                                         core_indices_in_sub_expanded,
+                                         ham_timing,
+                                         verbose=False)
             del tmp_molecule_whole
+
         else:
             device = 'cpu'
-            ham, eElec = get_hamiltonian(sdc, eng,subSy.coords,subSy.types,subSy.symbols, 
-                                  parts[partIndex], partsCoreHalo[partIndex], molecule_whole, P_contr, graph_for_pairs, graph_maskd, core_indices_in_sub_expanded, ham_timing, verbose=False)
+
+            # Get the Hamiltonian using the PYSEQM Molecule object for this
+            # Core+Halo subsystem.
+            ham, eElec = get_hamiltonian(sdc,
+                                         eng,
+                                         subSy.coords,
+                                         subSy.types,
+                                         subSy.symbols,
+                                         parts[partIndex],
+                                         partsCoreHalo[partIndex],
+                                         molecule_whole,
+                                         P_contr,
+                                         graph_for_pairs,
+                                         graph_maskd,
+                                         core_indices_in_sub_expanded,
+                                         ham_timing,
+                                         verbose=False)
+
         EELEC += eElec
-
-
-        #print("TOT {:>8.3f} (s)".format(time.perf_counter() - tic))
 
         # Get eVals, dVals
         tic = time.perf_counter()
         norbs = subSy.nats
         occ = int(float(norbs) / 2.0)  # Get the total occupied orbitals. Not used.
         coreSize = len(parts[partIndex])
-        eVals, dVals, Q, NH_Nh_Hs = get_eVals(eng, sdc, sy, ham, subSy.coords, subSy.symbols, subSy.types, sdc.Tel, mu0,
-                                                core_indices_in_sub, core_indices_in_sub_expanded, hindex_sub,
-                                                coreSize, subSy, subSyCore, parts[partIndex], partsCoreHalo[partIndex], verbose=False)
+        eVals, dVals, Q, NH_Nh_Hs = get_eVals(eng,
+                                              sdc,
+                                              sy,
+                                              ham,
+                                              subSy.coords,
+                                              subSy.symbols,
+                                              subSy.types,
+                                              sdc.Tel,
+                                              mu0,
+                                              core_indices_in_sub,
+                                              core_indices_in_sub_expanded,
+                                              hindex_sub,
+                                              coreSize,
+                                              subSy,
+                                              subSyCore,
+                                              parts[partIndex],
+                                              partsCoreHalo[partIndex],
+                                              verbose=False)
         del ham
-        
+
+        # Append eVals/eVals depending on if open/closed shell.
         if sdc.UHF:
             dValOnRank = np.append(dValOnRank, dVals, axis=1)
             eValOnRank = np.append(eValOnRank, eVals.cpu().numpy(), axis=1)
         else:
             dValOnRank = np.append(dValOnRank, dVals)
             eValOnRank = np.append(eValOnRank, eVals.cpu().numpy())
+
+        # Append eVals/dVals/eigenvectors local to this rank.
         eValOnRank_list.append(eVals.cpu())
         dValOnRank_list.append(dVals)
+
+        # See above documentation for the explanation of all of these lists.
+        # These effective collect the current rank's ifnromation for the above-
+        # mentioned quantities.
         Q_list.append(Q.cpu())
         core_indices_in_sub_expanded_list.append(core_indices_in_sub_expanded)
         NH_Nh_Hs_list.append(NH_Nh_Hs)
         Nocc_list.append(occ)
-        #print("| t eVals/dVals {:>9.4f} (s)".format(time.perf_counter() - tic))
+
+        # Timing on getting the Hamiltonians.
         ham_timing['eVals/dVals'] = time.perf_counter() - tic
         ham_timing['TOT'] = time.perf_counter() - ticHam
-        #ham_timing_formatted = {key: f"{value:8.3f}" for key, value in ham_timing.items()}
         formatted_string = " | ".join(f"{key} {value:8.3f}" for key, value in ham_timing.items())
         print('Rank', rank, 'part', partIndex, ':', formatted_string)
 
-
-    ##########
-    ##########
+    # Time the MPI collection of eigenvectors.
     tic = time.perf_counter()
     if rank != 0:
         gpu_comm.send(Q_list, dest=0, tag=0)
@@ -171,12 +329,8 @@ def get_singlePoint(sdc, eng,  partsPerGPU, partsPerNode, node_id, node_rank, ra
         Q_LIST = [Q_list]
         for i in range(1, gpu_comm.Get_size()):
             Q_LIST.append(gpu_comm.recv(source=i, tag=0))
-    print("Time Q_LIST send/recv {:>9.4f} (s)".format(time.perf_counter() - tic), rank)
-
-    # tic = time.perf_counter()
-    # torch.save(Q_list, 'Q/Q_list_{}.pt'.format(rank)) #### oldR
-    # print("Time to save Q_list {:>9.4f} (s)".format(time.perf_counter() - tic), rank)
-
+    print("Time Q_LIST send/recv {:>9.4f} (s)"
+          .format(time.perf_counter() - tic), rank)
 
     tic = time.perf_counter()
     full_dVals = None
@@ -187,15 +341,24 @@ def get_singlePoint(sdc, eng,  partsPerGPU, partsPerNode, node_id, node_rank, ra
     if rank == 0:
         eValOnRank_SIZES = np.empty(gpu_comm.Get_size(), dtype=int)
 
+    # Gather eigenvalues.
     gpu_comm.Gather(eValOnRank_size, eValOnRank_SIZES, root=0)
-    if rank == 0:
-        if sdc.UHF:
-            full_dVals = np.empty((2, np.sum(eValOnRank_SIZES)), dtype=eValOnRank.dtype)
-            recvcounts = [2 * size for size in eValOnRank_SIZES]
-        else:
-            full_dVals = np.empty(np.sum(eValOnRank_SIZES), dtype=eValOnRank.dtype)
-            full_eVals = np.empty(np.sum(eValOnRank_SIZES), dtype=eValOnRank.dtype) #### oldR
 
+    # Set up full containers on Rank 0.
+    if rank == 0:
+
+        if sdc.UHF:
+            full_dVals = np.empty((2, np.sum(eValOnRank_SIZES)),
+                                  dtype=eValOnRank.dtype)
+            recvcounts = [2 * size for size in eValOnRank_SIZES]
+
+        else:
+            full_dVals = np.empty(np.sum(eValOnRank_SIZES),
+                                  dtype=eValOnRank.dtype)
+            full_eVals = np.empty(np.sum(eValOnRank_SIZES),
+                                  dtype=eValOnRank.dtype)
+
+    # Gather the actual values.
     if sdc.UHF:
         dValOnRank_flat = dValOnRank.flatten()
         gpu_comm.Gatherv(
@@ -204,22 +367,19 @@ def get_singlePoint(sdc, eng,  partsPerGPU, partsPerNode, node_id, node_rank, ra
             root=0)
     else:
         gpu_comm.Gatherv(dValOnRank, [full_dVals, eValOnRank_SIZES], root=0)
-        gpu_comm.Gatherv(eValOnRank, [full_eVals, eValOnRank_SIZES], root=0) #### oldR
+        gpu_comm.Gatherv(eValOnRank, [full_eVals, eValOnRank_SIZES], root=0)
 
+    # These are the FULL versions of the corresponding lists above. See the 
+    # above documentation for which  all of these lists are explained.
     eVal_LIST = gpu_comm.gather(eValOnRank_list, root=0)
     dVal_LIST = gpu_comm.gather(dValOnRank_list, root=0)
     NH_Nh_Hs_LIST = gpu_comm.gather(NH_Nh_Hs_list, root=0)
     core_indices_in_sub_expanded_LIST = gpu_comm.gather(core_indices_in_sub_expanded_list, root=0)
     Nocc_LIST = gpu_comm.gather(Nocc_list, root=0)
 
-    #######
-    #######
+    # Flatten the nested list of lists into a single list of tensors.
+    # There is one tensor per CH partition.
     if rank == 0:
-        # Q_LIST = []
-        # for i in range(gpu_comm.Get_size()):
-        #     Q_LIST.append(torch.load('Q/Q_list_{}.pt'.format(i)))
-
-        # Flatten the nested list of lists into a single list of tensors. One tensor per CH.
         eVal_LIST = list(itertools.chain(*eVal_LIST))
         dVal_LIST = list(itertools.chain(*dVal_LIST))
         Q_LIST = list(itertools.chain(*Q_LIST))
@@ -228,18 +388,19 @@ def get_singlePoint(sdc, eng,  partsPerGPU, partsPerNode, node_id, node_rank, ra
         Nocc_LIST = list(itertools.chain(*Nocc_LIST))
     else:
         Q_LIST = None
-    if node_rank == 0: print("| t commLists {:>9.4f} (s)".format(time.perf_counter() - tic), rank)
+
+    if node_rank == 0:
+        print("| t commLists {:>9.4f} (s)".format(time.perf_counter() - tic),
+              rank)
 
     if rank == 0:
         tic = time.perf_counter()
-        #######
-        #######
-        mu0 = get_mu(mu0, full_dVals, full_eVals, sdc.Tel, sy.numel/2) #### oldR
-
-        #mu0 = get_mu(mu0, np.concatenate(dVal_LIST, axis = -1), torch.cat(eVal_LIST, dim = -1), sdc.Tel, sy.nocc) # chemical potential calculation
+        mu0 = get_mu(mu0, full_dVals, full_eVals, sdc.Tel, sy.numel/2)  # oldR
         print("Time mu0 {:>9.4f} (s)".format(time.perf_counter() - tic))
 
-    return EELEC, eVal_LIST, Q_LIST, NH_Nh_Hs_LIST, core_indices_in_sub_expanded_LIST, Nocc_LIST, mu0
+    return (EELEC, eVal_LIST, Q_LIST,
+            NH_Nh_Hs_LIST, core_indices_in_sub_expanded_LIST,
+            Nocc_LIST, mu0)
 
 
 ## Single point calculation
