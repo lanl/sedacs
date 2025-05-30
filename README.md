@@ -76,9 +76,46 @@ The current codebase has the following folder structure:
 └── tests
 ```
 
-### `proxya`
+### `src`
 
-Proxya code as explained in the proposal. This proxy code should
+This folder contains the bulk of the SEDACS codebase. It is seperated into 
+modules where applicable. 
+
+### `docs`
+
+Brief documentation for the functionality of the code. This will be replaced 
+largely by auto-generated code from the docstrings throughout the code-base. 
+Tentatively, the docstrings are a more up-to-date place to view the docs for 
+the code.
+
+#### `driver` 
+
+The `driver` modules can be thought of to contain full examples of ~production
+level simulations using the methods implemented in the code.
+
+#### `ewald` 
+
+The `ewald` folder contains tools for solving long-range interactions in 
+periodic systems with the Ewald and Particle-mesh Ewald methods.
+
+#### `cheq` 
+
+The `cheq` folder contains the relevant code for solving chare-equilibration
+models both in the standard, and Shadow/Extended-Lagrangian formalism.
+
+#### `dev` 
+
+The `dev` folder contains some utility functions for dealing with the paths and 
+linking SEDACS to the necessary parameter sets, and/or binaries for external 
+electronic structure codes in a programmatic manner.
+
+
+### `proxies`
+
+This folder holds Matlab, Python, Fortran, and C implementations of various 
+proxy codes which can be thought of as quick interface for running quick 
+simulations in the prototyping phase of a project. For exmample, the proxyA 
+code is implemented as explained in the SEDACS proposal. This proxy code should
 perform up to a full SCF optimization of the density matrix. It is written in
 three different languages: Python, Fortran, and C.
 
@@ -86,19 +123,12 @@ three different languages: Python, Fortran, and C.
 
 This is an implementation of the GPU/AI-solver library.
 
-### `latte`
+### `parameters`
 
-This is a code that generates "Latte" Hamiltonians from input coordinates
-files (`xyz` or `pdb`) and constructs the density matrix.
+This is a set of codes for fitting tight-binding parameters (for usage with the
+LANL-developed LATTE tight-binding electronic structure code), as well as some
+scripts for generating reference data with SIESTA.
 
-### `mods`
-
-Auxiliary Python modules. These modules will be used as building blocks
-to develop SEDACS.
-
-### `driver`
-
-Scripts to exercise the code.
 
 # License
 
