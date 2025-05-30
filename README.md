@@ -81,12 +81,6 @@ The current codebase has the following folder structure:
 This folder contains the bulk of the SEDACS codebase. It is seperated into 
 modules where applicable. 
 
-### `docs`
-
-Brief documentation for the functionality of the code. This will be replaced 
-largely by auto-generated code from the docstrings throughout the code-base. 
-Tentatively, the docstrings are a more up-to-date place to view the docs for 
-the code.
 
 #### `driver` 
 
@@ -108,6 +102,13 @@ models both in the standard, and Shadow/Extended-Lagrangian formalism.
 The `dev` folder contains some utility functions for dealing with the paths and 
 linking SEDACS to the necessary parameter sets, and/or binaries for external 
 electronic structure codes in a programmatic manner.
+
+### `docs`
+
+Brief documentation for the functionality of the code. This will be replaced 
+largely by auto-generated code from the docstrings throughout the code-base. 
+Tentatively, the docstrings are a more up-to-date place to view the docs for 
+the code.
 
 
 ### `proxies`
