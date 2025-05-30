@@ -44,12 +44,36 @@ The current codebase has the following folder structure:
 ```
 .
 ├── docs
-├── driver
-├── gpu
-├── latte
-├── mods
-├── proxya
-└── test
+│   └── source
+├── examples
+│   ├── cheq_md
+│   ├── graph_adaptive_dm_scf_sp2
+│   ├── latte_interface
+│   └── pyseqm_interface
+├── parameters
+│   ├── fitting
+│   ├── latte
+│   └── siesta_calculations
+├── proxies
+│   ├── c
+│   ├── fortran
+│   ├── matlab
+│   ├── matlab_proxyA
+│   ├── matlab_proxyB
+│   └── python
+├── src
+│   └── sedacs
+│       ├── cheq
+│       ├── dev
+│       ├── driver
+│       ├── ewald
+│       ├── gpu
+│       │   ├── amd
+│       │   ├── example
+│       │   ├── nvda
+│       │   └── omp
+│       └── interface
+└── tests
 ```
 
 ### `proxya`
