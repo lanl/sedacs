@@ -76,6 +76,6 @@ to develop SEDACS.
 
 Scripts to exercise the code.
 
-# License
+# License O# (O4732)
 
 This program is open source under the [BSD-3 License](LICENSE.txt).
