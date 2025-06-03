@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from scipy.sparse.linalg import LinearOperator, cg, gmres
+from scipy.sparse.linalg import LinearOperator, cg, gmres, minres
 from typing import Callable, Optional, Tuple
 
 def QEQ_solver(
@@ -79,3 +79,17 @@ def QEQ_solver(
     if exit_code > 0:
         print(f"[WARNING] No QEQ convergence after {exit_code} iterations")
     return torch.from_numpy(x).to(dtype).to(device), iter_cnt
+
+
+def solve_minres(A_torch, b_torch, rtol=1e-6, maxiter=1000):
+    """
+    """
+    A_np = A_torch.detach().cpu().numpy()
+    b_np = b_torch.detach().cpu().numpy()
+
+    x_np, info = minres(A_np, b_np, rtol=rtol, maxiter=maxiter)
+
+    if info != 0:
+        raise RuntimeError(f"MINRES failed to converge. Info code: {info}")
+
+    return torch.tensor(x_np, dtype=A_torch.dtype, device=A_torch.device)

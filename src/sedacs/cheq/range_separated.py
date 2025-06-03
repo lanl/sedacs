@@ -1,3 +1,4 @@
+from scipy.optimize import
 import torch
 
 
@@ -113,3 +114,103 @@ def tapered_inverse_distance_matrix(dist_matrix: torch.Tensor,
     tapered_inv_distance = scale_fac * inv_dist * taper_weights
 
     return tapered_inv_distance
+
+
+def sr_QEQ_charges(pos_T: torch.Tensor,
+                   sr_nbr_inds: torch.Tensor,
+                   sr_dists: torch.Tensor,
+                   sr_cutoff: float,
+                   chi: torch.Tensor,
+                   hu: torch.Tensor,
+                   q_tot: float,
+                   dtype,
+                   device):
+    """
+    Computes the charges from the short-range, tapered Coulomb matrix. Some
+    comments on the requisite form for the input neighbor list information:
+
+    sr_nbr_inds and sr_dists are the indices and distances respectively of the
+    neighbors of atom i. These are to be obtained by the 
+
+    Parameters
+    ----------
+    pos_T: Tensor
+        Atomic positions.
+    sr_nbr_inds: Tensor
+        Neighbor indices for the short-range Coulomb matrix.
+    sr_cutoff: float
+        Cutoff for the short-range neighborlist.
+    chi: Tensor
+        Atom-wise electronegativities.
+    hu: Tensor
+        Atom-wise Hubbard U values on the diagonal of the Coulomb matrix.
+    q_tot: float
+        Total charge, 0.0 as default.
+    dtype:
+        Torch datatype for floating point values (electronegativities,
+        distances, Coulomb matrix.)
+    device:
+        Torch device.
+
+    Returns
+    -------
+    x: Tensor
+        Torch tensor of shape: [q0, q1, ..., qN, mu] where mu
+        is the chemical potential.
+
+    TODO
+    ----
+    Remove the construction of the dense distance matrix in favor of the one
+    with the shape of the neighborlist. This also requires changing how the
+    diagonal of the inverse distance matrix is constructed in
+    tapered_inverse_distance_matrix.
+    """
+    # Correct treatment of PBCs
+    Rij = torch.zeros(pos_T.shape[1],
+                      pos_T.shape[1],
+                      dtype=dtype,
+                      device=device)
+
+    nbr_mask = sr_nbr_inds != -1
+    row_idx = (torch.arange(Rij.shape[0], device=device)
+               .unsqueeze(1)
+               .expand_as(sr_nbr_inds)
+               )
+
+    #      Valid rows          Valid Columns     Valid distances.
+    Rij[row_idx[nbr_mask], sr_nbr_inds[nbr_mask]] = sr_dists[nbr_mask]
+
+    # Construct the tapered SR Coulomb matrix. (Dense)
+    CL = tapered_inverse_distance_matrix(Rij,
+                                         sr_cutoff-1.0,
+                                         sr_cutoff)
+    # print(CL)
+
+    n_atoms = pos_T.shape[1]
+
+    # Construct the b-vector.
+    b = torch.zeros(n_atoms+1, dtype=dtype, device=device)
+    b[:-1] = -chi
+    b[-1] = q_tot
+
+    # Diagonal of thresholded Coulomb, this part is not efficient.
+    CS = torch.eye(n_atoms, device=device) * hu
+    AS = torch.zeros((n_atoms+1, n_atoms+1),
+                     device=device,
+                     dtype=dtype)
+
+    # Full A-matrix
+    AS[:-1, :-1] = CS  # SR Coulomb
+    AS[-1, :-1] = 1    # 1-vectors
+    AS[:-1, -1] = 1    # 1-vectors
+    AL = torch.zeros_like(AS, device=device)
+    AL[:-1, :-1] = CL  # On-site part of Coulomb
+    A = AS + AL        # Full A-matrix. (Dense)
+
+    # x = torch.linalg.inv(A)@b
+    # print(x)
+    # Solve system of equations for RS_QEQ with MINRES
+    x = solve_minres(A, b)
+
+    return x
+
