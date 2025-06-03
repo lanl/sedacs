@@ -1,4 +1,4 @@
-from scipy.optimize import
+from sedacs.cheq.charge_solver import solve_minres
 import torch
 
 
@@ -78,15 +78,20 @@ def tapered_inverse_distance_matrix(dist_matrix: torch.Tensor,
     Coulomb matrix. Modify the inv_dist term to add support for a neighbor-
     list form on the input.
 
-    Applies the tapering function to the input inverse distance matrix. This is
-    by default scaled using the appropriate units for usage in an MD/simulation
-    framework using input units of eV and Angstrom. For atomic units, input
-    distances should be in bohr, and scale_fac should be set to 1.
+
+    This function does three things:
+    1. Computes the inverse distance matrix. Masks any values which would otherwise lead
+       to a division by zero.
+    2. Gets the taper weights for each distance.
+    3. Scales the tapered inverse distance matrix by the scale_fac.
+
+    # TODO: It may be worth checking at some point that this yields the same behavior
+    # as the explicit inverse tapering function in the JAX-MD code.
 
     Parameters
     ----------
     dist_matrix: torch.Tensor
-        The input *inverse* distance matrix.
+        The input distance matrix.
     lo_rad: float
         The onset of the tapering function.
     hi_rad: float
@@ -213,4 +218,3 @@ def sr_QEQ_charges(pos_T: torch.Tensor,
     x = solve_minres(A, b)
 
     return x
-
