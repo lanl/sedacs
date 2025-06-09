@@ -4,7 +4,7 @@ import numpy as np
 import time
 from typing import Optional, Tuple
 from .util import CONV_FACTOR
-    
+
 @torch.compile  
 def ewald_real(
     nbr_inds: torch.Tensor,
@@ -71,6 +71,127 @@ def ewald_real(
         
     return torch.sum(res) / 2.0, f, de_dq
 
+@torch.compile
+def ewald_real_screening(nbr_inds, nbr_diff_vecs, nbr_dists, charges, hubbard_u, atomtypes,
+               alpha: float, cutoff: float, calculate_forces: int,
+               calculate_dq: int):
+    """
+    Computes the real-space contribution with the Hubbard-U screening correction to the Ewald summation.
+
+    This function calculates the electrostatic interaction energy in the real-space 
+    portion of the Ewald summation. It also optionally computes forces and derivatives 
+    with respect to charge if `calculate_forces` or `calculate_dq` are set.
+
+    Args:
+        nbr_inds (torch.Tensor): Indices of neighboring atoms. Shape: `(N, K)`, where:
+            - `N` is the number of local atoms.
+            - `K` is the maximum number of neighbors per atom.
+        nbr_diff_vecs (torch.Tensor): Displacement vectors to neighbors. Shape: `(3, N, K)`, where:
+            - `3` represents the x, y, and z components of the displacement.
+            - `N` is the number of local atoms.
+            - `K` is the number of neighbors per atom.
+        nbr_dists (torch.Tensor): Distances to neighboring atoms. Shape: `(N, K)`.
+        hubbard_u (torch.Tensor): Hubbard U values for each atom. Shape: `(N,)`.
+        atomtypes (torch.Tensor): Atomic types for each atom. Shape: `(N,)`.
+        charges (torch.Tensor): Atomic charge values. Shape: `(N,)`.
+        alpha (float): Ewald screening parameter (scalar).
+        cutoff (float): Cutoff distance for interactions (scalar).
+        calculate_forces (int): Flag to compute forces (`1` for True, `0` for False).
+        calculate_dq (int): Flag to compute charge derivatives (`1` for True, `0` for False).
+
+    Returns:
+        Tuple[float, Optional[torch.Tensor], Optional[torch.Tensor]]: 
+            - **(float)** Real-space energy contribution (scalar).
+            - **(torch.Tensor, shape `(3, N)`)** Forces on atoms if `calculate_forces` is enabled, otherwise `None`.
+            - **(torch.Tensor, shape `(N,)`)** Charge derivatives if `calculate_dq` is enabled, otherwise `None`.
+    """
+    # TODO: finalize DUMMY_ATOM_IND
+    KECONST = 14.3996437701414
+    device = nbr_dists.device
+    dtype = nbr_dists.dtype
+
+    one = torch.tensor(1.0, dtype=dtype, device=device)
+    zero = torch.tensor(0.0, dtype=dtype, device=device)
+
+    DUMMY_NBR_IND = -1
+    # symbols = torch.Tensor(sy.symbols)[atomtypes]
+    mask = ((nbr_inds != DUMMY_NBR_IND) & (nbr_dists <= cutoff))
+    same_element_mask = mask & (atomtypes.unsqueeze(1) == atomtypes[nbr_inds])  # (Nr_atoms, Max_Nr_Neigh)
+    different_element_mask = mask & ~same_element_mask
+    
+    TFACT  = 16.0 / (5.0 * KECONST)
+    #TI = TFACT * U.unsqueeze(1) * mask # (Nr_atoms, Max_Nr_Neigh)
+    TI = torch.where(mask, TFACT * hubbard_u.unsqueeze(1) * mask, one)
+    TI2 = TI * TI
+    TI3 = TI2 * TI
+    TI4 = TI2 * TI2
+    TI6 = TI4 * TI2
+
+    SSA = TI
+    SSB = TI3 / 48.0
+    SSC = 3.0 * TI2 / 16.0
+    SSD = 11.0 * TI / 16.0
+    SSE = 1.0
+
+    MAGR = torch.where(mask, nbr_dists, one)
+    MAGR2 = MAGR * MAGR
+    Z = abs(alpha * MAGR)
+    NUMREP_ERFC = torch.special.erfc(Z)
+   
+    J0 = torch.where(mask, NUMREP_ERFC / MAGR, zero)
+
+    EXPTI = torch.exp(-TI * MAGR)
+
+    J0[same_element_mask] = J0[same_element_mask] - (EXPTI * \
+                    (SSB * MAGR2 + SSC * MAGR + SSD + SSE / MAGR))[same_element_mask]
+
+    #TJ = TFACT * U[nbr_inds] * different_element_mask     # (Nr_atoms, Max_Nr_Neigh)
+    TJ = torch.where(different_element_mask, TFACT * hubbard_u[nbr_inds] * different_element_mask, one)
+    TJ2 = TJ * TJ
+    TJ4 = TJ2 * TJ2
+    TJ6 = TJ4 * TJ2
+    EXPTJ = torch.exp(-TJ * MAGR) 
+    TI2MTJ2 = TI2 - TJ2
+    TI2MTJ2 = torch.where(different_element_mask, TI2MTJ2, one)
+    SA = TI
+    SB = EXPTI * TJ4 * TI / 2.0 / TI2MTJ2 / TI2MTJ2 
+    SC = EXPTI * (TJ6 - 3.0 * TJ4 * TI2) / TI2MTJ2 / TI2MTJ2 / TI2MTJ2
+    SD = TJ
+    SE = EXPTJ * TI4 * TJ / 2.0 / TI2MTJ2 / TI2MTJ2 
+    SF = EXPTJ * (-(TI6 - 3.0 * TI4 * TJ2)) / TI2MTJ2 / TI2MTJ2 / TI2MTJ2 
+    J0[different_element_mask] = J0[different_element_mask] - (1.0 * (SB - SC / MAGR) + \
+                1.0 * (SE - SF / MAGR))[different_element_mask]
+
+    energy = charges[:, None] * J0 * charges[nbr_inds]
+
+    if calculate_forces:
+        nbr_diff_vecs = torch.transpose(nbr_diff_vecs, 0, 2).contiguous()
+        nbr_diff_vecs = torch.transpose(nbr_diff_vecs, 0, 1).contiguous()
+        alpha2 = alpha * alpha 
+        DC = torch.where(mask.unsqueeze(2), nbr_diff_vecs / nbr_dists.unsqueeze(2), zero)
+        CA = torch.where(mask, NUMREP_ERFC / MAGR, zero) 
+        CA = CA + 2.0 * alpha * torch.exp(-alpha2 * MAGR2) / math.sqrt(math.pi)
+        FORCE = -torch.sum((charges[:, None] * charges[nbr_inds] * \
+                 torch.where(mask, CA / MAGR, zero)).unsqueeze(2) * \
+                 DC * mask.unsqueeze(2), dim=1)
+
+        FORCE = FORCE + torch.sum(((charges[:, None] * charges[nbr_inds] * EXPTI) * \
+                    ((torch.where(same_element_mask, SSE / MAGR2, zero) - 2.0 * SSB * MAGR - SSC) \
+                    + SSA * (SSB * MAGR2 + SSC * MAGR + SSD + torch.where(same_element_mask, SSE / MAGR, zero)))).unsqueeze(2) * \
+                    DC * same_element_mask.unsqueeze(2), dim=1)
+        FORCE = FORCE + torch.sum((charges[:, None] * charges[nbr_inds] * ((1.0 * (SA * (SB - torch.where(different_element_mask, SC / MAGR, zero)) - \
+            torch.where(different_element_mask, SC / MAGR2, zero))) + (1.0 * (SD * (SE - torch.where(different_element_mask, SF / MAGR, zero)) - \
+            torch.where(different_element_mask, SF / MAGR2, zero))))).unsqueeze(2) * DC * different_element_mask.unsqueeze(2), dim=1)
+
+    else:
+        FORCE = None
+
+    if calculate_dq:
+        COULOMBV = torch.sum(J0 * charges[nbr_inds], dim=1) 
+    else:
+        COULOMBV = None
+
+    return torch.sum(energy) / 2.0, FORCE, COULOMBV
 
 
 

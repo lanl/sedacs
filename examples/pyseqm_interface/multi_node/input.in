@@ -1,0 +1,27 @@
+#Input file for SEDACS
+
+Verbosity= False                                               # Print level.
+Threshold= 1.0E-5                                              # Currently ignored.
+CoordsFile= gs_solvated.pdb                                    # Geometry filename.
+GraphThreshold= 0.0005                                         # Density matrix graph threshold (frobenius norm of off-diagonal blocks).
+GraphThresholdInit= 0.04                                       # For initial overlap matrix graph. Ignored if InitGraphType= Geom.
+MaxDeg= 900                                                    # Max graph degree. Must be large enough to fit the largest core+halo.
+Rcut= 3.0                                                      # Radius cutoff for initial graph. Ignored if InitGraphType= OverlapM.
+Alpha= 0.2                                                     # Density matrix linear mixing coeff. Alpha*new + (1-Alpha)*old.
+InitGraphType= Geom                                            # How to generate initial graph. Geom: through distances. OverlapM: through overlap matrix.
+PartitionType= SpectralClustering                              # SpectralClustering MinCut BalancedKmeans.
+NumParts= 16                                                   # Number of cores.
+SCFTol= 1.0E-5                                                 # Currently ignored
+Orbitals= {"H":1,"Li":4,"C":4,"N":4,"O":4,"F":4,"Cl":4,"Na":4} # This has to be known for each engine.
+Valency= {"H":1,"Li":1,"C":4,"N":5,"O":6,"F":7,"Cl":7,"Na":1}  # This has to be known for each engine.
+Tel= 4000                                                      # Electronic temperature.
+doForces= False                                                 # Flag to compute forces.
+scfDevice= cpu                                                 # cpu or cuda.
+ijMethod= Vec                                                  # Create idxi and idxj for pyseqm driver through vetorization (fast but memory consuming) or a loop.
+numJumps= 1                                                    # Length of jumps across graph for constructing halos. 1: neighbors of core atoms. 2: + neighbors of neighbors of core atoms.
+NumAdaptiveIter= 30                                            # Number of graph adaptive iterations (aka scf iterations).
+restartSave= False                                             # Save files for scf restart. Slows things down.
+restartLoad= False                                             # Load files for scf restart.
+numGPU= -1                                                     # If on CPU, no efect. If on GPU and nodes are homogeneous, set to -1. If on GPU and nodes are inhomogeneous (diferent number of GPUs per node), set it to the minimum number of GPUs per node. 
+writeGeom= False                                               # Save core and core+halo geometries.
+Engine= {"Name":"ProxyAPython","InterfaceType":"PySEQM","Path":".../sedacs/proxies/python/","Executable":""} #The name of the external code                                                         

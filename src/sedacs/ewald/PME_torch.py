@@ -1,6 +1,6 @@
 import torch
 import math
-from sedacs.ewald import ewald_real, CONV_FACTOR, ewald_self_energy
+from sedacs.ewald import ewald_real, CONV_FACTOR, ewald_self_energy, ewald_real_screening
 from typing import Optional, Tuple, List, Union
 
 def b(m, order=4):
@@ -141,8 +141,11 @@ def calculate_PME_ewald(
     alpha: float,
     cutoff: float,
     PME_init_data: Tuple[Union[List, Tuple], torch.Tensor, torch.Tensor, int],
-    calculate_forces: int,
-    calculate_dq: int = 0
+    hubbard_u: torch.Tensor = None,
+    atomtypes: torch.Tensor = None,
+    calculate_forces: int = 0,
+    calculate_dq: int = 0,
+    screening: int = 0
 ) -> Tuple[float, Optional[torch.Tensor], Optional[torch.Tensor]]:
     """
     Computes the total Ewald sum energy using Particle Mesh Ewald (PME).
@@ -191,10 +194,20 @@ def calculate_PME_ewald(
     
     dq = None
     forces = None
-    my_e_real, my_f_real, my_dq_real = ewald_real(nbr_inds, nbr_disp_vecs, 
-                                                nbr_dists, charges, alpha, 
-                                                cutoff,
-                                                calculate_forces, calculate_dq)
+    if screening:
+        my_e_real, my_f_real, my_dq_real = ewald_real_screening(nbr_inds, nbr_disp_vecs, 
+                                                    nbr_dists, charges, hubbard_u, atomtypes, alpha, 
+                                                    cutoff,
+                                                    calculate_forces, calculate_dq)
+        
+        # if my_f_real is not None and my_f_real.device.type == 'cuda':
+        #     my_f_real = my_f_real.T.contiguous() 
+
+    else:
+        my_e_real, my_f_real, my_dq_real = ewald_real(nbr_inds, nbr_disp_vecs, 
+                                                    nbr_dists, charges, alpha, 
+                                                    cutoff,
+                                                    calculate_forces, calculate_dq)
     if calculate_dq:
         charges.grad = None
         charges.requires_grad = True
