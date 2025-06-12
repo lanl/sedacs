@@ -1,10 +1,13 @@
 cmake_minimum_required(VERSION 3.18)
-project(nvda LANGUAGES CXX)
+project(libnvda LANGUAGES CXX)
 
 # ------------------------------------------------------
 # Set NVIDIA compiler and flags from environment
 # ------------------------------------------------------
 #set(CMAKE_CXX_COMPILER $ENV{CXX})
+#set(GPU_ARCH "cc80" CACHE STRING "Target GPU architecture")
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -gpu=${GPU_ARCH}")
+
 
 # ------------------------------------------------------
 # Configure MPI using find_package with custom path
@@ -29,12 +32,12 @@ include_directories(
 # ------------------------------------------------------
 # Library search paths (if needed)
 # ------------------------------------------------------
-link_directories(
-    $ENV{NVHPC_ROOT}/compilers/lib64
-    $ENV{NVHPC_ROOT}/math_libs/lib64
-    $ENV{NVHPC_ROOT}/cuda/lib64
-    $ENV{LAPACK_ROOT}/lib
-)
+#link_directories(
+#    $ENV{NVHPC_ROOT}/compilers/lib64
+#    $ENV{NVHPC_ROOT}/math_libs/lib64
+#    $ENV{NVHPC_ROOT}/cuda/lib64
+#    $ENV{LAPACK_ROOT}/lib
+#)
 
 # ------------------------------------------------------
 # Source files (treat .cu as C++ with nvc++)
@@ -58,10 +61,10 @@ endforeach()
 # ------------------------------------------------------
 # Shared library target
 # ------------------------------------------------------
-add_library(nvda SHARED ${ALL_SRCS})
-set_target_properties(nvda PROPERTIES OUTPUT_NAME "nvda")
+add_library(libnvda SHARED ${ALL_SRCS})
+set_target_properties(libnvda PROPERTIES OUTPUT_NAME "nvda")
 
-target_link_libraries(nvda
+target_link_libraries(libnvda
     ${MPI_CXX_LIBRARIES}
     cudanvhpc
     cublas
