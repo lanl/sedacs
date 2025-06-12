@@ -1207,7 +1207,8 @@ def build_nlist(coords_cart, latticeVectors, rcut, rank=0, numranks=1, verb=Fals
 # @return hindex Orbital index for each atom in the system
 # @retunn numel Total number of electrons
 #
-def get_hindex(orbs_for_every_symbol, symbols, types, verb=False):
+# def get_hindex(orbs_for_every_symbol, valency, symbols, types, verb=False):
+def get_hindex(orbs_for_every_symbol, symbols, types, valency=None, verb=False):
     nats = len(types[:])
     ntypes = len(symbols)
     hindex = np.zeros((nats + 1), dtype=int)
@@ -1241,6 +1242,7 @@ def get_hindex(orbs_for_every_symbol, symbols, types, verb=False):
         numel_for_atom = ptable.numel[atomic_number]
         norbs_for_every_type[cnt] = norbs_for_atom
         numel_for_every_type[cnt] = numel_for_atom
+        print(verb)
         if verb:
             print("type,symb,orb,valence",cnt, symbol,norbs_for_atom,numel_for_atom)
         cnt += 1

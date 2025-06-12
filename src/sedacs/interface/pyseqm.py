@@ -5,6 +5,9 @@ from sedacs.system import get_hindex
 import sys
 
 from sedacs.types import ArrayLike
+from typing import Union
+
+from sedacs.types import ArrayLike
 from sedacs.parser import Input
 import torch
 
@@ -125,9 +128,9 @@ def get_coreHalo_ham_inds(partIndex: ArrayLike,
     core_indices_in_sub_expanded = core_indices_in_sub_expanded.flatten()
 
     norbs, norbs_for_every_type, hindex_sub, numel, numel_for_every_type = get_hindex(sdc.orbs,
-                                                                                      sdc.valency,
                                                                                       sy.symbols,
-                                                                                      subSy.types)
+                                                                                      subSy.types,
+                                                                                      valency=sdc.valency)
 
     hindex_sub = torch.from_numpy(hindex_sub).to(device, dtype=sdc.torch_int_dt)
     return core_indices_in_sub, core_indices_in_sub_expanded, hindex_sub
@@ -1016,3 +1019,6 @@ def get_diag_guess_pyseqm(molecule: Molecule,
         P0[molecule.Z==1,0,0] = 1.0        
 
     return P0
+
+
+    
