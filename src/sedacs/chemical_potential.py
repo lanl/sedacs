@@ -55,8 +55,10 @@ def get_mu(mu0, evals, etemp, nocc, dvals=None, kB=8.61739e-5, verb=False):
     nmax = 30
     tol = 1.0E-10
 
-    #HOMO = evals[int(nocc)]
-    #LUMO = evals[int(nocc) + 1]
+    #HOMO = evals[int(nocc) - 1]
+    #LUMO = evals[int(nocc)]
+    #with open("energygap.dat", "a") as f:
+    #    f.write(f"{HOMO} {LUMO}\n")
     #mu = 0.5*(LUMO + HOMO)
     #mu = 0.5 * (np.min(evals) + np.max(evals))
     #mu = np.min(evals) 
@@ -67,13 +69,13 @@ def get_mu(mu0, evals, etemp, nocc, dvals=None, kB=8.61739e-5, verb=False):
         dvals = np.ones((norbs))
     for i in range(nmax+1):
         fermi = fermi_dirac(mu, evals, etemp) 
-        occ = np.sum([fermi[i]*dvals[i] for i in range(norbs)])
+        occ = np.sum([fermi[j]*dvals[j] for j in range(norbs)])
         occErr = abs(occ - nocc)
         if abs(occErr) < tol:
             break
         dFermiDmu =  (1/(kB*etemp))*fermi*(1.0-fermi)*dvals
         occ_prime = np.sum(dFermiDmu[:norbs]*dvals[:norbs])
-        mu = mu + a*(nocc - occ)/occ_prime
+        mu = mu + a*(nocc - occ)/(occ_prime + 1.0E-3)
         if(abs(mu) > 1.0E10):
             print('WARNING: Newton-Raphson did not converge (will try bisection) Occupation error = ', occErr)
             notConverged = True
@@ -85,7 +87,7 @@ def get_mu(mu0, evals, etemp, nocc, dvals=None, kB=8.61739e-5, verb=False):
             notConverged = True
     
     if(notConverged):
-        etemp = 10000 
+        #etemp = 10000 
         muMin = np.min(evals)
         muMax = np.max(evals)
         mu = muMin

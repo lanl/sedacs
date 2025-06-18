@@ -8,7 +8,7 @@ Graph adaptive single-point charge, energy and force solver
 import time
 from pathlib import Path
 
-from sedacs.graph import add_graphs, collect_graph_from_rho, print_graph
+from sedacs.graph import add_graphs, collect_graph_from_rho, print_graph, multiply_graphs
 from sedacs.graph_partition import get_coreHaloIndices, graph_partition
 from sedacs.sdc_hamiltonian import get_hamiltonian
 from sedacs.sdc_density_matrix import get_density_matrix
@@ -110,10 +110,12 @@ def get_singlePoint_energy_forces(
     energyOnRank = None
     forcesOnRank = None
     subSysOnRank = []
+    sy.subSy_list = [None] * partsPerRank
 
     for partIndex in range(partIndex1, partIndex2):
         numberOfCoreAtoms = len(parts[partIndex])
         subSy = System(len(partsCoreHalo[partIndex]))
+        sy.subSy_list[partIndex - partIndex1] = subSy
         subSy.symbols = sy.symbols
         tic = time.perf_counter()
         subSy.coords, subSy.types = extract_subsystem(
@@ -145,7 +147,7 @@ def get_singlePoint_energy_forces(
         print("Number of orbitals in the core =", norbsInCore)
         nocc = int(float(subSy.numel) / 2.0)  # Get the total occupied orbitals
 
-        ham, over = get_hamiltonian(
+        subSy.ham, subSy.over, subSy.zmat = get_hamiltonian(
             eng,
             partIndex,
             sdc.nparts,
@@ -163,7 +165,7 @@ def get_singlePoint_energy_forces(
         print("Time for get_hamiltonian", toc - tic, "(s)")
 
         tic = time.perf_counter()
-        evalsInPart, dvalsInPart = get_evals_dvals(
+        subSy.evects, evalsInPart, dvalsInPart = get_evals_dvals(
             eng,
             partIndex,
             sdc.nparts,
@@ -171,7 +173,7 @@ def get_singlePoint_energy_forces(
             subSy.coords,
             subSy.types,
             subSy.symbols,
-            ham,
+            subSy.ham,
             sy.coulvs[partsCoreHalo[partIndex]],
             nocc=nocc,
             norbsInCore=norbsInCore,
@@ -180,6 +182,7 @@ def get_singlePoint_energy_forces(
             verb=False,
             newsystem=False,
         )
+        subSy.evals = evalsInPart
         toc = time.perf_counter()
         print("Time for get_evals_dvals", toc - tic, "(s)")
 
@@ -206,24 +209,8 @@ def get_singlePoint_energy_forces(
 
     for partIndex in range(partIndex1, partIndex2):
         numberOfCoreAtoms = len(parts[partIndex])
-        subSy = System(len(partsCoreHalo[partIndex]))
-        subSy.symbols = sy.symbols
-        tic = time.perf_counter()
-        subSy.coords, subSy.types = extract_subsystem(
-            sy.coords, sy.types, sy.symbols, partsCoreHalo[partIndex]
-        )
-        subSy.ncores = len(parts[partIndex])
-        toc = time.perf_counter()
-        print("Time for extract_subsystem", toc - tic, "(s)")
+        subSy = sy.subSy_list[partIndex - partIndex1]
 
-        tic = time.perf_counter()
-
-        # Get some electronic structure elements for the sybsystem
-        # This could eventually be computed in the engine if no basis set is
-        # provided in the SEDACS input file.
-        subSy.norbs, subSy.orbs, subSy.hindex, subSy.numel, subSy.znuc = get_hindex(
-            sdc.orbs, subSy.symbols, subSy.types, verb=True
-        )
         norbs = subSy.norbs  # We have as many orbitals as columns in the Hamiltonian
         tmpArray = np.zeros(numberOfCoreAtoms)
         tmpArray[:] = subSy.orbs[subSy.types[0:numberOfCoreAtoms]]
@@ -242,13 +229,13 @@ def get_singlePoint_energy_forces(
             subSy.coords,
             subSy.types,
             subSy.symbols,
-            ham,
+            subSy.ham,
             sy.coulvs[partsCoreHalo[partIndex]],
             nocc=nocc,
             norbsInCore=norbsInCore,
             mu=mu,
             etemp=sdc.etemp,
-            overlap=over,
+            overlap=subSy.over,
             full_data=False,
             verb=False,
             newsystem=True,
@@ -264,7 +251,7 @@ def get_singlePoint_energy_forces(
             subSy.coords,
             subSy.types,
             subSy.symbols,
-            ham,
+            subSy.ham,
             sy.coulvs[partsCoreHalo[partIndex]],
             nocc=nocc,
             norbsInCore=norbsInCore,
@@ -334,41 +321,29 @@ def get_singlePoint_energy_forces(
 
 
 def get_adaptive_sp_energy_forces(
-    sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu, shadow_md=True
+    sdc, eng, comm, rank, numranks, sy, parts, partsCoreHalo, hindex, graphNL, mu, shadow_md=True
 ):
     fullGraph = graphNL
 
     charges = sy.charges
-    # Get the path of the current file
-    curr_file_path = Path(__file__)
-    # Get the directory of the current file
-    curr_dir = curr_file_path.parent
-    # Get the path of latte parameters
-    latte_param_path = curr_dir / Path(
-        "../../../parameters/latte/TBparam/electrons.dat"
-    )
-    latte_tbparams = read_latte_tbparams(latte_param_path)
-    hubbard_u = [latte_tbparams[symbol]["HubbardU"] for symbol in sy.symbols]
-    hubbard_u = np.array(hubbard_u)[sy.types]
     # Partition the graph
-    parts = graph_partition(
-        sdc, eng, fullGraph, sdc.partitionType, sdc.nparts, sy.coords, True
-    )
-    njumps = 2
-    partsCoreHalo = []
-    numCores = []
-
-    # print("\nCore and halos indices for every part:")
-    for i in range(sdc.nparts):
-        coreHalo, nc, nh = get_coreHaloIndices(parts[i], fullGraph, njumps)
-        partsCoreHalo.append(coreHalo)
-        numCores.append(nc)
-        print("core,halo size:", i, "=", nc, nh)
+#    parts = graph_partition(
+#        sdc, eng, fullGraph, sdc.partitionType, sdc.nparts, sy.coords, True
+#    )
+    # njumps = 1
+    # partsCoreHalo = []
+    # numCores = []
+    # # print("\nCore and halos indices for every part:")
+    # for i in range(sdc.nparts):
+    #     coreHalo, nc, nh = get_coreHaloIndices(parts[i], fullGraph, njumps)
+    #     partsCoreHalo.append(coreHalo)
+    #     numCores.append(nc)
+    #     print("core,halo size:", i, "=", nc, nh)
     #    print("coreHalo for part", i, "=", coreHalo)
 
     sy.coulvs, ecoul, fcoul = get_PME_coulvs(
         charges,
-        hubbard_u,
+        sy.hubbard_u,
         sy.coords,
         sy.types,
         sy.latticeVectors,
@@ -382,10 +357,12 @@ def get_adaptive_sp_energy_forces(
     )
     if shadow_md:
         fcoul = ((2 * charges - sy.charges) / sy.charges)[:, None] * fcoul
+        
     energy = energy - ecoul
     forces = forces + fcoul
 
-    fullGraph = add_graphs(fullGraphRho, graphNL)
+    # fullGraph = add_graphs(fullGraphRho, graphNL)
+    fullGraph = multiply_graphs(fullGraphRho, fullGraph)
 
     AtToPrint = 0
 
@@ -405,4 +382,4 @@ def get_adaptive_sp_energy_forces(
             "subSyG_fin.xyz", subSy.coords, subSy.types, subSy.symbols
         )
 
-    return fullGraph, charges, energy, forces, mu, parts, subSysOnRank
+    return fullGraph, charges, energy, forces, mu, parts, partsCoreHalo, subSysOnRank

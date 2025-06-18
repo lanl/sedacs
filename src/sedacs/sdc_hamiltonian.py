@@ -70,7 +70,7 @@ def get_hamiltonian(
     elif eng.interface == "Module":
         # We will call proxyA directly as it will be loaded as a module.
         if get_overlap:
-            ham, overlap = get_hamiltonian_module(
+            ham, overlap, zmat = get_hamiltonian_module(
                 eng,
                 partIndex,
                 nparts,
@@ -84,7 +84,7 @@ def get_hamiltonian(
                 newsystem=newsystem,
                 keepmem=keepmem,
             )
-            return ham, overlap
+            return ham, overlap, zmat
         else:
             return get_hamiltonian_module(
                 eng,

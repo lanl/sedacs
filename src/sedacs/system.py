@@ -121,6 +121,8 @@ class System:
         self.types = np.zeros(self.nats, dtype=int)
         ## Coordinates for each atom, e.g., z-coordinate of the frist atom is coords[0,2]
         self.coords = np.zeros((self.nats, 3), dtype=float)
+        ## Hubbard U for each atom
+        self.hubbard_u = np.zeros((self.nats), dtype=float)
         ## Charged (orbital base population) for each atom
         self.charges = np.zeros((self.nats), dtype=float)
         ## Coordinates for each atom, e.g., z-coordinate of the frist atom is coords[0,2]
@@ -144,6 +146,20 @@ class System:
         self.resNames = None
         ## Residue/molecule id 
         self.resIds = None 
+        ## List of subsystems
+        self.subSy_list = None
+        ## Kernel preconditioner
+        self.ker = None
+        ## Hamiltonian matrix
+        self.ham = None
+        ## Overlap matrix
+        self.over = None
+        ## Congruence transformation
+        self.zmat = None
+        ## Eigenvectors matrix
+        self.evects = None
+        ## Eigenvalues
+        self.evals = None
 
     def extract_types_and_symbols(self,symbols_list_for_all_atoms):
         """
