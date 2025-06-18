@@ -38,8 +38,11 @@ if (not fortlib) and (not pylib):
 # TODO These proxies should at some point probably be more properly
 # integrated into the code.
 try:
+    # from proxies.python.hamiltonian import get_hamiltonian_proxy
+    # from proxies.python.density_matrix import get_density_matrix_proxy
     from proxies.python.first_level import get_hamiltonian_proxy
     from proxies.python.first_level import get_density_matrix_proxy
+    # from proxies.python.evals_dvals import get_evals_dvals_proxy
 
     import inspect
     print(inspect.getfile(get_density_matrix_proxy))

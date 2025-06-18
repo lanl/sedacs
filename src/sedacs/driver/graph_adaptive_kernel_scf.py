@@ -1,14 +1,13 @@
 """
-graph_adaptive_scf.py
+graph_adaptive_kernel_scf.py
 ====================================
-Graph adaptive self-consistent charge solver
+Graph adaptive self-consistent charge solver with kernel
 
 """
 
 import time
 import numpy as np
-from pathlib import Path
-import pickle
+from copy import deepcopy
 
 from sedacs.graph import add_graphs, collect_graph_from_rho, print_graph, multiply_graphs
 from sedacs.graph_partition import get_coreHaloIndices, graph_partition
@@ -29,6 +28,7 @@ from sedacs.message import status_at, error_at, warning_at
 from sedacs.mixer import diis_mix, linear_mix
 from sedacs.chemical_potential import get_mu
 from sedacs.file_io import read_latte_tbparams
+from sedacs.driver.graph_kernel_byparts import get_kernel_byParts, apply_kernel_byParts, rankN_update_byParts
 
 try:
     from mpi4py import MPI
@@ -107,10 +107,12 @@ def get_singlePoint_charges(
     evalsOnRank = None
     dvalsOnRank = None
     subSysOnRank = []
+    sy.subSy_list = [None] * partsPerRank
 
     for partIndex in range(partIndex1, partIndex2):
         numberOfCoreAtoms = len(parts[partIndex])
         subSy = System(len(partsCoreHalo[partIndex]))
+        sy.subSy_list[partIndex - partIndex1] = subSy
         subSy.symbols = sy.symbols
         tic = time.perf_counter()
         subSy.coords, subSy.types = extract_subsystem(
@@ -143,7 +145,7 @@ def get_singlePoint_charges(
         print("Number of orbitals in the core =", norbsInCore)
         nocc = int(float(subSy.numel) / 2.0)  # Get the total occupied orbitals
 
-        ham, over, zmat = get_hamiltonian(
+        subSy.ham, subSy.over, subSy.zmat = get_hamiltonian(
             eng,
             partIndex,
             sdc.nparts,
@@ -161,7 +163,7 @@ def get_singlePoint_charges(
         print("Time for get_hamiltonian", toc - tic, "(s)")
 
         tic = time.perf_counter()
-        evects, evalsInPart, dvalsInPart = get_evals_dvals(
+        subSy.evects, evalsInPart, dvalsInPart = get_evals_dvals(
             eng,
             partIndex,
             sdc.nparts,
@@ -169,7 +171,7 @@ def get_singlePoint_charges(
             subSy.coords,
             subSy.types,
             subSy.symbols,
-            ham,
+            subSy.ham,
             sy.coulvs[partsCoreHalo[partIndex]],
             nocc=nocc,
             norbsInCore=norbsInCore,
@@ -178,6 +180,7 @@ def get_singlePoint_charges(
             verb=False,
             newsystem=False,
         )
+        subSy.evals = evalsInPart
         toc = time.perf_counter()
         print("Time for get_evals_dvals", toc - tic, "(s)")
 
@@ -204,24 +207,7 @@ def get_singlePoint_charges(
 
     for partIndex in range(partIndex1, partIndex2):
         numberOfCoreAtoms = len(parts[partIndex])
-        subSy = System(len(partsCoreHalo[partIndex]))
-        subSy.symbols = sy.symbols
-        tic = time.perf_counter()
-        subSy.coords, subSy.types = extract_subsystem(
-            sy.coords, sy.types, sy.symbols, partsCoreHalo[partIndex]
-        )
-        subSy.ncores = len(parts[partIndex])
-        toc = time.perf_counter()
-        print("Time for extract_subsystem", toc - tic, "(s)")
-
-        tic = time.perf_counter()
-
-        # Get some electronic structure elements for the sybsystem
-        # This could eventually be computed in the engine if no basis set is
-        # provided in the SEDACS input file.
-        subSy.norbs, subSy.orbs, subSy.hindex, subSy.numel, subSy.znuc = get_hindex(
-            sdc.orbs, subSy.symbols, subSy.types, verb=True
-        )
+        subSy = sy.subSy_list[partIndex - partIndex1]
 
         norbs = subSy.norbs  # We have as many orbitals as columns in the Hamiltonian
         tmpArray = np.zeros(numberOfCoreAtoms)
@@ -242,13 +228,13 @@ def get_singlePoint_charges(
             subSy.coords,
             subSy.types,
             subSy.symbols,
-            ham,
+            subSy.ham,
             sy.coulvs[partsCoreHalo[partIndex]],
             nocc=nocc,
             norbsInCore=norbsInCore,
             mu=mu,
             etemp=sdc.etemp,
-            overlap=over,
+            overlap=subSy.over,
             full_data=False,
             verb=False,
             newsystem=True,
@@ -256,7 +242,7 @@ def get_singlePoint_charges(
         )
 
         chargesInPart = chargesInPart[: len(parts[partIndex])]
-        subSy.charges = chargesInPart
+#        subSy.charges = chargesInPart
 
         # Save the subsystems list for returning them
         subSysOnRank.append(subSy)
@@ -294,24 +280,26 @@ def get_singlePoint_charges(
     return fullGraphRho, fullCharges, subSysOnRank, mu
 
 
-def get_adaptiveSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu):
+def get_adaptive_KernelSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu):
     fullGraph = graphNL
 
-    # Iitial guess for the excess ocupation vector. This is the negative of
+    # Initial guess for the excess ocupation vector. This is the negative of
     # the charge!
     charges = sy.charges
     chargesOld = None
     chargesIn = None
     chargesOld = None
     chargesOut = None
+    scfError = 1.0
+    charge_iter = [charges]
     # Partition the graph
     parts = graph_partition(
         sdc, eng, fullGraph, sdc.partitionType, sdc.nparts, sy.coords, True
     )
+    kernel = 0
     for gscf in range(sdc.numAdaptIter):
         msg = "Graph-adaptive iteration" + str(gscf)
         status_at("get_adaptiveSCFDM", msg)
-        
         njumps = 1
         partsCoreHalo = []
         numCores = []
@@ -328,31 +316,49 @@ def get_adaptiveSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu):
             sy.coulvs, ewald_e = get_PME_coulvs(
                 charges, sy.hubbard_u, sy.coords, sy.types, sy.latticeVectors
             )
-
+        
+        chargesOld = charges
         fullGraphRho, charges, subSysOnRank, mu = get_singlePoint_charges(
             sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, gscf, mu
         )
+        charge_iter.append(charges)
         # print("Collected charges", charges)
-
-        scfError, charges, chargesOld, chargesIn, chargesOut = diis_mix(
-            charges, chargesOld, chargesIn, chargesOut, gscf, verb=False
-        )
+        if scfError > 0.01:
+            scfError, charges, chargesOld, chargesIn, chargesOut = diis_mix(
+                charges, chargesOld, chargesIn, chargesOut, gscf, verb=True
+            )
         # scfError,charges,chargesOld = linear_mix(0.25,charges,chargesOld,gscf)
         # if gscf == 0:
         #    scfError = sy.numel
-
+        else: 
+            #scfError = np.linalg.norm(chargesNew - charges) / np.sqrt(sy.nats)
+            scfError = np.linalg.norm(charges - chargesOld) / np.sqrt(sy.nats)
+            # scfError = np.linalg.norm(charge_iter[-1] - charge_iter[-2]) / np.sqrt(sy.nats)
+            if kernel == 0:
+                get_kernel_byParts(sdc, rank, numranks, parts, partsCoreHalo, sy, mu)
+                syk = deepcopy(sy)
+                syk.subSy_list = deepcopy(sy.subSy_list)
+                for i, subSy in enumerate(syk.subSy_list):
+                    subSy.ker = deepcopy(sy.subSy_list[i].ker)
+                # KRes = apply_kernel_byParts(
+                #     charges, chargesOld, sdc, rank, numranks, comm, parts, sy
+                # )
+            # breakpoint()
+                kernel = 1
+            else:
+                for i, subSy in enumerate(sy.subSy_list):
+                    subSy.ker = deepcopy(syk.subSy_list[i].ker) 
+            KRes = rankN_update_byParts(
+                        charges, chargesOld, 6, sdc, rank, numranks, comm, parts, partsCoreHalo, sy, mu=mu
+                    )
+            # charges = charges - KRes
+            charges = chargesOld - KRes
+            # breakpoint()
+            # charges = charges - np.dot(sy.subSy_list[0].ker, g_charges - charges)
         # print_graph(fullGraphRho)
+
         # fullGraph = add_graphs(fullGraphRho, graphNL)
-        #fullGraph = multiply_graphs(fullGraphRho, graphNL)
         fullGraph = multiply_graphs(fullGraphRho, fullGraph)
-        # with open('graphNL.pkl', 'wb') as f:
-        #     pickle.dump(graphNL, f)
-        # with open('fullGraphRho.pkl', 'wb') as f:
-        #     pickle.dump(fullGraphRho, f)
-        # with open('fullGraph.pkl', 'wb') as f:
-        #     pickle.dump(fullGraph, f)
-        # if gscf == 1:
-        #     breakpoint()
         for i in range(sy.nats):
             print("Charges:", i, sy.symbols[sy.types[i]], charges[i])
         print("SCF ERR =", scfError)

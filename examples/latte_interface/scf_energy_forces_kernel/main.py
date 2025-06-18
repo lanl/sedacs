@@ -12,7 +12,7 @@ of the energy and forces.
 import sys
 
 import numpy as np
-from sedacs.driver.graph_adaptive_scf import get_adaptiveSCFDM
+from sedacs.driver.graph_adaptive_kernel_scf import get_adaptive_KernelSCFDM 
 from sedacs.driver.graph_adaptive_sp_energy_forces import get_adaptive_sp_energy_forces
 from sedacs.driver.init import get_args, init
 from sedacs.file_io import read_latte_tbparams
@@ -45,7 +45,7 @@ sy.hubbard_u = Hubbard_U
 
 # Perform a graph-adaptive calculation of the density matrix through SCF cycles
 mu = 0.0
-graphDH, sy.charges, mu, parts, partsCoreHalo, subSysOnRank = get_adaptiveSCFDM(
+graphDH, sy.charges, mu, parts, partsCoreHalo, subSysOnRank = get_adaptive_KernelSCFDM(
     sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu
 )
 # Perform a single-point graph-adaptive calculation of the energy and forces
