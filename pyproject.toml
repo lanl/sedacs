@@ -1,16 +1,18 @@
 [project]
 name = "sedacs"
 version = "0.1.0"
-description = "Scalable Ecosystem, Driver, and Analyzer for Complex Chemistry Simulations (SEDACS) enablesmassively parallel atomistic simulations that can seamlessly integrate with a diverserange of available and emerging quantum chemistry codes at different levelsof theory."
+description = "Scalable Ecosystem, Driver, and Analyzer for Complex Chemistry Simulations (SEDACS) enables massively parallel atomistic quantum molecular dynamics simulations that can seamlessly integrate with a diverse range of available and emerging quantum chemistry codes at different levels of theory."
 authors = [
     {name = "Christian Francisco Negre", email = "christianfannegre@gmail.com"},
     {name = "Joshua David Finkelstein", email = "finkeljos@gmail.com"},
     {name = "Michael E. Wall", email = "mewall@lanl.gov"},
-    {name = "Qi Zhang", email = "singularitti@outlook.com"},
+    {name = "Cheng-Han Li", email = "cheng-hanli@lanl.gov"},
+    {name = "Robert Stanton", email = "stanton@lanl.gov"},
     {name = "Anders Niklasson", email = "amn@lanl.gov"},
     {name = "Maksim Kulichenko", email = "maxim@lanl.gov"},
     {name = "Mehmet Cagri Kaymak", email = "mkaymak@lanl.gov"},
     {name = "Alejandro Lopez-Bezanilla", email = "alopezb@cadejo.lanl.gov"},
+    {name = "Qi Zhang", email = "singularitti@outlook.com"}
 ]
 dependencies = [
     "scipy>=1",
@@ -48,8 +50,18 @@ graph = [
 ]
 
 [build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["scikit-build-core","setuptools", "wheel"]
+build-backend = "scikit_build_core.build"
+
+[tool.scikit-build]
+minimum-version = "0.5"
+cmake.source-dir = "src/sedacs/gpu/nvda/"
+cmake.args = [
+  "-DCMAKE_CXX_COMPILER=nvc++",
+  "-DCMAKE_CXX_FLAGS=-O3 -cuda -gpu=cc89 -acc=gpu -Minfo=accel -fPIC --diag_suppress=bad_macro_redef --diag_suppress=cuda_compile",
+  "-DCMAKE_VERBOSE_MAKEFILE=ON"
+]
+build-dir = "src/sedacs/gpu/nvda/build"
 
 
 [tool.pdm]
@@ -72,9 +84,9 @@ doc = [
     "sphinx-press-theme>=0.9.1",
 ]
 
-
 [tool.setuptools]
 include-package-data = true
+package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]

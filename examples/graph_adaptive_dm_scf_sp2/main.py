@@ -6,7 +6,7 @@ optimization"""
 import sys
 
 import numpy as np
-from sedacs.driver.graph_adaptive_scf import get_adaptiveSCFDM
+from sedacs.driver.graph_adaptive_scf_sp2 import get_adaptiveSCFDM
 from sedacs.driver.init import get_args, init
 from sedacs.charges import get_charges
 import sedacs.globals as gl
@@ -23,8 +23,9 @@ sdc, eng, comm, rank, numranks, sy, hindex, graphNL, nl, nlTrX, nlTrY, nlTrZ = i
 
 sdc.verb = True
 
+mu = 0.0
 # Perform a graph-adaptive calculation of the density matrix
-graphDH,sy.charges,parts,subSysOnRank = get_adaptiveSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL)
+graphDH,sy.charges,parts,subSysOnRank = get_adaptiveSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu)
 
 #sy.energy,sy.forces = get_energy_and_forces(sdc, eng, comm, rank, numranks, sy, hindex, graphDH)
 

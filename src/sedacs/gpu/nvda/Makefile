@@ -5,14 +5,15 @@
 #
 # ##########################################################
 #
-# ## CC COMPILER OPTIONS ##
+# ## CXX COMPILER OPTIONS ##
 #
-# ## CC compiler options:
-CXX:=${CXX}
-CXX_FLAGS:=${CXX_FLAGS}
-CXX_SO_FLAGS= -fpic
-EXTRA_CXX_FLAGS= --diag_suppress=bad_macro_redef
+# ## CXX compiler options:
 $(info $$CXX is [${CXX}])
+GPU_ARCH:=cc${GPU_ARCH}
+CXX:=${CXX}
+CXX_FLAGS:=${CXX_FLAGS} -fpic -gpu $(GPU_ARCH)
+EXTRA_CXX_FLAGS:=${EXTRA_CXX_FLAGS}
+CXX_SO_FLAGS=-shared -fpic
 # #
 #
 # # CUDA math library directory:
@@ -42,9 +43,9 @@ CUDA_LINK_LIB= -lcudart -lnvToolsExt
 # 
 # MPI library 
 # 
-MPI_LIB_DIR= -L${OMPI_ROOT}/lib
+MPI_LIB_DIR= -L${MPI_ROOT}/lib
 # # MPI include directory:
-MPI_INC_DIR= -I${OMPI_ROOT}/include
+MPI_INC_DIR= -I${MPI_ROOT}/include
 # # MPI linking libraries:
 MPI_LINK_LIB= -lmpi
 # #
@@ -122,36 +123,36 @@ OBJS          =  $(OBJSP2) $(OBJDIAG) $(OBJPRT) $(OBJCHEBY) \
 
 # Link compiled object files to target so:
 so: $(OBJS)
-	$(CXX) -shared $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) $(OBJS) -o $(SO) $(MPI_LIB_DIR) $(MPI_LINK_LIB) $(CUDA_LIB_DIR) $(CUDA_LINK_LIB) $(CUDAMATH_LIB_DIR) $(CUDAMATH_LINK_LIB) $(NVCOMP_LIB_DIR) $(NVCOMP_LINK_LIB) -lnvToolsExt
+	$(CXX) $(CXX_SO_FLAGS) -gpu=cc89 -cuda $(EXTRA_CXX_FLAGS) $(OBJS) -o $(SO) $(MPI_LIB_DIR) $(MPI_LINK_LIB) $(CUDA_LIB_DIR) $(CUDA_LINK_LIB) $(CUDAMATH_LIB_DIR) $(CUDAMATH_LINK_LIB) $(NVCOMP_LIB_DIR) $(NVCOMP_LINK_LIB) #-lnvToolsExt -L/usr/lib 
 
 $(OBJ_DIR)/diag/%.o: $(SRC_DIR)/diag/%.cu
-	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR) $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB)
+	$(CXX) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR) $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB)
 
 $(OBJ_DIR)/dnnsp2/%.o: $(SRC_DIR)/dnnsp2/%.cu
-	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR) $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB) 
+	$(CXX) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR) $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB) 
 
 $(OBJ_DIR)/dnnprt/%.o: $(SRC_DIR)/dnnprt/%.cu
-	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR) $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB) 
+	$(CXX) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR) $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB) 
 
 $(OBJ_DIR)/goldensp2/%.o: $(SRC_DIR)/goldensp2/%.cu
-	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR) $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB)
+	$(CXX) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR) $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB)
 
 $(OBJ_DIR)/movingmusp2/%.o: $(SRC_DIR)/movingmusp2/%.cu
-	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR) $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB)
+	$(CXX) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR) $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB)
 
 $(OBJ_DIR)/fastcheby/%.o: $(SRC_DIR)/fastcheby/%.cu
-	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR) $(CUDAMATH_INC_DIR) $(LAPACK_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB) $(LAPACK_LIB_DIR) $(LAPACK_LINK_LIB)
+	$(CXX) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR) $(CUDAMATH_INC_DIR) $(LAPACK_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB) $(LAPACK_LIB_DIR) $(LAPACK_LINK_LIB)
 
 #$(OBJ_DIR)/invovlp/%.o: $(SRC_DIR)/invovlp/%.cu
 #	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR)\
 #                      $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB)
 
 $(OBJ_DIR)/mlsp2/%.o: $(SRC_DIR)/mlsp2/%.cu
-	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR)\
+	$(CXX) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR)\
                       $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB)
 
 $(OBJ_DIR)/lib/%.o: $(SRC_DIR)/lib/%.cu
-	$(CXX) $(CXX_SO_FLAGS) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR) $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB)
+	$(CXX) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR) $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB)
 
 
 #Clean objects in object directory.

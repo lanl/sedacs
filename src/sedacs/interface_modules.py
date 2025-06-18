@@ -34,13 +34,20 @@ if (not fortlib) and (not pylib):
     error_at("interface_modules", "No specific fortran or python library exists")
     raise e
 
-try:
-    from proxies.python.hamiltonian import get_hamiltonian_proxy
-    from proxies.python.density_matrix import get_density_matrix_proxy
-    #from proxies.python.evals_dvals import get_evals_dvals_proxy
 
+# TODO These proxies should at some point probably be more properly
+# integrated into the code.
+try:
+    # from proxies.python.hamiltonian import get_hamiltonian_proxy
+    # from proxies.python.density_matrix import get_density_matrix_proxy
+    from proxies.python.first_level import get_hamiltonian_proxy
+    from proxies.python.first_level import get_density_matrix_proxy
+    # from proxies.python.evals_dvals import get_evals_dvals_proxy
+
+    import inspect
+    print(inspect.getfile(get_density_matrix_proxy))
     from proxies.python.init_proxy import init_proxy_proxy
-    from proxies.python.hamiltonian import build_coul_ham_proxy
+    from proxies.python.energy_and_forces import build_coul_ham_proxy
 except Exception as e:
     pythlib = None
     raise e

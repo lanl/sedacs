@@ -6,6 +6,7 @@ this will be done interfacing with an engine.
 
 import sys
 
+from sedacs.types import ArrayLike
 from sedacs.interface.pyseqm import pyseqmObjects
 from sedacs.engine import Engine
 import numpy as np
