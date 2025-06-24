@@ -9,7 +9,7 @@
 #
 # ## CXX compiler options:
 $(info $$CXX is [${CXX}])
-GPU_ARCH:=cc${GPU_ARCH}
+GPU_ARCH:=${GPU_ARCH}
 CXX:=${CXX}
 CXX_FLAGS:=${CXX_FLAGS} -fpic -gpu $(GPU_ARCH)
 EXTRA_CXX_FLAGS:=${EXTRA_CXX_FLAGS}
@@ -17,7 +17,7 @@ CXX_SO_FLAGS=-shared -fpic
 # #
 #
 # # CUDA math library directory:
-NVCOMP_LIB_DIR= -L${NVHPC_ROOT}/compilers/lib64
+NVCOMP_LIB_DIR= -L${NVHPC_ROOT}/compilers/lib
 # # CUDA include directory:
 NVCOMP_INC_DIR= -I${NVHPC_ROOT}/compilers/include
 # # CUDA linking libraries:
@@ -27,7 +27,7 @@ NVCOMP_LINK_LIB= -lcudanvhpc
 INCLUDE_DIR= -Iinclude
 #
 # # CUDA math library directory:
-CUDAMATH_LIB_DIR= -L${NVHPC_ROOT}/math_libs/lib64
+CUDAMATH_LIB_DIR= -L/home1/apps/nvidia/Linux_x86_64/25.3/math_libs/12.8/targets/x86_64-linux/lib
 # # CUDA include directory:
 CUDAMATH_INC_DIR= -I${NVHPC_ROOT}/math_libs/include
 # # CUDA linking libraries:
@@ -123,7 +123,7 @@ OBJS          =  $(OBJSP2) $(OBJDIAG) $(OBJPRT) $(OBJCHEBY) \
 
 # Link compiled object files to target so:
 so: $(OBJS)
-	$(CXX) $(CXX_SO_FLAGS) -gpu=cc89 -cuda $(EXTRA_CXX_FLAGS) $(OBJS) -o $(SO) $(MPI_LIB_DIR) $(MPI_LINK_LIB) $(CUDA_LIB_DIR) $(CUDA_LINK_LIB) $(CUDAMATH_LIB_DIR) $(CUDAMATH_LINK_LIB) $(NVCOMP_LIB_DIR) $(NVCOMP_LINK_LIB) #-lnvToolsExt -L/usr/lib 
+	$(CXX) $(CXX_SO_FLAGS) -gpu=$(GPU_ARCH) -cuda $(EXTRA_CXX_FLAGS) $(OBJS) -o $(SO) $(MPI_LIB_DIR) $(MPI_LINK_LIB) $(CUDA_LIB_DIR) $(CUDA_LINK_LIB) $(CUDAMATH_LIB_DIR) $(CUDAMATH_LINK_LIB) $(NVCOMP_LIB_DIR) $(NVCOMP_LINK_LIB) #-lnvToolsExt -L/usr/lib 
 
 $(OBJ_DIR)/diag/%.o: $(SRC_DIR)/diag/%.cu
 	$(CXX) $(CXX_FLAGS) $(EXTRA_CXX_FLAGS) -c $< $(INCLUDE_DIR) $(MPI_INC_DIR) $(CUDA_INC_DIR) $(CUDAMATH_INC_DIR) -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIB)
