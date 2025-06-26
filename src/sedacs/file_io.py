@@ -5,6 +5,7 @@ from collections import defaultdict
 from sedacs.types import ArrayLike
 
 import numpy as np
+import toml
 
 from sedacs.system import parameters_to_vectors
 
@@ -16,7 +17,8 @@ __all__ = [
     "read_pdb_file",
     "write_pdb_coordinates",
     "are_files_equivalent",
-    "read_latte_tbparams"
+    "read_latte_tbparams",
+    "read_xtb_tbparams"
 ]
 
 
@@ -641,5 +643,23 @@ def read_latte_tbparams(file):
         tbparams[element]["Wpp"] = float(line[10])
         tbparams[element]["Wdd"] = float(line[11])
         tbparams[element]["Wff"] = float(line[12])
+
+    return tbparams
+
+def read_xtb_tbparams(file):
+    """
+    Reads the TB parameters for xTB from a .toml file.
+
+    Parameters
+    ----------
+    file : str
+        Path to the TB parameters file.
+    
+    Returns
+    -------
+    tbparams : dict
+        Dictionary containing the TB parameters for xTB.
+    """
+    tbparams = toml.load(open(file, "r"))
 
     return tbparams

@@ -34,20 +34,25 @@ if (not fortlib) and (not pylib):
     error_at("interface_modules", "No specific fortran or python library exists")
     raise e
 
+try:
+    from tblite.interface import Calculator
+    xtblib = True
+except Exception as e:
+    xtblib = False
 
 # TODO These proxies should at some point probably be more properly
 # integrated into the code.
 try:
-    # from proxies.python.hamiltonian import get_hamiltonian_proxy
-    # from proxies.python.density_matrix import get_density_matrix_proxy
-    from proxies.python.first_level import get_hamiltonian_proxy
-    from proxies.python.first_level import get_density_matrix_proxy
-    # from proxies.python.evals_dvals import get_evals_dvals_proxy
+    from proxies.python.hamiltonian import get_hamiltonian_proxy
+    from proxies.python.density_matrix import get_density_matrix_proxy
+    #from proxies.python.first_level import get_hamiltonian_proxy
+    #from proxies.python.first_level import get_density_matrix_proxy
+    from proxies.python.evals_dvals import get_evals_dvals_proxy
 
     import inspect
     print(inspect.getfile(get_density_matrix_proxy))
     from proxies.python.init_proxy import init_proxy_proxy
-    from proxies.python.energy_and_forces import build_coul_ham_proxy
+    from proxies.python.hamiltonian import build_coul_ham_proxy
 except Exception as e:
     pythlib = None
     raise e
@@ -116,12 +121,25 @@ def build_coul_ham_module(
             orbital_based,
             hindex,
             overlap=overlap,
+            hubbardu=True,
             verb=False,
         )
     elif eng.name == "ProxyAFortran":
         error_at("build_coul_ham_module", "ProxyAFortran version not implemented yet")
     elif eng.name == "ProxyAC":
         error_at("build_coul_ham_module", "ProxyAC version not implemented yet")
+    elif eng.name == "xTB":
+        ham = build_coul_ham_proxy(
+            ham0,
+            vcouls,
+            types,
+            charges,
+            orbital_based,
+            hindex,
+            overlap=overlap,
+            hubbardu=False,
+            verb=False,
+        )
     elif eng.name == "LATTE":
         # If using LATTE as engine, the coulombic potential would be added directly in the LATTE code.
         ham = ham0
@@ -232,6 +250,34 @@ def get_hamiltonian_module(
             over_ptr,
             ctypes.c_bool(verb),
         )
+
+    elif eng.name == "xTB":
+        
+        # Initialize xtb calculator
+        pt = PeriodicTable()
+        # Initializing the atomic numbers array
+        atomicNumbers = np.zeros_like(types, dtype=np.int32)
+        # Filling the atomic numbers array with the atomic numbers corresponding to the symbols
+        for i in range(len(types)):
+            atomicNumbers[i] = pt.get_atomic_number(symbols[types[i]])
+        
+        calc = Calculator(
+            method="GFN2-xTB",
+            numbers=atomicNumbers,
+            positions=coords * 1.8897259886, # Angstrom to Bohr
+            lattice=latticeVectors * 1.8897259886, # Angstrom to Bohr
+            periodic=np.array([1, 1, 1]),
+            #periodic=np.array([0, 0, 0]),
+        )
+        calc.set("save-integrals", True) # This allows saving overlap and hamiltonian matrices
+        calc.set("accuracy", 1e9) # Set to a large value to avoid error raised from SCF not converged 
+        calc.set("max-iter", 1)
+
+        res = calc.singlepoint()
+        hamiltonian = res.get("hamiltonian-matrix") * 27.211386245981 # Hartree to eV
+        overlap = res.get("overlap-matrix")
+        zmat = None
+
     elif eng.name == "LATTE":
 
         # Import the shared library
@@ -381,6 +427,7 @@ def get_evals_dvals_modules(
     norbsInCore=None,
     mu=None,
     etemp=0.0,
+    overlap=None,
     verb=False,
     newsystem=True,
     keepmem=False,
@@ -416,6 +463,8 @@ def get_evals_dvals_modules(
         Chemical potential for the system.
     etemp : float, optional
         Electronic temperature for the system.
+    overlap : 2D numpy array, dtype: float, optional
+        The overlap matrix.
     verb : bool, optional
         If True, enables verbose output.
     newsystem : bool, optional
@@ -432,15 +481,19 @@ def get_evals_dvals_modules(
     dvals: 1D numpy array, dtype: float
         The dvals of the input hamiltonian matrix, if requested.
     """
-    if eng.name == "ProxyAPython":
+    if eng.name == "ProxyAPython" or eng.name == "xTB":
+        method = eng.method
         evals, dvals = get_evals_dvals_proxy(
             ham,
             nocc,
             norbsInCore=norbsInCore,
+            method=method,
             mu=mu,
             etemp=etemp,
+            overlap=overlap,
             verb=verb,
         )
+        evects = None
 
     elif eng.name == "ProxyAFortran":
         error_at("get_evals_dvals_modules", "Not implemented yet.")
@@ -651,9 +704,10 @@ def get_density_matrix_modules(
     dvals: 1D numpy array, dtype: float, optional
         The dvals of the input hamiltonian matrix, if requested.
     """
-    if eng.name == "ProxyAPython":
+    if eng.name == "ProxyAPython" or eng.name == "xTB":
         method = eng.method
         accel = eng.accel
+        charges = None
         if full_data:
             density_matrix, evals, dvals = get_density_matrix_proxy(
                 ham,
@@ -828,38 +882,10 @@ def get_density_matrix_modules(
 
         return density_matrix, charges
 
-    else:
-        method = eng.method
-        accel = eng.accel
-        if full_data:
-            density_matrix, evals, dvals = get_density_matrix_proxy(
-                ham,
-                nocc,
-                norbsInCore=None,
-                method=method,
-                accel=accel,
-                mu=mu,
-                overlap=overlap,
-                full_data=full_data,
-                verb=False,
-            )
-        else:
-            density_matrix = get_density_matrix_proxy(
-                ham,
-                nocc,
-                norbsInCore=None,
-                method=method,
-                accel=accel,
-                mu=mu,
-                overlap=overlap,
-                full_data=full_data,
-                verb=False,
-            )
-
     if full_data:
-        return density_matrix, evals, dvals
+        return density_matrix, evals, dvals, charges
     else:
-        return density_matrix
+        return density_matrix, charges
 
 
 def get_energy_forces_modules(

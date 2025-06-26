@@ -15,11 +15,11 @@ PartitionType= Regular
 #PartitionType= MinCut
 NumParts= 1
 SCFTol= 1.0E-1
-Overlap= False
-ElectronicTemperature= 0
+Overlap= True 
+ElectronicTemperature= 1000
 MuCalculationType=  #FromParts, Dynamical, None
 Orbitals= {"H":1,"O":4} #This has to be know for each engine
 NumAdaptiveIter= 100 #Number of graph adaptive iterations
-Engine= {"Name":"ProxyAPython","InterfaceType":"Module","Path":"/home/cnegre/sedacs-Qi/proxies/python/","Executable":"/home/cnegre/","RhoSolverMethod":"SP2","Accelerator":"No","AcceleratorPath":"/home/cheng-hanli/github/sedacs_to_merge/src/sedacs/gpu/nvda"} #The name of the external code
+Engine= {"Name":"ProxyAPython","InterfaceType":"Module","Path":"/home/cnegre/sedacs-Qi/proxies/python/","Executable":"/home/cnegre/","RhoSolverMethod":"Diag","Accelerator":"No","AcceleratorPath":"/home/cheng-hanli/github/sedacs_to_merge/src/sedacs/gpu/nvda"} #The name of the external code
 #Engine= {"Name":"ProxyAFortran","InterfaceType":"Module","Path":"/home/cnegre/sedacs-Qi/proxies/fortran/","Executable":"/home/cnegre/"} #The name of the external code
 

@@ -157,6 +157,8 @@ def get_singlePoint_charges(
             newsystem=True,
         )
 
+        ham = build_coul_ham(eng,ham,sy.coulvs[partsCoreHalo[partIndex]],subSy.types,subSy.charges,False,subSy.hindex,overlap=over,verb=False)
+
         toc = time.perf_counter()
         print("Time for get_hamiltonian", toc - tic, "(s)")
 
@@ -175,6 +177,7 @@ def get_singlePoint_charges(
             norbsInCore=norbsInCore,
             mu=mu,
             etemp=sdc.etemp,
+            overlap=over,
             verb=False,
             newsystem=False,
         )
@@ -254,6 +257,9 @@ def get_singlePoint_charges(
             newsystem=True,
             keepmem=True,
         )
+
+        if chargesInPart is None:
+            chargesInPart = get_charges(rho,subSy.znuc,subSy.types,parts[partIndex],subSy.hindex,over=over,verb=True)
 
         chargesInPart = chargesInPart[: len(parts[partIndex])]
         subSy.charges = chargesInPart

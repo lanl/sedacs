@@ -134,6 +134,9 @@ def get_PME_coulvs(
     """
     np_dtype = np.float64
     dtype = torch.float64
+    # Check if Hubbard U is loaded 
+    if np.sum(hubbard_u == 0) > 0:
+        raise ValueError("Hubbard U is not assigned yet.")
 
     # NOTE: cutoff <= 0.5 * min(box lengths)
     # so if box lengths are [10.0, 10.0, 10.0], cutoff shuold be at most 5.0.
@@ -165,6 +168,7 @@ def get_PME_coulvs(
     )
 
     disps, dists, nbr_inds = calculate_dist_dips(coords_T, nbr_state)
+
     # When this is first run, torch.compile might give bunch of warnings about complex numbers
     # and overall tuning process, they are safe to ignore
     ewald_e, forces, coulvs = calculate_PME_ewald(

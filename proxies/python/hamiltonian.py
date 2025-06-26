@@ -129,25 +129,33 @@ sedacs.driver.get_hamiltonian = get_hamiltonian_proxy
 # @param overlap Overlap matrix for nonorthogonal formulations.
 # @param verb Verbosity switch.
 #
-def build_coul_ham_proxy(ham0, vcouls, types, charges, orbital_based, hindex, overlap=None, verb=False):
+def build_coul_ham_proxy(ham0, vcouls, types, charges, orbital_based, hindex, overlap=None, hubbardu=True, verb=False):
     norbs = len(ham0[:, 0])
     vcouls_orbs = np.zeros((norbs), dtype=float)  # Expanded coulombic potentials
     nats = len(hindex[:]) - 1
 
-    tbparams = bring_tbparams()
+    if hubbardu:
+        tbparams = bring_tbparams()
 
     if orbital_based:
         error_at("build_coul_ham", "Orbital-based coulombic potential not implemented")
     else:
-        for i in range(nats):
-            for ii in range(hindex[i], hindex[i + 1]):
-                k = ii - hindex[i]
-                vcouls_orbs[ii] = vcouls[i] + tbparams[types[i]][k].u * charges[i]
+        if hubbardu:
+            for i in range(nats):
+                for ii in range(hindex[i], hindex[i + 1]):
+                    k = ii - hindex[i]
+                    vcouls_orbs[ii] = vcouls[i] + tbparams[types[i]][k].u * charges[i]
+        else:
+            for i in range(nats):
+                for ii in range(hindex[i], hindex[i + 1]):
+                    k = ii - hindex[i]
+                    vcouls_orbs[ii] = vcouls[i] 
         if overlap is None:
             ham = ham0 + np.diag(vcouls_orbs)
         else:
             vmat = np.diag(vcouls_orbs)
             ham = ham0 + 0.5 * (np.dot(overlap, vmat) + np.dot(vmat, overlap))
+
     return ham
 
 
