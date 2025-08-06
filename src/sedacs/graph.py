@@ -37,7 +37,7 @@ except:
 # E.g, `graph[i,k]` is the kth neighbor of node i. NOTE: The 0 entry of
 # every row is reserved to store the degree of every node.
 #
-def get_initial_graph(coords, nl, radius, maxDeg, verb=False):
+def get_initial_graph(coords, nl, radius, maxDeg, LBox, verb=False):
     nats = len(coords[:, 0])
     graph = np.zeros((nats, maxDeg + 1), dtype=int)
     graph[:, :] = -1
@@ -47,7 +47,9 @@ def get_initial_graph(coords, nl, radius, maxDeg, verb=False):
         for j in range(1, nl[i, 0] + 1):
             jj = nl[i, j]
 
-            distance = np.linalg.norm(coords[i, :] - coords[jj, :])
+            delta = coords[i, :] - coords[jj, :]
+            delta -= LBox * np.round(delta / LBox)
+            distance = np.linalg.norm(delta)
             if distance < radius:
                 ik = ik + 1
                 if ik < maxDeg + 1:
@@ -318,6 +320,7 @@ def collect_graph_from_rho(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos,
                 graph[ii, k] = jj
 
         graph[ii, 0] = k
+        graph[ii, k + 1:] = -1  # Fill the rest with -1s
 
     return graph
 
@@ -419,6 +422,7 @@ def multiply_graphs(graphA, graphB):
 
     vectC = np.zeros((nnodes), dtype=bool)
     graphC = np.zeros((nnodes, maxDeg), dtype=int)
+    graphC[:, :] = -1
     for i in range(nnodes):
         vectC[:] = False
         for j in range(1, graphB[i, 0] + 1):
@@ -434,7 +438,7 @@ def multiply_graphs(graphA, graphB):
                     vectC[myJ] = True
 
         k = 0
-        for j in range(nnodes):
+        for j in range(0, nnodes):
             if vectC[j]:
                 k = k + 1
                 graphC[i, k] = j
@@ -634,5 +638,76 @@ def convert_to_graph(adj, maxDeg):
         connections = adj[i,:].nonzero()[0]
         graph[i,1:1+len(connections)] = connections[0:len(connections)]
         graph[i,0] = len(connections)
+
+    return graph
+
+def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos, indicesCore, hindex, coords):
+    """
+    Adaptively expanding the size of halo regions by multiplying the 
+    overlap matrix (estimated from exponential decay of neighboring distances) 
+    from the out of core halo regions with the density matrix in the core halo regions.
+    Dimension of the overlap matrix: NA in non core halo regions x NA in core halo regions.
+    Dimension of the density matrix: NO in core halo regions x NO in core halo regions
+    Dimension of the reducted density matrix: NA in core halo regions x NA in core regions.
+    Dimension of the SD matrix: NA in non core halo regions x NA in core regions.
+    This function will return a new graph with the updated halo regions.
+    """
+    if coords is None or rho is None:
+        raise ValueError("Coordinates and density matrix must be provided.")
+
+    if graph is None:
+        graph = np.zeros((nnodes, maxDeg + 1), dtype=int)
+    graph[indicesCore, 1:] = -1  
+    weights = np.zeros((nnodes))
+    ncores = len(indicesCore)
+    nch = len(indicesCoreHalos)
+
+    # Get the coordinates for the core halo regions
+    corehalo_coords = coords[indicesCoreHalos]
+    # Get the coordinates for the non core halo regions
+    indicesAll = np.arange(nnodes)
+    indicesNonCoreHalos = np.setdiff1d(indicesAll, indicesCoreHalos)
+    noncorehalo_coords = coords[indicesNonCoreHalos]
+    # Initialize the overlap matrix with zeros
+    overlap_matrix = np.zeros((noncorehalo_coords.shape[0], corehalo_coords.shape[0]), dtype=float)
+    # Calculate the distance between core and core halo regions with vectorized operations
+    distances = np.linalg.norm(noncorehalo_coords[:, np.newaxis] - corehalo_coords, axis=2)
+    # Estimate the overlap matrix based on the distances
+    overlap_matrix = np.exp(-distances)  # Exponential decay based on distance
+
+    # Contract the density matrix from number of orbitals to number of atoms by selecting the max # density matrix elements for each atom.
+    # hindex is the number of orbitals for each atom, so we can use it to slice the density matrix
+    if hindex is None:
+        raise ValueError("hindex must be provided to slice the density matrix.")
+    if rho.shape[0] != hindex[-1]:
+        raise ValueError("Density matrix shape does not match hindex length.")
+    rho = np.abs(rho)  # Ensure the density matrix is non-negative
+    # Create a reduced density matrix for the core halo regions
+    reduced_rho = np.zeros((nch, ncores), dtype=float)
+    for i in range(ncores):
+        for j in range(nch):
+            # Slice the density matrix according to hindex
+            reduced_rho[j, i] = np.max(rho[hindex[j]:hindex[j + 1], hindex[i]:hindex[i + 1]])  
+    # Matrix multiplication to get the new halo regions
+    SD = overlap_matrix @ reduced_rho
+    # Thresholding the SD matrix to get the new halo regions
+    for i in range(ncores):
+        ii = indicesCoreHalos[i]
+        weights[:] = 0.0
+        # Assign the weights for the non core halo regions
+        weights[indicesNonCoreHalos] += SD[:, i]
+        # Expand the connections to ii by the weights from each atom in the
+        # non core halo regions (the ones computed from SD)
+        k = 0
+        for j in range(len(indicesNonCoreHalos)): 
+            jj = indicesNonCoreHalos[j]
+            if (ii != jj) and (weights[jj] >= thresh):
+                k = k + 1
+                if k >= maxDeg + 1:
+                    msg = f"Max Degree parameter is too small, maxDeg: {maxDeg} ActuallDeg: {np.sum(weights >= thresh)}"
+                    raise ValueError(msg)
+                graph[ii, k] = jj
+
+        graph[ii, 0] = k
 
     return graph

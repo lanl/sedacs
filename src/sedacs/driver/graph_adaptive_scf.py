@@ -10,7 +10,7 @@ import numpy as np
 from pathlib import Path
 import pickle
 
-from sedacs.graph import add_graphs, collect_graph_from_rho, print_graph, multiply_graphs
+from sedacs.graph import add_graphs, collect_graph_from_rho, print_graph, multiply_graphs, adaptive_halo_expansion
 from sedacs.graph_partition import get_coreHaloIndices, graph_partition
 from sedacs.sdc_hamiltonian import get_hamiltonian
 from sedacs.sdc_density_matrix import get_density_matrix
@@ -272,16 +272,17 @@ def get_singlePoint_charges(
 
         toc = time.perf_counter()
         print("Time to get_densityMatrix and get_charges", toc - tic, "(s)")
-        # Building a graph from DMs
-        graphOnRank = collect_graph_from_rho(
+        # Adaptively expand the halo for the subsystem
+        graphOnRank = adaptive_halo_expansion(
             graphOnRank,
             rho,
             sdc.gthresh,
             sy.nats,
             sdc.maxDeg,
             partsCoreHalo[partIndex],
-            len(parts[partIndex]),
-            hindex,
+            parts[partIndex],
+            subSy.hindex,
+            sy.coords,
         )
 
         chargesOnRank = collect_charges(
@@ -289,15 +290,15 @@ def get_singlePoint_charges(
         )
 
     if is_mpi_available and numranks > 1:
-        fullGraphRho = collect_and_sum_matrices(graphOnRank, rank, numranks, comm)
+        fullGraphHalo = collect_and_sum_matrices(graphOnRank, rank, numranks, comm)
         fullCharges = collect_and_sum_vectors_float(chargesOnRank, rank, numranks, comm)
         comm.Barrier()
     else:
-        fullGraphRho = graphOnRank
+        fullGraphHalo = graphOnRank
         fullCharges = chargesOnRank
 
     # print_graph(fullGraphRho)
-    return fullGraphRho, fullCharges, subSysOnRank, mu
+    return fullGraphHalo, fullCharges, subSysOnRank, mu
 
 
 def get_adaptiveSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu):
@@ -335,7 +336,7 @@ def get_adaptiveSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu):
                 charges, sy.hubbard_u, sy.coords, sy.types, sy.latticeVectors
             )
 
-        fullGraphRho, charges, subSysOnRank, mu = get_singlePoint_charges(
+        fullGraphHalo, charges, subSysOnRank, mu = get_singlePoint_charges(
             sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, gscf, mu
         )
         # print("Collected charges", charges)
@@ -348,17 +349,11 @@ def get_adaptiveSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu):
         #    scfError = sy.numel
 
         # print_graph(fullGraphRho)
-        # fullGraph = add_graphs(fullGraphRho, graphNL)
-        #fullGraph = multiply_graphs(fullGraphRho, graphNL)
-        fullGraph = multiply_graphs(fullGraphRho, fullGraph)
-        # with open('graphNL.pkl', 'wb') as f:
-        #     pickle.dump(graphNL, f)
-        # with open('fullGraphRho.pkl', 'wb') as f:
-        #     pickle.dump(fullGraphRho, f)
-        # with open('fullGraph.pkl', 'wb') as f:
-        #     pickle.dump(fullGraph, f)
-        # if gscf == 1:
-        #     breakpoint()
+        fullGraph = add_graphs(fullGraphHalo, fullGraph)
+        #graphDH = multiply_graphs(fullGraphRho, graphNL)
+        # fullGraph = fullGraphRho 
+        #graphHD = multiply_graphs(graphNL, fullGraphRho)
+        #fullGraph = add_graphs(graphDH, graphHD)
         for i in range(sy.nats):
             print("Charges:", i, sy.symbols[sy.types[i]], charges[i])
         print("SCF ERR =", scfError)
@@ -375,7 +370,7 @@ def get_adaptiveSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu):
 
     AtToPrint = 0
 
-    subSy = System(fullGraphRho[AtToPrint, 0])
+    subSy = System(fullGraph[AtToPrint, 0])
     subSy.symbols = sy.symbols
     subSy.coords, subSy.types = extract_subsystem(
         sy.coords,

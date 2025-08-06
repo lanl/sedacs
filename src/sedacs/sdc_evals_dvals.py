@@ -94,6 +94,7 @@ def get_evals_dvals(
             nocc,
             norbsInCore=norbsInCore,
             mu=mu,
+            etemp=etemp,
             overlap=overlap,
             verb=verb,
             newsystem=newsystem,

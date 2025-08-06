@@ -8,7 +8,7 @@ Graph adaptive single-point charge, energy and force solver
 import time
 from pathlib import Path
 
-from sedacs.graph import add_graphs, collect_graph_from_rho, print_graph, multiply_graphs
+from sedacs.graph import add_graphs, collect_graph_from_rho, print_graph, multiply_graphs, adaptive_halo_expansion
 from sedacs.graph_partition import get_coreHaloIndices, graph_partition
 from sedacs.sdc_hamiltonian import get_hamiltonian
 from sedacs.sdc_density_matrix import get_density_matrix
@@ -276,16 +276,17 @@ def get_singlePoint_energy_forces(
 
         toc = time.perf_counter()
         print("Time to get_densityMatrix", toc - tic, "(s)")
-        # Building a graph from DMs
-        graphOnRank = collect_graph_from_rho(
+        # Adaptively expand the halo for the subsystem
+        graphOnRank = adaptive_halo_expansion(
             graphOnRank,
             rho,
             sdc.gthresh,
             sy.nats,
             sdc.maxDeg,
             partsCoreHalo[partIndex],
-            len(parts[partIndex]),
-            hindex,
+            parts[partIndex],
+            subSy.hindex,
+            sy.coords,
         )
 
         chargesOnRank = collect_charges(
@@ -297,21 +298,21 @@ def get_singlePoint_energy_forces(
         )
 
     if is_mpi_available and numranks > 1:
-        fullGraphRho = collect_and_sum_matrices(graphOnRank, rank, numranks, comm)
+        fullGraphHalo = collect_and_sum_matrices(graphOnRank, rank, numranks, comm)
         fullCharges = collect_and_sum_vectors_float(chargesOnRank, rank, numranks, comm)
         fullEnergy = collect_and_sum_vectors_float(energyOnRank, rank, numranks, comm)
         fullForces = collect_and_sum_matrices_float(forcesOnRank, comm)
         # fullForces = collect_and_sum_matrices(forcesOnRank, rank, numranks, comm, dtype=float)
         comm.Barrier()
     else:
-        fullGraphRho = graphOnRank
+        fullGraphHalo = graphOnRank
         fullCharges = chargesOnRank
         fullEnergy = energyOnRank
         fullForces = forcesOnRank
 
     # print_graph(fullGraphRho)
     return (
-        fullGraphRho,
+        fullGraphHalo,
         fullCharges,
         fullEnergy[0],
         fullForces,
@@ -321,25 +322,11 @@ def get_singlePoint_energy_forces(
 
 
 def get_adaptive_sp_energy_forces(
-    sdc, eng, comm, rank, numranks, sy, parts, partsCoreHalo, hindex, graphNL, mu, shadow_md=True
+    sdc, eng, comm, rank, numranks, sy, parts, partsCoreHalo, hindex, graph, mu, shadow_md=True
 ):
-    fullGraph = graphNL
+    fullGraph = graph
 
     charges = sy.charges
-    # Partition the graph
-#    parts = graph_partition(
-#        sdc, eng, fullGraph, sdc.partitionType, sdc.nparts, sy.coords, True
-#    )
-    # njumps = 1
-    # partsCoreHalo = []
-    # numCores = []
-    # # print("\nCore and halos indices for every part:")
-    # for i in range(sdc.nparts):
-    #     coreHalo, nc, nh = get_coreHaloIndices(parts[i], fullGraph, njumps)
-    #     partsCoreHalo.append(coreHalo)
-    #     numCores.append(nc)
-    #     print("core,halo size:", i, "=", nc, nh)
-    #    print("coreHalo for part", i, "=", coreHalo)
 
     sy.coulvs, ecoul, fcoul = get_PME_coulvs(
         charges,
@@ -350,7 +337,7 @@ def get_adaptive_sp_energy_forces(
         calculate_forces=1,
     )
 
-    fullGraphRho, charges, energy, forces, subSysOnRank, mu = (
+    fullGraphHalo, charges, energy, forces, subSysOnRank, mu = (
         get_singlePoint_energy_forces(
             sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu
         )
@@ -361,12 +348,11 @@ def get_adaptive_sp_energy_forces(
     energy = energy - ecoul
     forces = forces + fcoul
 
-    # fullGraph = add_graphs(fullGraphRho, graphNL)
-    fullGraph = multiply_graphs(fullGraphRho, fullGraph)
+    fullGraph = add_graphs(fullGraphHalo, graph)
 
     AtToPrint = 0
 
-    subSy = System(fullGraphRho[AtToPrint, 0])
+    subSy = System(fullGraph[AtToPrint, 0])
     subSy.symbols = sy.symbols
     subSy.coords, subSy.types = extract_subsystem(
         sy.coords,

@@ -6,10 +6,17 @@ Graph adaptive self-consistent charge solver with kernel
 """
 
 import time
+import torch
 import numpy as np
 from copy import deepcopy
 
-from sedacs.graph import add_graphs, collect_graph_from_rho, print_graph, multiply_graphs
+from sedacs.graph import (
+    add_graphs,
+    collect_graph_from_rho,
+    print_graph,
+    multiply_graphs,
+    adaptive_halo_expansion,
+)
 from sedacs.graph_partition import get_coreHaloIndices, graph_partition
 from sedacs.sdc_hamiltonian import get_hamiltonian
 from sedacs.sdc_density_matrix import get_density_matrix
@@ -19,6 +26,7 @@ from sedacs.mpi import (
     collect_and_sum_matrices,
     collect_and_sum_vectors_float,
     collect_and_concatenate_vectors,
+    collect_and_sum_matrices_float,
 )
 from sedacs.system import System, extract_subsystem, get_hindex
 from sedacs.coulombic import get_PME_coulvs, build_coul_ham
@@ -28,7 +36,13 @@ from sedacs.message import status_at, error_at, warning_at
 from sedacs.mixer import diis_mix, linear_mix
 from sedacs.chemical_potential import get_mu
 from sedacs.file_io import read_latte_tbparams
-from sedacs.driver.graph_kernel_byparts import get_kernel_byParts, apply_kernel_byParts, rankN_update_byParts
+
+# from sedacs.driver.graph_kernel_byparts import get_kernel_byParts, apply_kernel_byParts, rankN_update_byParts
+from sedacs.driver.graph_kernel_byparts import (
+    get_kernel_byParts,
+    apply_kernel_byParts,
+    rankN_update_byParts,
+)
 
 try:
     from mpi4py import MPI
@@ -129,6 +143,12 @@ def get_singlePoint_charges(
             subSy.types,
             subSy.symbols,
         )
+        write_pdb_coordinates(
+            "subSy_core" + str(rank) + "_" + str(partIndex) + ".pdb",
+            subSy.coords[: len(parts[partIndex]), :],
+            subSy.types[: len(parts[partIndex])],
+            subSy.symbols,
+        )
         tic = time.perf_counter()
 
         # Get some electronic structure elements for the sybsystem
@@ -154,6 +174,7 @@ def get_singlePoint_charges(
             subSy.coords,
             subSy.types,
             subSy.symbols,
+            etemp=sdc.etemp,
             verb=False,
             get_overlap=True,
             newsystem=True,
@@ -242,7 +263,7 @@ def get_singlePoint_charges(
         )
 
         chargesInPart = chargesInPart[: len(parts[partIndex])]
-#        subSy.charges = chargesInPart
+        #        subSy.charges = chargesInPart
 
         # Save the subsystems list for returning them
         subSysOnRank.append(subSy)
@@ -252,37 +273,48 @@ def get_singlePoint_charges(
 
         toc = time.perf_counter()
         print("Time to get_densityMatrix and get_charges", toc - tic, "(s)")
-        # Building a graph from DMs
-        graphOnRank = collect_graph_from_rho(
+        # Adaptively expand the halo for the subsystem
+        graphOnRank = adaptive_halo_expansion(
             graphOnRank,
             rho,
             sdc.gthresh,
             sy.nats,
             sdc.maxDeg,
             partsCoreHalo[partIndex],
-            len(parts[partIndex]),
-            hindex,
+            parts[partIndex],
+            subSy.hindex,
+            sy.coords,
         )
-
         chargesOnRank = collect_charges(
             chargesOnRank, chargesInPart, parts[partIndex], sy.nats, verb=True
         )
 
     if is_mpi_available and numranks > 1:
-        fullGraphRho = collect_and_sum_matrices(graphOnRank, rank, numranks, comm)
+        fullGraphHalo = collect_and_sum_matrices_float(graphOnRank, comm)
         fullCharges = collect_and_sum_vectors_float(chargesOnRank, rank, numranks, comm)
         comm.Barrier()
     else:
-        fullGraphRho = graphOnRank
+        fullGraphHalo = graphOnRank
         fullCharges = chargesOnRank
 
     # print_graph(fullGraphRho)
-    return fullGraphRho, fullCharges, subSysOnRank, mu
+    return fullGraphHalo, fullCharges, subSysOnRank, mu
 
 
-def get_adaptive_KernelSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu):
+def get_adaptive_KernelSCFDM(
+    sdc,
+    eng,
+    comm,
+    rank,
+    numranks,
+    sy,
+    hindex,
+    graphNL,
+    mu,
+    device="cuda",
+    dtype=torch.float64,
+):
     fullGraph = graphNL
-
     # Initial guess for the excess ocupation vector. This is the negative of
     # the charge!
     charges = sy.charges
@@ -291,12 +323,11 @@ def get_adaptive_KernelSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL
     chargesOld = None
     chargesOut = None
     scfError = 1.0
-    charge_iter = [charges]
+    kernel = 0
     # Partition the graph
     parts = graph_partition(
         sdc, eng, fullGraph, sdc.partitionType, sdc.nparts, sy.coords, True
     )
-    kernel = 0
     for gscf in range(sdc.numAdaptIter):
         msg = "Graph-adaptive iteration" + str(gscf)
         status_at("get_adaptiveSCFDM", msg)
@@ -310,55 +341,69 @@ def get_adaptive_KernelSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL
             numCores.append(nc)
             print("core,halo size:", i, "=", nc, nh)
         #    print("coreHalo for part", i, "=", coreHalo)
-        if gscf == 0 and sum(charges == 0) != 0:
+        if rank == 0 and gscf == 0 and sum(charges == 0) != 0:
             sy.coulvs = np.zeros(len(charges))
-        else:
+        elif rank == 0:
             sy.coulvs, ewald_e = get_PME_coulvs(
-                charges, sy.hubbard_u, sy.coords, sy.types, sy.latticeVectors
+                charges,
+                sy.hubbard_u,
+                sy.coords,
+                sy.types,
+                sy.latticeVectors,
+                device=device,
             )
-        
+        sy.coulvs = comm.bcast(sy.coulvs, root=0)
         chargesOld = charges
-        fullGraphRho, charges, subSysOnRank, mu = get_singlePoint_charges(
+        fullGraphHalo, charges, subSysOnRank, mu = get_singlePoint_charges(
             sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, gscf, mu
         )
-        charge_iter.append(charges)
         # print("Collected charges", charges)
-        if scfError > 0.01:
+        if scfError > 0.001:
             scfError, charges, chargesOld, chargesIn, chargesOut = diis_mix(
-                charges, chargesOld, chargesIn, chargesOut, gscf, verb=True
+                charges, chargesOld, chargesIn, chargesOut, gscf, verb=False
             )
-        # scfError,charges,chargesOld = linear_mix(0.25,charges,chargesOld,gscf)
+        #             scfError,charges,chargesOld = linear_mix(0.1,charges,chargesOld,gscf)
         # if gscf == 0:
         #    scfError = sy.numel
-        else: 
-            #scfError = np.linalg.norm(chargesNew - charges) / np.sqrt(sy.nats)
+        else:
             scfError = np.linalg.norm(charges - chargesOld) / np.sqrt(sy.nats)
-            # scfError = np.linalg.norm(charge_iter[-1] - charge_iter[-2]) / np.sqrt(sy.nats)
             if kernel == 0:
-                get_kernel_byParts(sdc, rank, numranks, parts, partsCoreHalo, sy, mu)
+                print("start building the full kernel...")
+                get_kernel_byParts(
+                    sdc, rank, numranks, parts, partsCoreHalo, sy, mu, device=device
+                )
                 syk = deepcopy(sy)
-                syk.subSy_list = deepcopy(sy.subSy_list)
-                for i, subSy in enumerate(syk.subSy_list):
-                    subSy.ker = deepcopy(sy.subSy_list[i].ker)
                 # KRes = apply_kernel_byParts(
                 #     charges, chargesOld, sdc, rank, numranks, comm, parts, sy
                 # )
-            # breakpoint()
                 kernel = 1
             else:
                 for i, subSy in enumerate(sy.subSy_list):
-                    subSy.ker = deepcopy(syk.subSy_list[i].ker) 
+                    subSy.ker = syk.subSy_list[i].ker.clone()
             KRes = rankN_update_byParts(
-                        charges, chargesOld, 6, sdc, rank, numranks, comm, parts, partsCoreHalo, sy, mu=mu
-                    )
+                torch.from_numpy(charges).to(device).to(dtype),
+                torch.from_numpy(chargesOld).to(device).to(dtype),
+                6,
+                sdc,
+                rank,
+                numranks,
+                comm,
+                parts,
+                partsCoreHalo,
+                sy,
+                mu=mu,
+                device=device,
+            )
+            KRes = KRes.cpu().numpy()
+            
             # charges = charges - KRes
             charges = chargesOld - KRes
-            # breakpoint()
             # charges = charges - np.dot(sy.subSy_list[0].ker, g_charges - charges)
         # print_graph(fullGraphRho)
 
-        # fullGraph = add_graphs(fullGraphRho, graphNL)
-        fullGraph = multiply_graphs(fullGraphRho, fullGraph)
+        fullGraph = add_graphs(fullGraphHalo, fullGraph)
+        # fullGraph = multiply_graphs(fullGraphRho, graphNL)
+        # fullGraph = fullGraphRho
         for i in range(sy.nats):
             print("Charges:", i, sy.symbols[sy.types[i]], charges[i])
         print("SCF ERR =", scfError)
@@ -375,7 +420,7 @@ def get_adaptive_KernelSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL
 
     AtToPrint = 0
 
-    subSy = System(fullGraphRho[AtToPrint, 0])
+    subSy = System(fullGraph[AtToPrint, 0])
     subSy.symbols = sy.symbols
     subSy.coords, subSy.types = extract_subsystem(
         sy.coords,

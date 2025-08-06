@@ -115,6 +115,8 @@ def init(args):
         # Read the coordinates
         sy = System(1)
         sy.latticeVectors, sy.symbols, sy.types, sy.coords = read_coords_file(sdc.coordsFileName, lib="None", verb=True)
+        LBox = np.diag(sy.latticeVectors)
+        sy.coords = sy.coords - LBox * np.floor(sy.coords / LBox)
         sy.nats = len(sy.coords[:, 0])
         sy.vels = np.zeros((sy.nats, 3))
         sy.hubbard_u = np.zeros(sy.nats)
@@ -200,7 +202,7 @@ def init(args):
             #del sdc.overlap_whole
 
         else:
-            graphNL = get_initial_graph(sy.coords, nl, sdc.rcut, sdc.maxDeg, True)
+            graphNL = get_initial_graph(sy.coords, nl, sdc.rcut, sdc.maxDeg, LBox, True)
     else:
         graphNL = None
     

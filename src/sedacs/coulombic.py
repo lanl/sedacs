@@ -104,6 +104,7 @@ def get_PME_coulvs(
     lattice_vecs,
     calculate_forces=0,
     device="cuda",
+    use_torch=False,
 ):
     """
     Get periodic Coulombic potentials using the Particle Mesh Ewald method
@@ -135,7 +136,7 @@ def get_PME_coulvs(
     np_dtype = np.float64
     dtype = torch.float64
     # Check if Hubbard U is loaded 
-    if np.sum(hubbard_u == 0) > 0:
+    if sum(hubbard_u == 0) > 0:
         raise ValueError("Hubbard U is not assigned yet.")
 
     # NOTE: cutoff <= 0.5 * min(box lengths)
@@ -149,11 +150,19 @@ def get_PME_coulvs(
     t_err = 5e-4  # force error
     PME_order = 6
 
-    lattice_vecs = torch.from_numpy(lattice_vecs).to(device).to(dtype)
-    coords = torch.from_numpy(coords).to(device).to(dtype)
-    charges = torch.from_numpy(charges).to(device).to(dtype)
-    hubbard_u = torch.from_numpy(hubbard_u).to(device).to(dtype)
-    atomtypes = torch.from_numpy(atomtypes).to(device).to(torch.int)
+    if use_torch:
+        lattice_vecs = lattice_vecs.to(device).to(dtype)
+        coords = coords.to(device).to(dtype)
+        charges = charges.to(device).to(dtype)
+        hubbard_u = hubbard_u.to(device).to(dtype)
+        atomtypes = atomtypes.to(device).to(torch.int32)
+    else:
+        lattice_vecs = torch.from_numpy(lattice_vecs).to(device).to(dtype)
+        coords = torch.from_numpy(coords).to(device).to(dtype)
+        charges = torch.from_numpy(charges).to(device).to(dtype)
+        hubbard_u = torch.from_numpy(hubbard_u).to(device).to(dtype)
+        atomtypes = torch.from_numpy(atomtypes).to(device).to(torch.int32)
+
     # init PME grid size and related data
     alpha, grid_dimensions = calculate_alpha_and_num_grids(
         lattice_vecs, cutoff, t_err

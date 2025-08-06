@@ -614,7 +614,7 @@ def get_core_halo(nodeIPartition, nodeIConnections, nodeIDegree, k,
 # @param graph Graph to extract the halos from
 # @param njumps It will search the halos among the "njumps" nearest neighbors
 #
-def get_coreHaloIndices(eng, core,graph,njumps, *args):
+def _get_coreHaloIndices(eng, core, graph, njumps, *args):
     coreHalo = np.array(core.copy())
     nc = len(coreHalo)
     nch = nc
