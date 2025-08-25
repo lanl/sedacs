@@ -652,11 +652,44 @@ def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos
     Adaptively expanding the size of halo regions by multiplying the 
     overlap matrix (estimated from exponential decay of neighboring distances) 
     from the out of core halo regions with the density matrix in the core halo regions.
-    Dimension of the overlap matrix: NA in non core halo regions x NA in core halo regions.
-    Dimension of the density matrix: NO in core halo regions x NO in core halo regions
+    Dimension of the overlap matrix: Number of atoms (NA) in whole system/non core halo regions x NA in core halo regions.
+    Dimension of the density matrix: Number of orbitals (NO) in core halo regions x NO in core halo regions
     Dimension of the reducted density matrix: NA in core halo regions x NA in core regions.
-    Dimension of the SD matrix: NA in non core halo regions x NA in core regions.
+    Dimension of the SD matrix: NA in whole system/non core halo regions x NA in core regions.
     This function will return a new graph with the updated halo regions.
+
+    Parameters
+    ----------
+    graph : np.ndarray
+        The graph in 2D numpy array where `graph[i,k]` is the kth neighbor
+        of node i. NOTE: The 0 entry of every row is reserved to store the degree of every node.
+    rho : np.ndarray
+        Density matrix from the subgraph. This is a 2D numpy array.
+    thresh : float
+        Threshold to determine significant connections.
+    nnodes : int
+        Number of nodes of the full graph.
+    maxDeg : int
+        Max degree parameter for the full graph.
+    indicesCoreHalos : list
+        List of core+halo indices.
+    indicesCore : list
+        List of core indices.
+    hindex : list
+        A list of displacements mapping every node in the full graph
+        with a sequence of indices (orbitals) in the full density matrix.
+        The orbital indices for orbital i goes from `hindex[i]` to `hindex[i+1]-1`.
+    coords : np.ndarray
+        Coordinates of the atoms in the system.
+    alpha : float, optional
+        Decay parameter for the overlap matrix, by default 0.7.
+    expandonly : bool, optional
+        If True, only expand the halo regions without modifying previous core+halo regions, by default True.
+    
+    Returns
+    -------
+    np.ndarray
+        Updated graph with the new halo regions.
     """
     if coords is None or rho is None:
         raise ValueError("Coordinates and density matrix must be provided.")
