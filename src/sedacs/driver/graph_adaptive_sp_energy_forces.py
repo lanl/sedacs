@@ -29,6 +29,7 @@ from sedacs.energy_forces import collect_energy, collect_forces
 from sedacs.message import status_at, error_at, warning_at
 from sedacs.mixer import diis_mix, linear_mix
 from sedacs.chemical_potential import get_mu
+from sedacs.entropy import get_entropy
 from sedacs.file_io import read_latte_tbparams
 import numpy as np
 
@@ -48,7 +49,7 @@ __all__ = ["get_singlePoint_energy_forces", "get_adaptive_sp_energy_forces"]
 
 
 def get_singlePoint_energy_forces(
-    sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu=0.0
+    sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu=0.0, alpha=0.7, expandonly=True,
 ):
     """
     Get the single point charges, energy, and forces for the full system from graph-partitioned subsystems.
@@ -206,6 +207,15 @@ def get_singlePoint_energy_forces(
         kB=8.61739e-5,
         verb=True,
     )
+    # Calculate the electronic entropy from the evals and dvals collected from all subsystems
+    fullEntropy = get_entropy(
+        mu,
+        fullEvals,
+        sdc.etemp,
+        fullDvals,
+        kB=8.61739e-5,
+        verb=True,
+    )
 
     for partIndex in range(partIndex1, partIndex2):
         numberOfCoreAtoms = len(parts[partIndex])
@@ -287,6 +297,8 @@ def get_singlePoint_energy_forces(
             parts[partIndex],
             subSy.hindex,
             sy.coords,
+            alpha=alpha,
+            expandonly=expandonly,
         )
 
         chargesOnRank = collect_charges(
@@ -298,7 +310,7 @@ def get_singlePoint_energy_forces(
         )
 
     if is_mpi_available and numranks > 1:
-        fullGraphHalo = collect_and_sum_matrices(graphOnRank, rank, numranks, comm)
+        fullGraphHalo = collect_and_sum_matrices_float(graphOnRank, comm)
         fullCharges = collect_and_sum_vectors_float(chargesOnRank, rank, numranks, comm)
         fullEnergy = collect_and_sum_vectors_float(energyOnRank, rank, numranks, comm)
         fullForces = collect_and_sum_matrices_float(forcesOnRank, comm)
@@ -315,6 +327,7 @@ def get_singlePoint_energy_forces(
         fullGraphHalo,
         fullCharges,
         fullEnergy[0],
+        fullEntropy,
         fullForces,
         subSysOnRank,
         mu,
@@ -322,24 +335,30 @@ def get_singlePoint_energy_forces(
 
 
 def get_adaptive_sp_energy_forces(
-    sdc, eng, comm, rank, numranks, sy, parts, partsCoreHalo, hindex, graph, mu, shadow_md=True
+    sdc, eng, comm, rank, numranks, sy, parts, partsCoreHalo, hindex, graphNL, mu, alpha=0.7, shadow_md=True, device="cuda", expandonly=True,
 ):
-    fullGraph = graph
-
     charges = sy.charges
 
-    sy.coulvs, ecoul, fcoul = get_PME_coulvs(
-        charges,
-        sy.hubbard_u,
-        sy.coords,
-        sy.types,
-        sy.latticeVectors,
-        calculate_forces=1,
-    )
+    if rank == 0:
+        sy.coulvs, ecoul, fcoul = get_PME_coulvs(
+            charges,
+            sy.hubbard_u,
+            sy.coords,
+            sy.types,
+            sy.latticeVectors,
+            calculate_forces=1,
+            device=device,
+        )
+    else:
+        ecoul = None
+        fcoul = None
+    sy.coulvs = comm.bcast(sy.coulvs, root=0)
+    ecoul = comm.bcast(ecoul, root=0)
+    fcoul = comm.bcast(fcoul, root=0)
 
-    fullGraphHalo, charges, energy, forces, subSysOnRank, mu = (
+    fullGraphHalo, charges, energy, entropy, forces, subSysOnRank, mu = (
         get_singlePoint_energy_forces(
-            sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu
+            sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu, alpha=alpha, expandonly=expandonly,
         )
     )
     if shadow_md:
@@ -348,7 +367,8 @@ def get_adaptive_sp_energy_forces(
     energy = energy - ecoul
     forces = forces + fcoul
 
-    fullGraph = add_graphs(fullGraphHalo, graph)
+    fullGraph = add_graphs(fullGraphHalo, graphNL)
+    #fullGraph = fullGraphHalo
 
     AtToPrint = 0
 
@@ -368,4 +388,4 @@ def get_adaptive_sp_energy_forces(
             "subSyG_fin.xyz", subSy.coords, subSy.types, subSy.symbols
         )
 
-    return fullGraph, charges, energy, forces, mu, parts, partsCoreHalo, subSysOnRank
+    return fullGraph, charges, energy, entropy, forces, mu, parts, partsCoreHalo, subSysOnRank

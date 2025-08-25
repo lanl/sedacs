@@ -19,13 +19,13 @@ torch.set_default_dtype(torch.float64)
 from sedacs.driver.init import init, available_device
 from sedacs.graph_partition import get_coreHaloIndices, graph_partition
 from sedacs.driver.graph_kernel_byparts import get_kernel_byParts, apply_kernel_byParts, rankN_update_byParts
-from sedacs.driver.graph_adaptive_scf import get_adaptiveSCFDM
+from sedacs.driver.graph_adaptive_kernel_scf import get_adaptive_KernelSCFDM
 from sedacs.driver.graph_adaptive_sp_energy_forces import get_adaptive_sp_energy_forces
 from sedacs.file_io import read_latte_tbparams
 from sedacs.periodic_table import PeriodicTable
 from mpi4py import MPI
 from sedacs.system import build_nlist
-from sedacs.graph import get_initial_graph
+from sedacs.graph import get_initial_graph, add_graphs
 
 ####
 # Global Constants
@@ -45,7 +45,7 @@ def main(args):
     # Set numpy printing threshold
     np.set_printoptions(threshold=sys.maxsize)
     # Initialize sedacs parameters
-    sdc, eng, comm, rank, numranks, sy, hindex, graphNL, nl, nlTrX, nlTrY, nlTrZ = init(
+    sdc, eng, comm, rank, numranks, sy, hindex, graphNL, graphweights, nl, nlTrX, nlTrY, nlTrZ = init(
         args
     )
     if rank == 0:
@@ -54,8 +54,12 @@ def main(args):
         Energy_dat = open("Energy.dat", "w")
     # Set verbosity
     sdc.verb = False
+    # Get device
+    device = args.device
     # Chemical potential
     mu = args.mu
+    # Degree of localization for adaptive halo expansion
+    localization = args.localization
     # Number of timesteps
     MD_Iter = args.md_iter
     # Size of the timestep
@@ -91,14 +95,21 @@ def main(args):
     # Read the coordinates as tensors
     coords = torch.tensor(sy.coords)
     # Perform a graph-adaptive calculation of the charges with SCF cycles
-    graphDH, sy.charges, mu, parts, partsCoreHalo, subSysOnRank = get_adaptiveSCFDM(
-        sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu
+    graphDH, sy.charges, mu, parts, partsCoreHalo, subSysOnRank = get_adaptive_KernelSCFDM(
+        sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu, alpha=localization, graphweights=graphweights, device=device,
     )
     #breakpoint()
+    njumps = 1
+    partsCoreHalo = []
+    numCores = []
+    for i in range(sdc.nparts):
+        coreHalo, nc, nh = get_coreHaloIndices(parts[i], graphDH, njumps)
+        partsCoreHalo.append(coreHalo)
+        numCores.append(nc)
     # Perform a single-point graph-adaptive calculation of the energy and forces
-    graphDH, charges, EPOT, FTOT, mu, parts, partsCoreHalo, subSysOnRank = (
+    graphDH, charges, EPOT, entropy, FTOT, mu, parts, partsCoreHalo, subSysOnRank = (
         get_adaptive_sp_energy_forces(
-            sdc, eng, comm, rank, numranks, sy, parts, partsCoreHalo, hindex, graphDH, mu
+            sdc, eng, comm, rank, numranks, sy, parts, partsCoreHalo, hindex, graphNL, mu, alpha=localization, device=device, shadow_md=shadow_md,
         )
     )
     # Convert the charges to a tensor
@@ -161,7 +172,7 @@ def main(args):
             # Here we record the time, temperature, and charges. Note that the last term, q, would be constant if not solving exact charges during MD
             with torch.no_grad():
                 Energy_dat.write(
-                    f"{Time/1000:<16.8f} {ETOT:<16.16f} {Temperature:<16.8f} {EKIN.item():<16.16f} {EPOT.item():<16.16f} {torch.sum(q).item():<16.16f} {torch.sum(n_0).item():<16.16f} {mu:<16.16f}\n"
+                    f"{Time/1000:<16.8f} {ETOT.item():<16.16f} {entropy:<16.16f} {Temperature.item():<16.8f} {EKIN.item():<16.16f} {EPOT.item():<16.16f} {torch.sum(q).item():<16.16f} {torch.sum(n_0).item():<16.16f} {mu:<16.16f}\n"
                 )
 
             # Here we dump the MD trajectory
@@ -185,13 +196,8 @@ def main(args):
         # if use_kernel:
         if use_kernel:
             if MD_step == 0 or renew == 1:
-                get_kernel_byParts(sdc, rank, numranks, parts, partsCoreHalo, sy, mu) 
+                get_kernel_byParts(sdc, rank, numranks, parts, partsCoreHalo, sy, mu, device=device) 
                 syk = deepcopy(sy)
-                syk.subSy_list = deepcopy(sy.subSy_list)
-                for i, subSy in enumerate(syk.subSy_list):
-                    subSy.ker = deepcopy(sy.subSy_list[i].ker)
-                partsk = deepcopy(parts)
-                partsCoreHalok = deepcopy(partsCoreHalo)
                 #breakpoint()
                 #KK0 = torch.tensor(sy.subSy_list[0].ker)
                 #KK0 = torch.tensor(collect_kernel_byParts(
@@ -207,8 +213,9 @@ def main(args):
                 for i, subSy in enumerate(sy.subSy_list):
                     subSy.ker = deepcopy(syk.subSy_list[i].ker)
                 dn2dt2 = -rankN_update_byParts(
-                        q, n_0, 6, sdc, rank, numranks, comm, parts, partsCoreHalo, sy, mu=mu
+                        q.to(device), n_0.to(device), 12, sdc, rank, numranks, comm, parts, partsCoreHalo, sy, mu=mu, device=device
                         )
+                dn2dt2 = dn2dt2.to("cpu")
                 #dn2dt2 = -rankN_update_byParts(
                 #        q, n_0, 6, sdc, eng, rank, numranks, comm, partsk, partsCoreHalok, syk, hindex, mu=mu
                 #        )
@@ -271,17 +278,33 @@ def main(args):
         #graphNL = comm.bcast(graphNL, root=0)
         if not shadow_md:
             # Perform a graph-adaptive calculation of the charges with SCF cycles
-            graphDH, sy.charges, mu, parts, subSysOnRank = get_adaptiveSCFDM(
-                sdc, eng, comm, rank, numranks, sy, hindex, graphDH, mu
+            graphDH, sy.charges, mu, parts, subSysOnRank = get_adaptive_KernelSCFDM(
+                sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu, alpha=localization, graphweights=graphweights
             )
         #else:
         #    graphDH = graphNL
 
         if MD_step % 100 == 99:
+            # Update neighbor list
+            nl, nlTrX, nlTrY, nlTrZ = build_nlist(
+               sy.coords,
+               sy.latticeVectors,
+               sdc.rcut,
+               api="old",
+               rank=rank,
+               numranks=numranks,
+               verb=False,
+            )
+            comm.Barrier()
+            # Create initial graph based on distances
+            if rank == 0:
+                graphNL, graphweights = get_initial_graph(sy.coords, nl, sdc.rcut, sdc.maxDeg, LBox.numpy(), graphweights=True, verb=True) 
+            graphNL = comm.bcast(graphNL, root=0)
             # Partition the graph
-            #parts = graph_partition(
-            #    sdc, eng, graphDH, sdc.partitionType, sdc.nparts, sy.coords, True
-            #)
+            parts = graph_partition(
+                sdc, eng, graphNL, sdc.partitionType, sdc.nparts, sy.coords, graphweights=graphweights, verb=True
+            )
+            graphDH = add_graphs(graphDH, graphNL)
 
             renew = 1
             
@@ -294,7 +317,7 @@ def main(args):
             numCores.append(nc)
             print("MD_step, core,halo size:", MD_step, i, "=", nc, nh)
         # Perform a single-point graph-adaptive calculation of the energy and forces
-        graphDH, sy.charges, EPOT, FTOT, mu, parts, partsCoreHalo, subSysOnRank = (
+        graphDH, sy.charges, EPOT, entropy, FTOT, mu, parts, partsCoreHalo, subSysOnRank = (
             get_adaptive_sp_energy_forces(
                 sdc,
                 eng,
@@ -305,9 +328,12 @@ def main(args):
                 parts,
                 partsCoreHalo,
                 hindex,
-                graphDH,
+                graphNL,
                 mu,
+                alpha=localization,
                 shadow_md=shadow_md,
+                device=device,
+                expandonly=False,
             )
         )
         q = torch.tensor(sy.charges)
@@ -331,8 +357,9 @@ if __name__ == "__main__":
         description="Regular Born-Oppenheimer MD with sedacs"
     )
     parser.add_argument(
-        "--use-torch", help="Use pytorch", required=False, action="store_true"
+        "--device", help="CPU/GPU device", type=str, default="cuda",
     )
+    parser.add_argument("--use-torch", help="Use pytorch", required=False, action="store_true")
     parser.add_argument(
         "--input-file",
         help="Specify input file",
@@ -351,6 +378,9 @@ if __name__ == "__main__":
         "--mu", type=float, default=0.0, help="Initial Chemical potential (eV)"
     )
     parser.add_argument(
+        "--localization", type=float, default=0.7, help="Degree of localization for adaptive halo expansion"
+    )
+    parser.add_argument(
         "--shadow_md",
         type=int,
         default=1,
@@ -363,8 +393,6 @@ if __name__ == "__main__":
         help="Set to 1/0 to enable/disable kernel calculation",
     )
     args = parser.parse_args()
-    if args.use_torch:
-        args.device = available_device()
 
     print("Start running MD......")
     main(args)

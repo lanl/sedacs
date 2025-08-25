@@ -5,6 +5,7 @@ from sedacs.file_io import (
         write_xyz_coordinates,
         write_pdb_coordinates
 )
+from sedacs.sedacs_partition.sedacs_part import *
 #import matplotlib.pyplot as plt
 #
 
@@ -19,7 +20,7 @@ import os
 from sedacs.periodic_table import PeriodicTable
 
 try: 
-    import metis
+    import pymetis
     metisLib = True
 except: 
     metisLib = False
@@ -72,13 +73,15 @@ DEBUG_LEVEL = 0  # > 0 gives assert statements, > 1 gives print statements.
 # @param verb Verbosity level
 # @return parts Partition containing a "list of parts" where every
 # part is a list of nodes
-def graph_partition(sdc, eng, graph, partitionType, nparts, coords, verb=False):
+def graph_partition(sdc, eng, graph, partitionType, nparts, coords, latticeVectors=None, graphweights=None, verb=False):
     if partitionType == "Regular":
         parts = regular_partition(graph, nparts, verb)
     elif partitionType == "Metis":
-        parts = metis_partition(graph, nparts, verb)
+        parts = metis_partition(graph, nparts, graphweights=graphweights, verb=verb)
     elif partitionType == "MinCut":
         parts = mincut_partition(graph, nparts, verb)
+    elif partitionType == "SEDACS":
+        parts = sedacs_partition(graph, nparts, coords, latticeVectors, verb)
     elif(partitionType == "SpectralClustering"):
         parts = spectral_clustering_partition(sdc, graph, nparts, coords, do_xyz=True)
 
@@ -884,7 +887,7 @@ def coords_partition(
 # @return parts Partition containing a "list of parts" where every
 # part is a list of nodes
 #
-def metis_partition(graph, nparts, verb=False):
+def metis_partition(graph, nparts, graphweights=None, verb=False):
     """Partitions using metis"""
     if metisLib == False:
         raise ImportError("Consider installing Metis library")
@@ -895,11 +898,27 @@ def metis_partition(graph, nparts, verb=False):
 
     nnodes = len(graph[:, 0])
     if(nparts > 1):
-        nxGraph = get_nx_graph(graph, 1.0)
+        if graphweights is not None:
+            eweights = []
+            for i in range(len(graph[:, 0])):
+                eweights += list(map(int, graphweights[i, 1:graph[i,0]+1].tolist()))
+        else:
+            eweights = None
+        xadj = [0]
+        adjncy = []
+        for i in range(nnodes):
+            adjncy += list(map(int, graph[i, 1:graph[i,0]+1]))
+            xadj.append(len(adjncy))
+        #graph_list = []
+        #for i in range(len(graph[:, 0])):
+        #    graph_list.append(graph[i, 1:graph[i,0]+1])
+        #edgecuts, metisParts = pymetis.part_graph(nparts, adjacency=graph_list)
         # Metis partition metis call
         # Metis returns nxParts which is a list of every's part (or "color")
         # to where they belong. Node "i" belongs to "metisParts[i]" part.
-        edgecuts, metisParts = metis.part_graph(nxGraph, nparts)
+        eweights = None
+        #edgecuts, metisParts = pymetis.part_graph(nparts, xadj=xadj, adjncy=adjncy, eweights=eweights, recursive=True)
+        edgecuts, metisParts = pymetis.part_graph(nparts, xadj=xadj, adjncy=adjncy, eweights=eweights, recursive=True)
 
         # The next lines will transform from metis to our partition format
         parts = []
@@ -919,6 +938,24 @@ def metis_partition(graph, nparts, verb=False):
     # plot_graph(nxGraph)
     return parts
 
+def sedacs_partition(graph, nparts, coords, latticeVectors, verb):
+    nnodes = len(graph[:, 0])
+    if(nparts > 1):
+        nx = 4; ny = 4; nz = 3
+        rank = 1; numranks = 1
+        degs = graph[:, 0]
+
+        err, boxOfI, nparts = sedacs_nlistbox(coords,latticeVectors,nx,ny,nz,rank,numranks,verb)
+
+        err, whichParts_guess_out = sedacs_part(boxOfI,graph,degs,nparts,verb)
+        parts = []
+        for i in range(nparts):
+            parts.append(np.where(whichParts_guess_out == i)[0].tolist())
+    else:
+        parts = []
+        parts.append(list(range(0, nnodes)))
+
+    return parts 
 
 ## MinCut local partition optimization.
 # @brief This will optimize a given partition based on a mincut algorithm.
@@ -1337,6 +1374,7 @@ def get_coreHaloIndices(core, graph, njumps, eng=None):
                         nch = nch + 1
                         coreHalo.append(j)
                         nx[j] = True
+
         return coreHalo, nc, nch
 
 def get_coreHaloIndicesPYSEQM(eng, core,graph,njumps, *args):

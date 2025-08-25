@@ -37,10 +37,14 @@ except:
 # E.g, `graph[i,k]` is the kth neighbor of node i. NOTE: The 0 entry of
 # every row is reserved to store the degree of every node.
 #
-def get_initial_graph(coords, nl, radius, maxDeg, LBox, verb=False):
+def get_initial_graph(coords, nl, radius, maxDeg, LBox, graphweights=False, verb=False):
     nats = len(coords[:, 0])
     graph = np.zeros((nats, maxDeg + 1), dtype=int)
     graph[:, :] = -1
+    if graphweights:
+        eweights = np.zeros((nats, maxDeg + 1), dtype=int)
+    else:
+        eweights = None
     for i in range(nats):
         ik = 0
         degi = 0
@@ -55,6 +59,8 @@ def get_initial_graph(coords, nl, radius, maxDeg, LBox, verb=False):
                 if ik < maxDeg + 1:
                     graph[i, ik] = jj
                     degi = degi + 1
+                    if graphweights:
+                        eweights[i, ik] = np.round(1000 * np.exp(-2 * distance)).astype(int) + 1
                     # if i == 0:
                     #     print(nl[i,j])
                 else:
@@ -63,7 +69,7 @@ def get_initial_graph(coords, nl, radius, maxDeg, LBox, verb=False):
 
         graph[i, 0] = degi  # Storing the degrees
 
-    return graph
+    return graph, eweights
 
 
 ## Print graph
@@ -641,7 +647,7 @@ def convert_to_graph(adj, maxDeg):
 
     return graph
 
-def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos, indicesCore, hindex, coords):
+def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos, indicesCore, hindex, coords, alpha=0.7, expandonly=True):
     """
     Adaptively expanding the size of halo regions by multiplying the 
     overlap matrix (estimated from exponential decay of neighboring distances) 
@@ -666,14 +672,15 @@ def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos
     corehalo_coords = coords[indicesCoreHalos]
     # Get the coordinates for the non core halo regions
     indicesAll = np.arange(nnodes)
-    indicesNonCoreHalos = np.setdiff1d(indicesAll, indicesCoreHalos)
-    noncorehalo_coords = coords[indicesNonCoreHalos]
+    if expandonly: 
+        indicesNonCoreHalos = np.setdiff1d(indicesAll, indicesCoreHalos)
+        coords = coords[indicesNonCoreHalos]
     # Initialize the overlap matrix with zeros
-    overlap_matrix = np.zeros((noncorehalo_coords.shape[0], corehalo_coords.shape[0]), dtype=float)
+    overlap_matrix = np.zeros((coords.shape[0], corehalo_coords.shape[0]), dtype=float)
     # Calculate the distance between core and core halo regions with vectorized operations
-    distances = np.linalg.norm(noncorehalo_coords[:, np.newaxis] - corehalo_coords, axis=2)
+    distances = np.linalg.norm(coords[:, np.newaxis] - corehalo_coords, axis=2)
     # Estimate the overlap matrix based on the distances
-    overlap_matrix = np.exp(-distances)  # Exponential decay based on distance
+    overlap_matrix = np.exp(-alpha * distances ** 2)  # Exponential decay based on distance
 
     # Contract the density matrix from number of orbitals to number of atoms by selecting the max # density matrix elements for each atom.
     # hindex is the number of orbitals for each atom, so we can use it to slice the density matrix
@@ -690,17 +697,22 @@ def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos
             reduced_rho[j, i] = np.max(rho[hindex[j]:hindex[j + 1], hindex[i]:hindex[i + 1]])  
     # Matrix multiplication to get the new halo regions
     SD = overlap_matrix @ reduced_rho
+    # assign indices
+    if expandonly:
+        indices = indicesNonCoreHalos 
+    else:
+        indices = indicesAll
     # Thresholding the SD matrix to get the new halo regions
     for i in range(ncores):
         ii = indicesCoreHalos[i]
         weights[:] = 0.0
-        # Assign the weights for the non core halo regions
-        weights[indicesNonCoreHalos] += SD[:, i]
+        # Assign the weights
+        weights[indices] += SD[:, i]
         # Expand the connections to ii by the weights from each atom in the
         # non core halo regions (the ones computed from SD)
         k = 0
-        for j in range(len(indicesNonCoreHalos)): 
-            jj = indicesNonCoreHalos[j]
+        for j in range(len(indices)): 
+            jj = indices[j]
             if (ii != jj) and (weights[jj] >= thresh):
                 k = k + 1
                 if k >= maxDeg + 1:

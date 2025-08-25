@@ -60,7 +60,7 @@ __all__ = ["get_singlePoint_charges", "get_adaptiveSCFDM"]
 
 
 def get_singlePoint_charges(
-    sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, gscf, mu=0.0
+    sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, gscf, mu=0.0, alpha=0.7,
 ):
     """
     Get the single point charges for the full system from graph-partitioned subsystems.
@@ -284,6 +284,7 @@ def get_singlePoint_charges(
             parts[partIndex],
             subSy.hindex,
             sy.coords,
+            alpha=alpha,
         )
         chargesOnRank = collect_charges(
             chargesOnRank, chargesInPart, parts[partIndex], sy.nats, verb=True
@@ -311,6 +312,8 @@ def get_adaptive_KernelSCFDM(
     hindex,
     graphNL,
     mu,
+    alpha=0.7,
+    graphweights=None,
     device="cuda",
     dtype=torch.float64,
 ):
@@ -326,7 +329,7 @@ def get_adaptive_KernelSCFDM(
     kernel = 0
     # Partition the graph
     parts = graph_partition(
-        sdc, eng, fullGraph, sdc.partitionType, sdc.nparts, sy.coords, True
+        sdc, eng, fullGraph, sdc.partitionType, sdc.nparts, sy.coords, latticeVectors=sy.latticeVectors, graphweights=graphweights, verb=True
     )
     for gscf in range(sdc.numAdaptIter):
         msg = "Graph-adaptive iteration" + str(gscf)
@@ -352,13 +355,14 @@ def get_adaptive_KernelSCFDM(
                 sy.latticeVectors,
                 device=device,
             )
-        sy.coulvs = comm.bcast(sy.coulvs, root=0)
+        if is_mpi_available and numranks > 1:
+            sy.coulvs = comm.bcast(sy.coulvs, root=0)
         chargesOld = charges
         fullGraphHalo, charges, subSysOnRank, mu = get_singlePoint_charges(
-            sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, gscf, mu
+            sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, gscf, mu, alpha=alpha,
         )
         # print("Collected charges", charges)
-        if scfError > 0.001:
+        if scfError > 0.0001:
             scfError, charges, chargesOld, chargesIn, chargesOut = diis_mix(
                 charges, chargesOld, chargesIn, chargesOut, gscf, verb=False
             )

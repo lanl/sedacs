@@ -127,6 +127,12 @@ def get_singlePoint_charges(
             subSy.types,
             subSy.symbols,
         )
+        write_pdb_coordinates(
+            "subSy_core" + str(rank) + "_" + str(partIndex) + ".pdb",
+            subSy.coords[: len(parts[partIndex]), :],
+            subSy.types[: len(parts[partIndex])],
+            subSy.symbols,
+        )
         tic = time.perf_counter()
 
         # Get some electronic structure elements for the sybsystem
@@ -301,7 +307,7 @@ def get_singlePoint_charges(
     return fullGraphHalo, fullCharges, subSysOnRank, mu
 
 
-def get_adaptiveSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu):
+def get_adaptiveSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu, graphweights=None, device="cuda"):
     fullGraph = graphNL
 
     # Iitial guess for the excess ocupation vector. This is the negative of
@@ -313,7 +319,7 @@ def get_adaptiveSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu):
     chargesOut = None
     # Partition the graph
     parts = graph_partition(
-        sdc, eng, fullGraph, sdc.partitionType, sdc.nparts, sy.coords, True
+        sdc, eng, fullGraph, sdc.partitionType, sdc.nparts, sy.coords, graphweights=graphweights, verb=True
     )
     for gscf in range(sdc.numAdaptIter):
         msg = "Graph-adaptive iteration" + str(gscf)
@@ -329,12 +335,19 @@ def get_adaptiveSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu):
             numCores.append(nc)
             print("core,halo size:", i, "=", nc, nh)
         #    print("coreHalo for part", i, "=", coreHalo)
-        if gscf == 0 and sum(charges == 0) != 0:
+        if rank == 0 and gscf == 0 and sum(charges == 0) != 0:
             sy.coulvs = np.zeros(len(charges))
-        else:
+        elif rank == 0:
             sy.coulvs, ewald_e = get_PME_coulvs(
-                charges, sy.hubbard_u, sy.coords, sy.types, sy.latticeVectors
+                charges,
+                sy.hubbard_u,
+                sy.coords,
+                sy.types,
+                sy.latticeVectors,
+                device=device,
             )
+        if is_mpi_available and numranks > 1:
+            sy.coulvs = comm.bcast(sy.coulvs, root=0)
 
         fullGraphHalo, charges, subSysOnRank, mu = get_singlePoint_charges(
             sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, gscf, mu

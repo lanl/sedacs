@@ -30,14 +30,13 @@ except ImportError:
 import torch
 try:
 
-    from sedacs.torch import build_nlist_torch
+    from sedacs.torch_sedacs import build_nlist_torch
 
     is_torch_available = True
 except ImportError:
     is_torch_available = False
 
 is_torch_available = False
-
 
 __all__ = ["available_device", "init"]
 
@@ -202,12 +201,14 @@ def init(args):
             #del sdc.overlap_whole
 
         else:
-            graphNL = get_initial_graph(sy.coords, nl, sdc.rcut, sdc.maxDeg, LBox, True)
+            graphNL, eweights = get_initial_graph(sy.coords, nl, sdc.rcut, sdc.maxDeg, LBox, graphweights=True, verb=True)
     else:
         graphNL = None
+        eweights = None
     
     #comm.Barrier()
     graphNL = comm.bcast(graphNL, root=0)
+    eweights = comm.bcast(eweights, root=0)
     fullGraph = np.zeros((sy.nats, sdc.maxDeg + 1), dtype=int)
     fullGraph[:, :] = graphNL[:, :]
 
@@ -216,4 +217,4 @@ def init(args):
         init_proxy(sy.symbols,sy.orbs)
     eng.up = True
 
-    return sdc, eng, comm, rank, numranks, sy, hindex, fullGraph, nl, nlTrX, nlTrY, nlTrZ
+    return sdc, eng, comm, rank, numranks, sy, hindex, fullGraph, eweights, nl, nlTrX, nlTrY, nlTrZ

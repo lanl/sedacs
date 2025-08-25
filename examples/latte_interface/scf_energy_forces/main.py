@@ -28,7 +28,7 @@ args = get_args()
 np.set_printoptions(threshold=sys.maxsize)
 
 # Initialize sdc parameters
-sdc, eng, comm, rank, numranks, sy, hindex, graphNL, nl, nlTrX, nlTrY, nlTrZ = init(
+sdc, eng, comm, rank, numranks, sy, hindex, graphNL, graphweights, nl, nlTrX, nlTrY, nlTrZ = init(
     args
 )
 
@@ -46,11 +46,11 @@ sy.hubbard_u = Hubbard_U
 # Perform a graph-adaptive calculation of the density matrix through SCF cycles
 mu = 0.0
 graphDH, sy.charges, mu, parts, partsCoreHalo, subSysOnRank = get_adaptiveSCFDM(
-    sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu
+    sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu, graphweights=graphweights
 )
 # Perform a single-point graph-adaptive calculation of the energy and forces
 graphDH, sy.charges, energy, forces, mu, parts, partsCoreHalo, subSysOnRank = get_adaptive_sp_energy_forces(
-    sdc, eng, comm, rank, numranks, sy, parts, partsCoreHalo, hindex, graphDH, mu
+    sdc, eng, comm, rank, numranks, sy, parts, partsCoreHalo, hindex, graphNL, mu
 )
 print("total energy:", energy)
 print("forces:", forces[0])
