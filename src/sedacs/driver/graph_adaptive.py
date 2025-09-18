@@ -412,7 +412,9 @@ def get_singlePoint(sdc,
 
     if rank == 0:
         tic = time.perf_counter()
-        mu0 = get_mu(mu0, full_dVals, full_eVals, sdc.Tel, sy.numel/2)  # oldR
+        #mu0 = get_mu(mu0, full_dVals, full_eVals, sdc.Tel, sy.numel/2)  # oldR
+        mu0 = get_mu(mu0, full_eVals, sdc.Tel, sy.numel/2, dvals = full_dVals)
+
         print("Time mu0 {:>9.4f} (s)".format(time.perf_counter() - tic))
 
     return (EELEC,
@@ -1555,7 +1557,7 @@ def get_adaptiveDM_PYSEQM(sdc,
 
     # Initial chemical potential guess. TODO: This should probably not be 
     # hard-coded.
-    mu0 = -5.5
+    mu0 = -4.7
     if sdc.UHF:
         mu0 = np.array([mu0+0.1, mu0-0.1])
         mu0 = np.array([-1.3, -5.5])
@@ -1682,6 +1684,7 @@ def get_adaptiveDM_PYSEQM(sdc,
                 # are fewer GPUs per node than ranks per nodes.
 
                 if node_rank < num_gpus:
+                    print(mu0)
                     # We want more ranks per node because dm update always
                     # happens on CPU, on node 0, in parallel.
                     (eElec,
@@ -1707,6 +1710,8 @@ def get_adaptiveDM_PYSEQM(sdc,
                                                        graph_for_pairs,
                                                        graph_maskd)
 
+                    print(mu0)
+                    #if gsc > 2: exit(0)
                     gpu_comm.Allreduce(eElec, global_Eelec, op=MPI.SUM)
 
                 else:

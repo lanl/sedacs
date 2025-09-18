@@ -122,7 +122,7 @@ def init(args):
 
         # Get hindex (the orbital index for each atom in the system)
         sy.norbs, sy.orbs, hindex, sy.numel, sy.znuc = get_hindex(sdc.orbs, sy.symbols, sy.types)
-        if eng.interface == "PySEQM": sy.numel = int(sy.numel/2)
+        #if eng.interface == "PySEQM": sy.numel = int(sy.numel/2)
         sy.numel -= sdc.charge
         if sdc.UHF:
             sy.nocc_alpha = sy.numel/2. + (sdc.mult-1)/2.
