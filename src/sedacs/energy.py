@@ -39,7 +39,9 @@ def get_eNuc(eng, obj):
         else:
             #print('w',obj.w_whole[...,0,0].shape)
             #gam = obj.w_whole[...,0,0]
-            gam = obj.w_ssss
+            gam = obj.w_ssss  # w_ssss zero for now since its unchanged since initialization, FIXME
+            if obj.molecule_whole.method in ("MNDO","AM1","PM3"):
+                raise NotImplementedError("Core-core interaction energy implemented only for PM6_SP method. Don't use MNDO, AM1, PM3")
         return get_nucAB_energy_pyseqm(obj.molecule_whole.Z, obj.molecule_whole.const, obj.molecule_whole.nmol, obj.molecule_whole.ni, obj.molecule_whole.nj,
                                          obj.molecule_whole.idxi, obj.molecule_whole.idxj, obj.molecule_whole.rij, \
                                          obj.rho0xi_whole, obj.rho0xj_whole, obj.molecule_whole.alp, obj.molecule_whole.chi,

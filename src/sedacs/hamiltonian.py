@@ -96,8 +96,8 @@ def get_hamiltonian(sdc, eng, coords, types, symbols,
         else:
             with torch.no_grad():
                 molSub = get_molecule_pyseqm(sdc, molecule_whole.coordinates[:,partsCoreHaloIndex], symbols, types, device=P_contr.device)[0]
-        M_sub, _, __, ___ = hcore(molSub, doTETCI=False) # off-diagonal h1elec
-        del _, __, ___
+        M_sub, *rest = hcore(molSub, doTETCI=False) # off-diagonal h1elec
+        del rest
         ham_timing['h1elNonDi'] = time.time() - tic
         #print("t: h1elNonDi {:>7.3f} |".format(time.time() - tic), end=" ")
 
@@ -136,7 +136,7 @@ def get_hamiltonian(sdc, eng, coords, types, symbols,
             #print("subIndsUnion {:>7.3f} |".format(time.time() - tic), end=" ")
 
             tic = time.time() # compute 2c2e and diagonal h1elec
-            coulInts_test, e1b, e2a, _, _ = TETCI(molecule_whole.const, molecule_whole.idxi[subIndsUnion], molecule_whole.idxj[subIndsUnion],
+            coulInts_test, e1b, e2a, *rest = TETCI(molecule_whole.const, molecule_whole.idxi[subIndsUnion], molecule_whole.idxj[subIndsUnion],
                 molecule_whole.ni[subIndsUnion], molecule_whole.nj[subIndsUnion], molecule_whole.xij[subIndsUnion], molecule_whole.rij[subIndsUnion], molecule_whole.Z,\
                 molecule_whole.parameters['zeta_s'], molecule_whole.parameters['zeta_p'], molecule_whole.parameters['zeta_d'],\
                 molecule_whole.parameters['s_orb_exp_tail'], molecule_whole.parameters['p_orb_exp_tail'], molecule_whole.parameters['d_orb_exp_tail'],\
@@ -213,7 +213,7 @@ def get_hamiltonian(sdc, eng, coords, types, symbols,
             #print("idxi&idxj {:>7.3f} |".format(time.time() - tic), end=" ")
 
             tic = time.time() # compute 2c2e and diagonal h1elec
-            coulInts_test, e1b, e2a, _, _ = TETCI(molecule_whole.const, iii, jjj,
+            coulInts_test, e1b, e2a, *rest = TETCI(molecule_whole.const, iii, jjj,
                     molecule_whole.Z[iii], molecule_whole.Z[jjj], x_ij, r_ij, molecule_whole.Z,\
                     molecule_whole.parameters['zeta_s'], molecule_whole.parameters['zeta_p'], molecule_whole.parameters['zeta_d'],\
                     molecule_whole.parameters['s_orb_exp_tail'], molecule_whole.parameters['p_orb_exp_tail'], molecule_whole.parameters['d_orb_exp_tail'],\
@@ -265,6 +265,8 @@ def get_hamiltonian(sdc, eng, coords, types, symbols,
             # )
             ham_timing['TETCI&DiI'] = time.time() - tic
             #print("TETCI&DiI {:>7.3f} |".format(time.time() - tic), end=" ")
+
+        del rest
         
         tic = time.time()
         idx_to_idx_mapping = {value: idx for idx, value in enumerate(block_indices)}
@@ -310,21 +312,20 @@ def get_hamiltonian(sdc, eng, coords, types, symbols,
             # Check if the positions are valid and match
             idxi_sub_ovrlp_with_rest = (pos < len(block_indices)) & (block_indices[pos] == iii)
 
-            #M_sub.index_add_(0,molSub.maskd[new_iii], e1b[torch.isin(iii, block_indices)])
+            # #M_sub.index_add_(0,molSub.maskd[new_iii], e1b[torch.isin(iii, block_indices)])
             M_sub.index_add_(0,molSub.maskd[new_iii], e1b[idxi_sub_ovrlp_with_rest])
             M_sub.index_add_(0,molSub.maskd[new_jjj], e2a[torch.isin(jjj, block_indices)])
             del repeats, new_iii, new_jjj_list, new_jjj, top_row, start_indices, pos, idxi_sub_ovrlp_with_rest
             ham_timing['h1elDiUpd'] = time.time() - tic
             #print("h1elDiUpd {:>7.3f} |".format(time.time() - tic), end=" ")
             
-        del e1b, e2a, _
+        del e1b, e2a
         
         tic = time.time()
         graph_for_pairs = torch.from_numpy(graph_for_pairs).to(P_contr.device, dtype=eng.torch_int_dt)
         
         if sdc.UHF: # open shell
-            P_sub_from_contr = torch.zeros(2, len(block_indices)*len(block_indices),4,4, device = P_contr.device, dtype=eng.torch_dt)
-            P_sub_from_contr = P_sub_from_contr.reshape(2, len(block_indices), len(block_indices), 4,4)
+            P_sub_from_contr = torch.zeros(2, len(block_indices), len(block_indices), 4,4, device = P_contr.device, dtype=eng.torch_dt)
 
             parts_mask = torch.isin(block_indices, torch.tensor(partsIndex, device=block_indices.device))
             max_len = graph_for_pairs[partsIndex[0]][0]
@@ -347,8 +348,7 @@ def get_hamiltonian(sdc, eng, coords, types, symbols,
             P_diag_contr = P_contr.transpose(1,2).reshape(2,molecule_whole.molsize*(len(graph_for_pairs[0])-1), 4,4)[:,graph_maskd]#.transpose(1,2)
 
         else: # closed shell
-            P_sub_from_contr = torch.zeros(len(block_indices)*len(block_indices),4,4, device = P_contr.device, dtype=eng.torch_dt)
-            P_sub_from_contr = P_sub_from_contr.reshape(len(block_indices), len(block_indices), 4,4)
+            P_sub_from_contr = torch.zeros(len(block_indices),len(block_indices),4,4, device = P_contr.device, dtype=eng.torch_dt)
 
             parts_mask = torch.isin(block_indices, torch.tensor(partsIndex, device=block_indices.device))
             max_len = graph_for_pairs[partsIndex[0]][0]
@@ -415,7 +415,7 @@ def get_hamiltonian(sdc, eng, coords, types, symbols,
         #     use_reentrant=True
         #     )
 
-        del coulInts_test, P_diag_contr, maskd_sub, mask_sub, lookup_tensor, max_key, idx_to_idx_mapping
+        del coulInts_test, maskd_sub, mask_sub, lookup_tensor, max_key, idx_to_idx_mapping
         if eng.use_pyseqm_lt:
             del subIndsUnion, new_idxi, new_idxj, in_block_mask
         else:
@@ -442,24 +442,27 @@ def get_hamiltonian(sdc, eng, coords, types, symbols,
                 .transpose(2,3) \
                 .reshape(molSub.nmol, 4*molSub.molsize, 4*molSub.molsize)
             eElec_contr  = 0.5*(dm_contr[:,:,core_indices_in_sub_expanded]*(h1elec_sub[:,:,core_indices_in_sub_expanded]+ham_contr[:,:,core_indices_in_sub_expanded])).sum()
-        del dm_contr, h1elec_sub, P_sub_from_contr, M_sub, molSub
+        del dm_contr, h1elec_sub, M_sub
         ham_timing['En'] = time.time() - tic
         #print("En {:>7.3f} (s)|".format(time.time() - tic), end=" ")
         ### END CALC Eelec ###
 
         if doForces:            
             tic = time.time()
-            L = eElec_contr.sum()
-            torch.cuda.empty_cache()
-            if molecule_whole.coordinates.requires_grad:
-                L.backward()
-                force = -molecule_whole.coordinates.grad.detach()[0].cpu().numpy()
-                molecule_whole.coordinates.grad.zero_()
-            else:
-                force = molecule_whole.coordinates[0].cpu().numpy() * 0.0
-            del  L, ham_contr
+            # L = eElec_contr.sum()
+            # # L = myElec.sum()
+            # torch.cuda.empty_cache()
+            # if molecule_whole.coordinates.requires_grad:
+            #     L.backward()
+            #     force = -molecule_whole.coordinates.grad.detach()[0].cpu().numpy()
+            #     molecule_whole.coordinates.grad.zero_()
+            # else:
+            #     force = molecule_whole.coordinates[0].cpu().numpy() * 0.0
+            # del  L, ham_contr
+            with torch.no_grad():
+                force = analytical_gradient_ground_state_pyseqm(sdc, eng, molSub,
+                                    partsIndex, partsCoreHaloIndex, molecule_whole, P_sub_from_contr, P_diag_contr, ham_timing)
             ham_timing['Force'] = time.time() - tic
-            #print("Force {:>7.3f} |".format(time.time() - tic), end=" ")
             return force, eElec_contr.detach().cpu().numpy()
         else:
             #print_memory_usage(len(partsIndex), 99, "HAM memory usage")
@@ -467,3 +470,300 @@ def get_hamiltonian(sdc, eng, coords, types, symbols,
 
     raise ValueError(f"ERROR!!!: Interface type not recognized: '{eng.interface}'. " +
                      f"Use any of the following: Module,File,Socket,MDI")
+
+from seqm.seqm_functions.anal_grad import overlap_der_finiteDiff
+from seqm.seqm_functions.constants import a0
+
+def analytical_gradient_ground_state_pyseqm(sdc, eng, molSub,
+                    partsIndex, partsCoreHaloIndex, molecule_whole, P_sub_from_contr, P_diag_contr , ham_timing):
+    '''
+    Compute analytic gradient (-forces) for ground state SCF with a core–halo (CH) partition.
+    Returns
+    -------
+    np.ndarray, shape (n_atoms, 3) : negative gradient (force) on CPU
+
+    TDOD: wrap the call to this function under torch.no_grad 
+    molSub: pyseqm molecule object formed from only the core-halo atoms
+    partsIndex: core
+    partsCoreHaloIndex: core+halo
+    partsCoreHalo: list of core+halo
+    molecule_whole: pyseqm molecule object for the whole system
+    P_sub_from_contr: Density matrix in the core-halo atom subspace
+    P_diag_contr: Diagonal blocks of the full (all atoms) density matrix
+    core_indices_in_sub_expanded_list: indices of core columns in CH. E.g., CH[i] contains atoms [0,1,2,3], core atoms are [1,3], 4 AOs per atom. Then, core_indices_in_sub_expanded_list[i] is [4,5,6,7, 12,13,14,15].
+    '''
+    if eng.use_pyseqm_lt: # if pyseqm "large tensors" are pre-computed (e.g. idxi, idxj, masks), these will be sliced and used. Not recommended for large systems
+        raise NotImplementedError
+    
+    if sdc.UHF: # open shell
+        print("Gradients for unrestricted SCF is not yet tested. The gradients might be incorrect!!!!!!")
+    tic = time.time()
+    dtype = P_sub_from_contr.dtype
+    device = P_sub_from_contr.device
+    block_indices = torch.tensor(partsCoreHaloIndex, dtype=eng.torch_int_dt, device=device) # core+halo as tensor
+    core_indices = torch.tensor(partsIndex, dtype=eng.torch_int_dt, device=device)
+
+    N = molecule_whole.molsize
+
+    # Build global masks once
+    is_core = torch.zeros(N, dtype=torch.bool, device=device)
+    is_core[core_indices] = True
+    in_block = torch.zeros(N, dtype=torch.bool, device=device)
+    in_block[block_indices] = True
+    parts_mask = is_core[block_indices]  # block-membership in core
+
+    mask_sub = molSub.mask
+    npairs = int(molSub.idxi.shape[0])
+
+    overlap_KAB_x = torch.zeros((npairs, 3, 4, 4), dtype=dtype, device=device)
+    Xij = molSub.xij * molSub.rij.unsqueeze(1) * a0
+    zeta_fields = ['zeta_s', 'zeta_p', 'zeta_d'] if molSub.method == "PM6" else ['zeta_s', 'zeta_p']
+    zeta = torch.stack([molSub.parameters[f] for f in zeta_fields], dim=1)
+    beta = molSub.parameters['beta']  # shape (n_atoms, 3) or (n_atoms, 2)
+    overlap_der_finiteDiff(overlap_KAB_x, molSub.idxi, molSub.idxj, molSub.rij, Xij, beta, molSub.ni, molSub.nj, zeta, molSub.const.qn_int)
+    ham_timing['h1elNonDi'] = time.time() - tic
+    idxi, idxj = molSub.idxi, molSub.idxj
+    #print("t: h1elNonDi {:>7.3f} |".format(time.time() - tic), end=" ")
+
+    tic = time.time()
+    # --------------------------
+    # Pairs in GLOBAL space that touch the block (O(B·N), no O(N²) blowup)
+    # --------------------------
+    all_idx = torch.arange(N, device=device)
+
+    # block–block upper-triangle pairs (unique)
+    gi_bb = block_indices[idxi]
+    gj_bb = block_indices[idxj]
+
+    # block–outside pairs (unique, upper-triangle canonicalization)
+    outside = all_idx[~in_block]
+    n_outside = outside.numel()
+    B = int(block_indices.numel())
+    if n_outside > 0:
+        bi = block_indices.view(B, 1).expand(B, n_outside)
+        oj = outside.view(1, -1).expand(B, n_outside)
+        gi_bo = torch.minimum(bi, oj).reshape(-1)
+        gj_bo = torch.maximum(bi, oj).reshape(-1)
+
+        gi = torch.cat([gi_bb, gi_bo], dim=0)
+        gj = torch.cat([gj_bb, gj_bo], dim=0)
+    else:
+        gi, gj = gi_bb, gj_bb
+
+    paircoord = molecule_whole.coordinates[0,gi] - molecule_whole.coordinates[0,gj]
+    r_ij = torch.norm(paircoord,dim=1) * molecule_whole.const.length_conversion_factor
+    Xij = -paircoord
+    del paircoord
+    
+    ham_timing['idxi&idxj'] = time.time() - tic
+    #print("idxi&idxj {:>7.3f} |".format(time.time() - tic), end=" ")
+
+    tic = time.time() # compute 2c2e and diagonal h1elec
+    w_x = torch.zeros(r_ij.shape[0], 3, 10, 10, dtype=dtype, device=device)
+    e1b_x, e2a_x = w_derivative_numerical(molecule_whole.const, molecule_whole.method,
+                                          Xij, molecule_whole.Z[gi], molecule_whole.Z[gj],
+                                          gi, gj, molecule_whole.Z, w_x, molecule_whole.parameters['zeta_s'], molecule_whole.parameters['zeta_p'],
+                                          molecule_whole.parameters['g_ss'], molecule_whole.parameters['g_pp'], molecule_whole.parameters['g_p2'], 
+                                          molecule_whole.parameters['h_sp'],molecule_whole.parameters['rho_core'])
+
+    ham_timing['TETCI&DiI'] = time.time() - tic
+    #print("TETCI&DiI {:>7.3f} |".format(time.time() - tic), end=" ")
+    
+    tic = time.time()
+    # # graph_for_pairs = torch.from_numpy(graph_for_pairs).to(P_contr.device, dtype=eng.torch_int_dt)
+    # # Map to BLOCK space where applicable (=-1 if not in block)
+    # max_key = int(block_indices.max().item())
+    # lut = torch.full((max_key+1,), -1, dtype=torch.long, device=device)
+    # lut[block_indices] = torch.arange(len(block_indices), device=device)
+
+    if sdc.UHF: # open shell
+        # P_sub_from_contr = torch.zeros(2, len(block_indices), len(block_indices), 4,4, device = device, dtype=eng.torch_dt)
+        #
+        # max_len = graph_for_pairs[partsIndex[0]][0]
+        # P_sub_from_contr[:,:,parts_mask] = P_contr[:,:max_len, block_indices[parts_mask]]
+        #
+        # for i in range(len(parts_mask)): ### $$$ needs vecorization
+        #     if not parts_mask[i]:
+        #         tmp = graph_for_pairs[block_indices[i]][1:graph_for_pairs[block_indices[i]][0]+1]
+        #         pos = torch.searchsorted(block_indices, tmp)
+        #         # Ensure the indices are within bounds
+        #         pos = torch.clamp(pos, max=len(block_indices) - 1)
+        #         # Check if the positions are valid and match
+        #         mask_for_lookup = (pos < len(block_indices)) & (block_indices[pos] == tmp)
+        #         P_sub_from_contr[:,lut[tmp[mask_for_lookup]],i] = \
+        #             P_contr[:,:graph_for_pairs[block_indices[i]][0],block_indices[i]][:,mask_for_lookup]
+        #         del pos, tmp, mask_for_lookup
+        #
+        # P_sub_from_contr = P_sub_from_contr.reshape(2,len(block_indices)*len(block_indices), 4,4)
+        # P_diag_contr = P_contr.transpose(1,2).reshape(2,molecule_whole.molsize*(len(graph_for_pairs[0])-1), 4,4)[:,graph_maskd]#.transpose(1,2)
+        P_diag_contr = P_diag_contr[0] + P_diag_contr[1]
+
+    # else: # closed shell
+    #     P_sub_from_contr = torch.zeros(len(block_indices),len(block_indices),4,4, device = P_contr.device, dtype=eng.torch_dt)
+    #
+    #     max_len = graph_for_pairs[partsIndex[0]][0]
+    #     P_sub_from_contr[:,parts_mask] = P_contr[:max_len, block_indices[parts_mask]]
+    #
+    #     for i in range(len(parts_mask)): ### $$$ needs vecorization
+    #         if not parts_mask[i]:
+    #             tmp = graph_for_pairs[block_indices[i]][1:graph_for_pairs[block_indices[i]][0]+1]
+    #             pos = torch.searchsorted(block_indices, tmp)
+    #             # Ensure the indices are within bounds
+    #             pos = torch.clamp(pos, max=len(block_indices) - 1)
+    #             # Check if the positions are valid and match
+    #             mask_for_lookup = (pos < len(block_indices)) & (block_indices[pos] == tmp)
+    #             P_sub_from_contr[lut[tmp[mask_for_lookup]],i] = \
+    #                 P_contr[:graph_for_pairs[block_indices[i]][0],block_indices[i]][mask_for_lookup]
+    #             del pos, tmp, mask_for_lookup
+    #
+    #     P_sub_from_contr = P_sub_from_contr.reshape(len(block_indices)*len(block_indices), 4,4)
+    #     #P_sub_from_contr = P_sub_from_contr.reshape(len(block_indices)*4, len(block_indices)*4)
+    #     P_diag_contr = P_contr.transpose(0,1).reshape(molecule_whole.molsize*(len(graph_for_pairs[0])-1), 4,4)[graph_maskd]#.transpose(0,1)
+    # del lut 
+    ham_timing['P_sub_from_contr'] = time.time() - tic
+
+    force = torch.zeros_like(molecule_whole.coordinates).squeeze(0)
+
+    ind = torch.tensor([[0, 1, 3, 6], [1, 2, 4, 7], [3, 4, 5, 8], [6, 7, 8, 9]], dtype=torch.long, device=device)
+
+    both_in_block = in_block[gi] & in_block[gj]
+    w_block_x = w_x[both_in_block]
+
+    if sdc.UHF:
+        sum_ = overlap_KAB_x.unsqueeze(0).expand(2, *overlap_KAB_x.shape).clone()
+        Pp = P_sub_from_contr[:, mask_sub].unsqueeze(2)
+        for i in range(4):
+            for j in range(4):
+                # \sum_{nu \in A} \sum_{sigma \in B} P_{nu, sigma} * (mu nu, lambda, sigma)
+                sum_[..., i, j] -= torch.sum(Pp * w_block_x[None, ..., ind[i], :][..., :, ind[j]], dim=(3, 4))
+
+        pair_grad = ((Pp * sum_).sum(dim=(0, 3, 4)))
+        del sum_
+
+    else:
+        Pp = P_sub_from_contr[mask_sub].unsqueeze(1)
+        for i in range(4):
+            w_x_i = w_block_x[..., ind[i], :]
+            for j in range(4):
+                # \sum_{nu \in A} \sum_{sigma \in B} P_{nu, sigma} * (mu nu, lambda, sigma)
+                overlap_KAB_x[..., i, j] -= 0.5 * torch.sum(Pp * (w_x_i[..., :, ind[j]]), dim=(2, 3))
+
+        pair_grad = ((Pp * overlap_KAB_x).sum(dim=(2, 3)))
+
+    del overlap_KAB_x, Pp, w_block_x, both_in_block
+
+
+    # membership test: for each index in partsCoreHaloIndex, check if it's in partsIndex
+    is_in_C = parts_mask
+
+    # Map membership to each end of every pair
+    inC_i = is_in_C[idxi]
+    inC_j = is_in_C[idxj]
+
+    # Cases:
+    #   both not in C -> 0.0
+    #   exactly one in C -> 0.5
+    #   both in C -> 1.0
+    count = inC_i.to(torch.int8) + inC_j.to(torch.int8)    # 0,1,2
+    scale = (count.to(pair_grad.dtype) * 0.5)              # 0.0, 0.5, 1.0
+    pair_grad = pair_grad * scale.unsqueeze(1)
+
+    force.index_add_(0,block_indices[idxi],pair_grad)
+    force.index_add_(0,block_indices[idxj],pair_grad,alpha=-1.0)
+
+    tic = time.time()
+
+    is_core_gi = is_core[gi]
+    is_core_gj = is_core[gj]
+
+    e1b_x = e1b_x[is_core_gi]
+    e2a_x = e2a_x[is_core_gj]
+
+    weight = torch.tensor([1.0, 2.0, 1.0, 2.0, 2.0, 1.0, 2.0, 2.0, 2.0, 1.0], dtype=dtype, device=device).reshape(
+        (-1, 10))
+    weight *= 0.5  # Multiply the weight by 0.5 because the contribution of coulomb integrals to engergy is calculated as 0.5*P_mu_nu*F_mu_nv
+
+    indices = (0, 0, 1, 0, 1, 2, 0, 1, 2, 3), (0, 1, 1, 2, 2, 2, 3, 3, 3, 3)
+    PA = (P_diag_contr[gi[is_core_gj]][..., indices[0], indices[1]] * weight).unsqueeze(-1)  # Shape: (npairs, 10, 1)
+    PB = (P_diag_contr[gj[is_core_gi]][..., indices[0], indices[1]] * weight).unsqueeze(-2)  # Shape: (npairs, 1, 10)
+
+    suma = torch.sum(PA.unsqueeze(1) * w_x[is_core_gj], dim=2)  # Shape: (npairs, 3, 10)
+    sumA = torch.zeros(int(torch.sum(is_core_gj)),3,4,4,dtype=dtype,device=device)
+    sumA[..., indices[0], indices[1]] = suma
+    e2a_x.add_(sumA)
+    del sumA, suma
+
+    sumB = torch.zeros(int(torch.sum(is_core_gi)),3,4,4,dtype=dtype,device=device)
+    sumb = torch.sum(PB.unsqueeze(1) * w_x[is_core_gi], dim=3)  # Shape: (npairs, 3, 10)
+    sumB[..., indices[0], indices[1]] = sumb
+    e1b_x.add_(sumB)
+    del sumB, sumb
+
+    ham_timing['diIndsExp'] = time.time() - tic
+    #print("diIndsExp {:>7.3f} |".format(time.time() - tic), end=" ")
+
+    tic = time.time()
+    # Core-elecron interaction
+    scale_emat = torch.tensor([ [1.0, 2.0, 2.0, 2.0],
+                                [0.0, 1.0, 2.0, 2.0],
+                                [0.0, 0.0, 1.0, 2.0],
+                                [0.0, 0.0, 0.0, 1.0] ], device=device,dtype=dtype)
+    e1b_x *= scale_emat
+    e2a_x *= scale_emat   
+
+    tmp = (P_diag_contr[gi[is_core_gi],None,:,:] * e1b_x).sum(dim=(2,3))
+    force.index_add_(0,gi[is_core_gi],tmp)
+    force.index_add_(0,gj[is_core_gi],tmp,alpha=-1.0)
+    tmp = (P_diag_contr[gj[is_core_gj],None,:,:] * e2a_x).sum(dim=(2,3))
+    force.index_add_(0,gj[is_core_gj],tmp,alpha=-1.0)
+    force.index_add_(0,gi[is_core_gj],tmp)
+    # del tmp, is_core, is_core_gi, is_core_gj
+    ham_timing['h1elDiUpd'] = time.time() - tic
+    #print("h1elDiUpd {:>7.3f} |".format(time.time() - tic), end=" ")
+
+    return -force.cpu().numpy()
+
+from seqm.seqm_functions.anal_grad import delta, repeat_tensor, w_der
+def w_derivative_numerical(const, method, Xij, ni, nj, idxi, idxj, Z, w_x_new, zeta_s, zeta_p, g_ss, g_pp,g_p2,h_sp,rho):
+    npairs = Xij.shape[0]
+    e1b_x_new = torch.zeros(Xij.shape[0], 3, 4, 4, device=Xij.device, dtype=Xij.dtype)
+    e2a_x_new = torch.zeros_like(e1b_x_new)
+    ni_ = repeat_tensor(ni)
+    nj_ = repeat_tensor(nj)
+    Z_ = repeat_tensor(Z)
+    idxi_ = repeat_tensor(idxi)
+    idxj_ = repeat_tensor(idxj)
+    zeta_s_ = repeat_tensor(zeta_s)
+    zeta_p_ = repeat_tensor(zeta_p)
+    g_ss_ = repeat_tensor(g_ss)
+    g_pp_ = repeat_tensor(g_pp)
+    g_p2_ = repeat_tensor(g_p2)
+    h_sp_ = repeat_tensor(h_sp)
+    rho_core_ = repeat_tensor(rho)
+    for coord in range(3):
+        # since Xij = Xj-Xi, when I want to do Xi+delta, I have to subtract delta from from Xij
+        Xij[:, coord] -= delta
+        rij_plus = torch.norm(Xij, dim=1)
+        xij_plus = Xij / rij_plus.unsqueeze(1)
+        rij_plus = rij_plus / a0
+
+        Xij[:, coord] += 2.0 * delta
+        rij_minus = torch.norm(Xij, dim=1)
+        xij_minus = Xij / rij_minus.unsqueeze(1)
+        rij_minus = rij_minus / a0
+
+        rij_ = torch.cat([rij_plus, rij_minus])
+        xij_ = torch.cat([xij_plus, xij_minus])
+
+        # TODO: works for only s,p orbitals
+        w_, e1b_, e2a_, _, _, _, _ = TETCI(const, idxi_, idxj_, ni_, nj_, xij_, rij_, Z_, zeta_s_, zeta_p_, None, None,
+                                           None, None, g_ss_, g_pp_, g_p2_, h_sp_, None, None, rho_core_, None, None,
+                                           method)
+        Xij[:, coord] -= delta
+
+        w_x_new[:, coord, ...] = (w_[:npairs] - w_[npairs:]) / (2.0 * delta)
+        e1b_x_new[:, coord, ...] = (e1b_[:npairs]- e1b_[npairs:]) / (2.0 * delta)
+        e2a_x_new[:, coord, ...] = (e2a_[:npairs]- e2a_[npairs:]) / (2.0 * delta)
+
+    return e1b_x_new, e2a_x_new
+

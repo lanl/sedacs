@@ -1,19 +1,15 @@
 """Main sedacs prototype driver"""
 import time
-import sys
 import torch
 import numpy as np
 
-# ADD PROXYA_PATH to PYTHONPATH
-proxya_path = "/home/maxim/Projects/SEDACS_1/sedacs"
-sys.path.append(proxya_path)
-
-### ADD PATH TO PYSEQM ###
-pyseqm_path = ".../pyseqm/"
-sys.path.insert(1, pyseqm_path)
-
 DTYPE = torch.float64
 torch.set_default_dtype(DTYPE)
+
+# ADD PROXYA_PATH to PYTHONPATH
+import sys
+proxya_path = "../../../../sedacs"
+sys.path.append(proxya_path)
 
 from sedacs.driver.graph_adaptive import get_adaptiveDM
 from sedacs.driver.init import get_args, init

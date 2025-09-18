@@ -845,13 +845,9 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
 
         tic = time.perf_counter()
         if eng.interface == "PySEQM":
-            if sdc.doForces:
+            with torch.no_grad():
                 eElec = get_singlePointForces(sdc, eng, partsPerGPU, partsPerNode, node_id, node_rank, rank, parts, partsCoreHalo, sy, hindex, forces, molecule_whole,
-                            None, P_contr.to(device), graph_for_pairs, graph_maskd)
-            else:
-                with torch.no_grad():
-                    eElec = get_singlePointForces(sdc, eng, partsPerGPU, partsPerNode, node_id, node_rank, rank, parts, partsCoreHalo, sy, hindex, forces, molecule_whole,
-                            None, P_contr.to(device), graph_for_pairs, graph_maskd)
+                        None, P_contr.to(device), graph_for_pairs, graph_maskd)
             global_Eelec = np.zeros(1, dtype=np.float64)
             gpu_comm.Barrier()
             gpu_comm.Allreduce(MPI.IN_PLACE, forces, op=MPI.SUM)
@@ -872,5 +868,7 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             forceNuc = -molSysData.molecule_whole.coordinates.grad.detach()
             molSysData.molecule_whole.coordinates.grad.zero_()
             print("Time to get nuclear forces {:>8.2f} (s)".format(time.perf_counter() - tic))
+            # print(f"Force is:\n{forces+forceNuc.cpu().numpy()[0]}")
+            # print(f"Eelec force is:\n{forces}")
             np.save('forces', (forces+forceNuc.cpu().numpy()[0]), )
     ### END FORCES CALC ###

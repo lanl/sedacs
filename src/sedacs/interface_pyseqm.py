@@ -24,6 +24,7 @@ try:
   import time
 except: PYSEQM = False
 
+seqm_method = 'PM6_SP'
 class pyseqmObjects(torch.nn.Module):
     '''
     Container for pyseqm objects
@@ -410,7 +411,7 @@ def get_hcore_pyseqm(coords,symbols,atomTypes, device='cpu', verb=False):
   const = Constants().to(device)
   elements = [0]+sorted(set(species.reshape(-1).tolist()))
   seqm_parameters = {
-                    'method' : 'PM6_SP',  # AM1, MNDO, PM3, PM6, PM6_SP. PM6_SP is PM6 without d-orbitals. Effectively, PM6 for the first two rows of periodic table
+                    'method' : seqm_method,  # AM1, MNDO, PM3, PM6, PM6_SP. PM6_SP is PM6 without d-orbitals. Effectively, PM6 for the first two rows of periodic table
                     'scf_eps' : 1.0e-6,  # unit eV, change of electric energy, as nuclear energy doesnt' change during SCF
                     'scf_converger' : [0,0.8,0.93,30], # converger used for scf loop
                                           # [0, 0.1], [0, alpha] constant mixing, P = alpha*P + (1.0-alpha)*Pnew
@@ -488,7 +489,7 @@ def get_molecule_pyseqm(sdc, coords, symbols, atomTypes, do_large_tensors=True, 
   const = Constants().to(device)
   elements = [0]+sorted(set(species.reshape(-1).tolist()))
   seqm_parameters = {
-                    'method' : 'PM6_SP',  # AM1, MNDO, PM3, PM6, PM6_SP. PM6_SP is PM6 without d-orbitals. Effectively, PM6 for the first two rows of periodic table
+                    'method' : seqm_method,  # AM1, MNDO, PM3, PM6, PM6_SP. PM6_SP is PM6 without d-orbitals. Effectively, PM6 for the first two rows of periodic table
                     'scf_eps' : 1.0e-6,  # unit eV, change of electric energy, as nuclear energy doesnt' change during SCF
                     'scf_converger' : [0,0.8,0.93,30], # converger used for scf loop
                                           # [0, 0.1], [0, alpha] constant mixing, P = alpha*P + (1.0-alpha)*Pnew
@@ -626,7 +627,7 @@ def get_overlap_pyseqm(coords,symbols,atomTypes, hindex, verb=False):
     const = Constants().to(device)
     elements = [0]+sorted(set(species.reshape(-1).tolist()))
     seqm_parameters = {
-                    'method' : 'PM6_SP',  # AM1, MNDO, PM3, PM6, PM6_SP. PM6_SP is PM6 without d-orbitals. Effectively, PM6 for the first two rows of periodic table
+                    'method' : seqm_method,  # AM1, MNDO, PM3, PM6, PM6_SP. PM6_SP is PM6 without d-orbitals. Effectively, PM6 for the first two rows of periodic table
                     'scf_eps' : 1.0e-6,  # unit eV, change of electric energy, as nuclear energy doesnt' change during SCF
                     'scf_converger' : [0,0.8,0.93,30], # converger used for scf loop
                                             # [0, 0.1], [0, alpha] constant mixing, P = alpha*P + (1.0-alpha)*Pnew
@@ -652,7 +653,7 @@ def get_overlap_pyseqm(coords,symbols,atomTypes, hindex, verb=False):
         zeta = torch.cat((molecule.parameters['zeta_s'].unsqueeze(1), molecule.parameters['zeta_p'].unsqueeze(1)),dim=1)
     overlap_pairs = molecule.rij<=overlap_cutoff
 
-    if molecule.method == 'PM6_SP':
+    if molecule.method != 'PM6':
         di = torch.zeros((molecule.xij.shape[0], 4, 4),dtype=dtype, device=device)
         di[overlap_pairs] = diatom_overlap_matrix_PM6_SP(molecule.ni[overlap_pairs],
                                 molecule.nj[overlap_pairs],
@@ -682,7 +683,7 @@ def get_diag_guess_pyseqm(molecule, sy, verb=False):
     Initial guess for dm diagonal
     '''
     tore = molecule.const.tore
-    method = 'PM6_SP'
+    method = seqm_method
     if method == 'PM6':
         P0 = torch.zeros(sy.nats,9,9,dtype=molecule.coordinates.dtype, device=tore.device)  # density matrix
         P0[molecule.Z>1,0,0] = tore[molecule.Z[molecule.Z>1]]/4.0
