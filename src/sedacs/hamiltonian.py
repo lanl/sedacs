@@ -500,27 +500,18 @@ def analytical_gradient_ground_state_pyseqm(sdc, eng, molSub,
     tic = time.time()
     dtype = P_sub_from_contr.dtype
     device = P_sub_from_contr.device
-    block_indices = torch.tensor(partsCoreHaloIndex, dtype=eng.torch_int_dt, device=device) # core+halo as tensor
-    core_indices = torch.tensor(partsIndex, dtype=eng.torch_int_dt, device=device)
-
-    N = molecule_whole.molsize
+    ch_indices   = torch.as_tensor(partsCoreHaloIndex, dtype=torch.long, device=device)
+    core_indices = torch.as_tensor(partsIndex,       dtype=torch.long, device=device)
+    N   = int(molecule_whole.molsize)
+    B   = int(ch_indices.numel())
 
     # Build global masks once
     is_core = torch.zeros(N, dtype=torch.bool, device=device)
     is_core[core_indices] = True
     in_block = torch.zeros(N, dtype=torch.bool, device=device)
-    in_block[block_indices] = True
-    parts_mask = is_core[block_indices]  # block-membership in core
+    in_block[ch_indices] = True
+    is_core_in_block = is_core[ch_indices]  # block-membership in core
 
-    mask_sub = molSub.mask
-    npairs = int(molSub.idxi.shape[0])
-
-    overlap_KAB_x = torch.zeros((npairs, 3, 4, 4), dtype=dtype, device=device)
-    Xij = molSub.xij * molSub.rij.unsqueeze(1) * a0
-    zeta_fields = ['zeta_s', 'zeta_p', 'zeta_d'] if molSub.method == "PM6" else ['zeta_s', 'zeta_p']
-    zeta = torch.stack([molSub.parameters[f] for f in zeta_fields], dim=1)
-    beta = molSub.parameters['beta']  # shape (n_atoms, 3) or (n_atoms, 2)
-    overlap_der_finiteDiff(overlap_KAB_x, molSub.idxi, molSub.idxj, molSub.rij, Xij, beta, molSub.ni, molSub.nj, zeta, molSub.const.qn_int)
     ham_timing['h1elNonDi'] = time.time() - tic
     idxi, idxj = molSub.idxi, molSub.idxj
     #print("t: h1elNonDi {:>7.3f} |".format(time.time() - tic), end=" ")
@@ -532,21 +523,22 @@ def analytical_gradient_ground_state_pyseqm(sdc, eng, molSub,
     all_idx = torch.arange(N, device=device)
 
     # block–block upper-triangle pairs (unique)
-    gi_bb = block_indices[idxi]
-    gj_bb = block_indices[idxj]
+    gi_bb = ch_indices[idxi]
+    gj_bb = ch_indices[idxj]
 
     # block–outside pairs (unique, upper-triangle canonicalization)
     outside = all_idx[~in_block]
     n_outside = outside.numel()
-    B = int(block_indices.numel())
+    C = int(core_indices.numel())
     if n_outside > 0:
-        bi = block_indices.view(B, 1).expand(B, n_outside)
-        oj = outside.view(1, -1).expand(B, n_outside)
+        bi = core_indices.view(C, 1).expand(C, n_outside)
+        oj = outside.view(1, -1).expand(C, n_outside)
         gi_bo = torch.minimum(bi, oj).reshape(-1)
         gj_bo = torch.maximum(bi, oj).reshape(-1)
-
+        
         gi = torch.cat([gi_bb, gi_bo], dim=0)
         gj = torch.cat([gj_bb, gj_bo], dim=0)
+
     else:
         gi, gj = gi_bb, gj_bb
 
@@ -570,68 +562,46 @@ def analytical_gradient_ground_state_pyseqm(sdc, eng, molSub,
     #print("TETCI&DiI {:>7.3f} |".format(time.time() - tic), end=" ")
     
     tic = time.time()
-    # # graph_for_pairs = torch.from_numpy(graph_for_pairs).to(P_contr.device, dtype=eng.torch_int_dt)
-    # # Map to BLOCK space where applicable (=-1 if not in block)
-    # max_key = int(block_indices.max().item())
-    # lut = torch.full((max_key+1,), -1, dtype=torch.long, device=device)
-    # lut[block_indices] = torch.arange(len(block_indices), device=device)
 
     if sdc.UHF: # open shell
-        # P_sub_from_contr = torch.zeros(2, len(block_indices), len(block_indices), 4,4, device = device, dtype=eng.torch_dt)
-        #
-        # max_len = graph_for_pairs[partsIndex[0]][0]
-        # P_sub_from_contr[:,:,parts_mask] = P_contr[:,:max_len, block_indices[parts_mask]]
-        #
-        # for i in range(len(parts_mask)): ### $$$ needs vecorization
-        #     if not parts_mask[i]:
-        #         tmp = graph_for_pairs[block_indices[i]][1:graph_for_pairs[block_indices[i]][0]+1]
-        #         pos = torch.searchsorted(block_indices, tmp)
-        #         # Ensure the indices are within bounds
-        #         pos = torch.clamp(pos, max=len(block_indices) - 1)
-        #         # Check if the positions are valid and match
-        #         mask_for_lookup = (pos < len(block_indices)) & (block_indices[pos] == tmp)
-        #         P_sub_from_contr[:,lut[tmp[mask_for_lookup]],i] = \
-        #             P_contr[:,:graph_for_pairs[block_indices[i]][0],block_indices[i]][:,mask_for_lookup]
-        #         del pos, tmp, mask_for_lookup
-        #
-        # P_sub_from_contr = P_sub_from_contr.reshape(2,len(block_indices)*len(block_indices), 4,4)
-        # P_diag_contr = P_contr.transpose(1,2).reshape(2,molecule_whole.molsize*(len(graph_for_pairs[0])-1), 4,4)[:,graph_maskd]#.transpose(1,2)
         P_diag_contr = P_diag_contr[0] + P_diag_contr[1]
 
-    # else: # closed shell
-    #     P_sub_from_contr = torch.zeros(len(block_indices),len(block_indices),4,4, device = P_contr.device, dtype=eng.torch_dt)
-    #
-    #     max_len = graph_for_pairs[partsIndex[0]][0]
-    #     P_sub_from_contr[:,parts_mask] = P_contr[:max_len, block_indices[parts_mask]]
-    #
-    #     for i in range(len(parts_mask)): ### $$$ needs vecorization
-    #         if not parts_mask[i]:
-    #             tmp = graph_for_pairs[block_indices[i]][1:graph_for_pairs[block_indices[i]][0]+1]
-    #             pos = torch.searchsorted(block_indices, tmp)
-    #             # Ensure the indices are within bounds
-    #             pos = torch.clamp(pos, max=len(block_indices) - 1)
-    #             # Check if the positions are valid and match
-    #             mask_for_lookup = (pos < len(block_indices)) & (block_indices[pos] == tmp)
-    #             P_sub_from_contr[lut[tmp[mask_for_lookup]],i] = \
-    #                 P_contr[:graph_for_pairs[block_indices[i]][0],block_indices[i]][mask_for_lookup]
-    #             del pos, tmp, mask_for_lookup
-    #
-    #     P_sub_from_contr = P_sub_from_contr.reshape(len(block_indices)*len(block_indices), 4,4)
-    #     #P_sub_from_contr = P_sub_from_contr.reshape(len(block_indices)*4, len(block_indices)*4)
-    #     P_diag_contr = P_contr.transpose(0,1).reshape(molecule_whole.molsize*(len(graph_for_pairs[0])-1), 4,4)[graph_maskd]#.transpose(0,1)
-    # del lut 
     ham_timing['P_sub_from_contr'] = time.time() - tic
 
     force = torch.zeros_like(molecule_whole.coordinates).squeeze(0)
 
+    # membership test: for each index in partsCoreHaloIndex, check if it's in partsIndex
+    is_in_C = is_core_in_block
+
+    # Map membership to each end of every pair
+    inC_i = is_in_C[idxi]
+    inC_j = is_in_C[idxj]
+    # Cases:
+    #   halo-halo -> 0.0
+    #   core-halo -> 0.5
+    #   core-core -> 1.0
+    count = inC_i.to(torch.int8) + inC_j.to(torch.int8)    # 0,1,2
+    scale = (count.to(dtype) * 0.5)              # 0.0, 0.5, 1.0
+    inCij = count>0
+    scale = scale[inCij]
+
+    mask_sub = molSub.mask
+    npairs = int(inCij.sum())
+
+    overlap_KAB_x = torch.zeros((npairs, 3, 4, 4), dtype=dtype, device=device)
+    Xij = molSub.xij * molSub.rij.unsqueeze(1) * a0
+    zeta_fields = ['zeta_s', 'zeta_p', 'zeta_d'] if molSub.method == "PM6" else ['zeta_s', 'zeta_p']
+    zeta = torch.stack([molSub.parameters[f] for f in zeta_fields], dim=1)
+    beta = molSub.parameters['beta']  # shape (n_atoms, 3) or (n_atoms, 2)
+    overlap_der_finiteDiff(overlap_KAB_x, molSub.idxi[inCij], molSub.idxj[inCij], molSub.rij[inCij], Xij[inCij], beta, molSub.ni[inCij], molSub.nj[inCij], zeta, molSub.const.qn_int)
+
     ind = torch.tensor([[0, 1, 3, 6], [1, 2, 4, 7], [3, 4, 5, 8], [6, 7, 8, 9]], dtype=torch.long, device=device)
 
-    both_in_block = in_block[gi] & in_block[gj]
-    w_block_x = w_x[both_in_block]
+    w_block_x = w_x[:idxi.shape[0]][inCij]
 
     if sdc.UHF:
         sum_ = overlap_KAB_x.unsqueeze(0).expand(2, *overlap_KAB_x.shape).clone()
-        Pp = P_sub_from_contr[:, mask_sub].unsqueeze(2)
+        Pp = P_sub_from_contr[:, mask_sub[inCij]].unsqueeze(2)
         for i in range(4):
             for j in range(4):
                 # \sum_{nu \in A} \sum_{sigma \in B} P_{nu, sigma} * (mu nu, lambda, sigma)
@@ -641,7 +611,7 @@ def analytical_gradient_ground_state_pyseqm(sdc, eng, molSub,
         del sum_
 
     else:
-        Pp = P_sub_from_contr[mask_sub].unsqueeze(1)
+        Pp = P_sub_from_contr[mask_sub[inCij]].unsqueeze(1)
         for i in range(4):
             w_x_i = w_block_x[..., ind[i], :]
             for j in range(4):
@@ -650,26 +620,13 @@ def analytical_gradient_ground_state_pyseqm(sdc, eng, molSub,
 
         pair_grad = ((Pp * overlap_KAB_x).sum(dim=(2, 3)))
 
-    del overlap_KAB_x, Pp, w_block_x, both_in_block
+    del overlap_KAB_x, Pp, w_block_x
 
-
-    # membership test: for each index in partsCoreHaloIndex, check if it's in partsIndex
-    is_in_C = parts_mask
-
-    # Map membership to each end of every pair
-    inC_i = is_in_C[idxi]
-    inC_j = is_in_C[idxj]
-
-    # Cases:
-    #   both not in C -> 0.0
-    #   exactly one in C -> 0.5
-    #   both in C -> 1.0
-    count = inC_i.to(torch.int8) + inC_j.to(torch.int8)    # 0,1,2
-    scale = (count.to(pair_grad.dtype) * 0.5)              # 0.0, 0.5, 1.0
     pair_grad = pair_grad * scale.unsqueeze(1)
 
-    force.index_add_(0,block_indices[idxi],pair_grad)
-    force.index_add_(0,block_indices[idxj],pair_grad,alpha=-1.0)
+    force.index_add_(0,gi_bb[inCij],pair_grad)
+    force.index_add_(0,gj_bb[inCij],pair_grad,alpha=-1.0)
+    del pair_grad
 
     tic = time.time()
 
@@ -723,7 +680,7 @@ def analytical_gradient_ground_state_pyseqm(sdc, eng, molSub,
 
     return -force.cpu().numpy()
 
-from seqm.seqm_functions.anal_grad import delta, repeat_tensor, w_der
+from seqm.seqm_functions.anal_grad import delta, repeat_tensor
 def w_derivative_numerical(const, method, Xij, ni, nj, idxi, idxj, Z, w_x_new, zeta_s, zeta_p, g_ss, g_pp,g_p2,h_sp,rho):
     npairs = Xij.shape[0]
     e1b_x_new = torch.zeros(Xij.shape[0], 3, 4, 4, device=Xij.device, dtype=Xij.dtype)
