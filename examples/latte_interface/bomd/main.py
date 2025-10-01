@@ -52,10 +52,15 @@ def main(args):
         # Open files to write down information during MD simulation
         MD_xyz = open("MD.xyz", "w")
         Energy_dat = open("Energy.dat", "w")
+        corehalo_log = open("avg_corehalo.log", "w")
     # Set verbosity
     sdc.verb = False
     # Get device
     device = args.device
+    if device == "cuda":
+        local_rank = rank % torch.cuda.device_count()
+        device = f"cuda:{local_rank}"
+        torch.cuda.set_device(local_rank)
     # Chemical potential
     mu = args.mu
     # Degree of localization for adaptive halo expansion
@@ -98,16 +103,27 @@ def main(args):
     graphDH, sy.charges, mu, parts, partsCoreHalo, subSysOnRank = get_adaptive_KernelSCFDM(
         sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu, alpha=localization, graphweights=graphweights, device=device,
     )
-    #breakpoint()
+    if rank == 0:
+        parts = graph_partition(
+            sdc, eng, graphDH, sdc.partitionType, sdc.nparts, sy.coords, graphweights=None, verb=True
+        )
+    parts = comm.bcast(parts, root=0)
     njumps = 1
     partsCoreHalo = []
     numCores = []
+    total_corehalo = 0
+    max_corehalo = 0
+    min_corehalo = 100000
     for i in range(sdc.nparts):
         coreHalo, nc, nh = get_coreHaloIndices(parts[i], graphDH, njumps)
         partsCoreHalo.append(coreHalo)
         numCores.append(nc)
+        total_corehalo += nh
+        max_corehalo = max(max_corehalo, nh) 
+        min_corehalo = min(min_corehalo, nh) 
+        print("After SCF, core,halo size:", i, "=", nc, nh)
     # Perform a single-point graph-adaptive calculation of the energy and forces
-    graphDH, charges, EPOT, entropy, FTOT, mu, parts, partsCoreHalo, subSysOnRank = (
+    graphDH, sy.charges, EPOT, entropy, FTOT, mu, parts, partsCoreHalo, subSysOnRank = (
         get_adaptive_sp_energy_forces(
             sdc, eng, comm, rank, numranks, sy, parts, partsCoreHalo, hindex, graphNL, mu, alpha=localization, device=device, shadow_md=shadow_md,
         )
@@ -174,6 +190,9 @@ def main(args):
                 Energy_dat.write(
                     f"{Time/1000:<16.8f} {ETOT.item():<16.16f} {entropy:<16.16f} {Temperature.item():<16.8f} {EKIN.item():<16.16f} {EPOT.item():<16.16f} {torch.sum(q).item():<16.16f} {torch.sum(n_0).item():<16.16f} {mu:<16.16f}\n"
                 )
+            corehalo_log.write(
+                f"max., min., avg. core+halo size: {max_corehalo}, {min_corehalo}, {total_corehalo / sdc.nparts}\n"
+            )
 
             # Here we dump the MD trajectory
             if (Time % 50) == 49:
@@ -185,6 +204,7 @@ def main(args):
                     )
                 MD_xyz.flush()
                 Energy_dat.flush()
+            corehalo_log.flush()
 
         if numranks > 1 and (Time % 10) == 9:
             coords_sum = torch.zeros_like(coords)
@@ -198,16 +218,7 @@ def main(args):
             if MD_step == 0 or renew == 1:
                 get_kernel_byParts(sdc, rank, numranks, parts, partsCoreHalo, sy, mu, device=device) 
                 syk = deepcopy(sy)
-                #breakpoint()
-                #KK0 = torch.tensor(sy.subSy_list[0].ker)
-                #KK0 = torch.tensor(collect_kernel_byParts(
-                #    q, n_0, sdc, rank, numranks, comm, parts, partsCoreHalo, sy
-                #))
-            #dn2dt2 = -torch.matmul(KK0, Res)   
                 dn2dt2 = 0
-            #    ker = sy.subSy_list[0].ker
-            #else:
-            #    sy.subSy_list[0].ker = ker
                 renew = 0
             if MD_step > 0:
                 for i, subSy in enumerate(sy.subSy_list):
@@ -216,13 +227,6 @@ def main(args):
                         q.to(device), n_0.to(device), 12, sdc, rank, numranks, comm, parts, partsCoreHalo, sy, mu=mu, device=device
                         )
                 dn2dt2 = dn2dt2.to("cpu")
-                #dn2dt2 = -rankN_update_byParts(
-                #        q, n_0, 6, sdc, eng, rank, numranks, comm, partsk, partsCoreHalok, syk, hindex, mu=mu
-                #        )
-                #dn2dt2 = -torch.tensor(apply_kernel_byParts(
-                #     q, n_0, sdc, rank, numranks, comm, partsk, syk
-                #))
-            #breakpoint()
         else:
             dn2dt2 = 0.8 * Res
         # Propagating charge vector n for a better initial guess
@@ -242,7 +246,6 @@ def main(args):
                 + C6 * n_6
             )
         )
-        #        breakpoint()
         n_6 = n_5
         n_5 = n_4
         n_4 = n_3
@@ -261,60 +264,35 @@ def main(args):
         coords = coords - LBox * torch.floor(coords / LBox)
         # Update sy.coords in the system object
         sy.coords = coords.numpy()
-        # Update neighbor list
-        #nl, nlTrX, nlTrY, nlTrZ = build_nlist(
-        #   sy.coords,
-        #   sy.latticeVectors,
-        #   sdc.rcut,
-        #   api="old",
-        #   rank=rank,
-        #   numranks=numranks,
-        #   verb=False,
-        #)
-        #comm.Barrier()
-        # Create initial graph based on distances
-        #if rank == 0:
-        #   graphNL = get_initial_graph(sy.coords, nl, sdc.rcut, sdc.maxDeg)
-        #graphNL = comm.bcast(graphNL, root=0)
+
         if not shadow_md:
             # Perform a graph-adaptive calculation of the charges with SCF cycles
             graphDH, sy.charges, mu, parts, subSysOnRank = get_adaptive_KernelSCFDM(
-                sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu, alpha=localization, graphweights=graphweights
+                sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu, alpha=localization, graphweights=graphweights, device=device,
             )
-        #else:
-        #    graphDH = graphNL
 
         if MD_step % 100 == 99:
-            # Update neighbor list
-            nl, nlTrX, nlTrY, nlTrZ = build_nlist(
-               sy.coords,
-               sy.latticeVectors,
-               sdc.rcut,
-               api="old",
-               rank=rank,
-               numranks=numranks,
-               verb=False,
-            )
-            comm.Barrier()
-            # Create initial graph based on distances
             if rank == 0:
-                graphNL, graphweights = get_initial_graph(sy.coords, nl, sdc.rcut, sdc.maxDeg, LBox.numpy(), graphweights=True, verb=True) 
-            graphNL = comm.bcast(graphNL, root=0)
-            # Partition the graph
-            parts = graph_partition(
-                sdc, eng, graphNL, sdc.partitionType, sdc.nparts, sy.coords, graphweights=graphweights, verb=True
-            )
-            graphDH = add_graphs(graphDH, graphNL)
+                parts = graph_partition(
+                    sdc, eng, graphDH, sdc.partitionType, sdc.nparts, sy.coords, graphweights=None, verb=True
+                )
+            parts = comm.bcast(parts, root=0)
 
             renew = 1
             
         njumps = 1
         partsCoreHalo = []
         numCores = []
+        total_corehalo = 0
+        max_corehalo = 0
+        min_corehalo = 100000
         for i in range(sdc.nparts):
             coreHalo, nc, nh = get_coreHaloIndices(parts[i], graphDH, njumps)
             partsCoreHalo.append(coreHalo)
             numCores.append(nc)
+            total_corehalo += nh
+            max_corehalo = max(max_corehalo, nh) 
+            min_corehalo = min(min_corehalo, nh) 
             print("MD_step, core,halo size:", MD_step, i, "=", nc, nh)
         # Perform a single-point graph-adaptive calculation of the energy and forces
         graphDH, sy.charges, EPOT, entropy, FTOT, mu, parts, partsCoreHalo, subSysOnRank = (
@@ -333,7 +311,6 @@ def main(args):
                 alpha=localization,
                 shadow_md=shadow_md,
                 device=device,
-                expandonly=False,
             )
         )
         q = torch.tensor(sy.charges)
@@ -349,6 +326,7 @@ def main(args):
     if rank == 0:
         MD_xyz.close()
         Energy_dat.close()
+        corehalo_log.close()
 
 
 if __name__ == "__main__":

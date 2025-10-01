@@ -9,6 +9,7 @@ import time
 import torch
 import numpy as np
 from copy import deepcopy
+import nvtx
 
 from sedacs.graph import (
     add_graphs,
@@ -16,6 +17,7 @@ from sedacs.graph import (
     print_graph,
     multiply_graphs,
     adaptive_halo_expansion,
+    symmetrize_graph,
 )
 from sedacs.graph_partition import get_coreHaloIndices, graph_partition
 from sedacs.sdc_hamiltonian import get_hamiltonian
@@ -117,6 +119,7 @@ def get_singlePoint_charges(
     partIndex1 = rank * partsPerRank
     partIndex2 = (rank + 1) * partsPerRank
     graphOnRank = None
+    graphRhoOnRank = None
     chargesOnRank = None
     evalsOnRank = None
     dvalsOnRank = None
@@ -164,7 +167,7 @@ def get_singlePoint_charges(
         norbsInCore = int(np.sum(tmpArray))
         print("Number of orbitals in the core =", norbsInCore)
         nocc = int(float(subSy.numel) / 2.0)  # Get the total occupied orbitals
-
+        nvtx.push_range("get_hamiltonian", color="blue", domain="get_singlePoint_charges")
         subSy.ham, subSy.over, subSy.zmat = get_hamiltonian(
             eng,
             partIndex,
@@ -179,11 +182,13 @@ def get_singlePoint_charges(
             get_overlap=True,
             newsystem=True,
         )
+        nvtx.pop_range("get_singlePoint_charges")
 
         toc = time.perf_counter()
         print("Time for get_hamiltonian", toc - tic, "(s)")
 
         tic = time.perf_counter()
+        nvtx.push_range("get_evals_dvals", color="orange", domain="get_singlePoint_charges")
         subSy.evects, evalsInPart, dvalsInPart = get_evals_dvals(
             eng,
             partIndex,
@@ -201,13 +206,14 @@ def get_singlePoint_charges(
             verb=False,
             newsystem=False,
         )
+        nvtx.pop_range("get_singlePoint_charges")
         subSy.evals = evalsInPart
         toc = time.perf_counter()
         print("Time for get_evals_dvals", toc - tic, "(s)")
 
         evalsOnRank = collect_evals(evalsOnRank, evalsInPart, verb=True)
         dvalsOnRank = collect_dvals(dvalsOnRank, dvalsInPart, verb=True)
-
+    nvtx.push_range("collect_evals_dvals", color="green", domain="get_singlePoint_charges")
     if is_mpi_available and numranks > 1:
         fullEvals = collect_and_concatenate_vectors(evalsOnRank, comm)
         fullDvals = collect_and_concatenate_vectors(dvalsOnRank, comm)
@@ -215,7 +221,9 @@ def get_singlePoint_charges(
     else:
         fullEvals = evalsOnRank
         fullDvals = dvalsOnRank
+    nvtx.pop_range("get_singlePoint_charges")
     # Calculate the global chemical potential from the evals and dvals collected from all subsystems
+    nvtx.push_range("get_mu", color="purple", domain="get_singlePoint_charges")
     mu = get_mu(
         mu,
         fullEvals,
@@ -225,7 +233,8 @@ def get_singlePoint_charges(
         kB=8.61739e-5,
         verb=True,
     )
-
+    # mu = -6
+    nvtx.pop_range("get_singlePoint_charges")
     for partIndex in range(partIndex1, partIndex2):
         numberOfCoreAtoms = len(parts[partIndex])
         subSy = sy.subSy_list[partIndex - partIndex1]
@@ -239,7 +248,7 @@ def get_singlePoint_charges(
         subSy.latticeVectors = sy.latticeVectors
 
         tic = time.perf_counter()
-
+        nvtx.push_range("get_density_matrix", color="red", domain="get_singlePoint_charges")
         rho, chargesInPart = get_density_matrix(
             eng,
             partIndex,
@@ -261,7 +270,7 @@ def get_singlePoint_charges(
             newsystem=True,
             keepmem=True,
         )
-
+        nvtx.pop_range("get_singlePoint_charges")
         chargesInPart = chargesInPart[: len(parts[partIndex])]
         #        subSy.charges = chargesInPart
 
@@ -274,6 +283,7 @@ def get_singlePoint_charges(
         toc = time.perf_counter()
         print("Time to get_densityMatrix and get_charges", toc - tic, "(s)")
         # Adaptively expand the halo for the subsystem
+        nvtx.push_range("adaptive_halo_expansion", color="pink", domain="get_singlePoint_charges")
         graphOnRank = adaptive_halo_expansion(
             graphOnRank,
             rho,
@@ -286,20 +296,35 @@ def get_singlePoint_charges(
             sy.coords,
             alpha=alpha,
         )
+
+        graphRhoOnRank = collect_graph_from_rho(
+            graphRhoOnRank,
+            rho,
+            sdc.gthresh,
+            sy.nats,
+            sdc.maxDeg,
+            partsCoreHalo[partIndex],
+            len(parts[partIndex]),
+            hindex,
+        )
+        nvtx.pop_range("get_singlePoint_charges")
         chargesOnRank = collect_charges(
             chargesOnRank, chargesInPart, parts[partIndex], sy.nats, verb=True
         )
-
+    nvtx.push_range("collect_graph_and_charges", color="green", domain="get_singlePoint_charges")
     if is_mpi_available and numranks > 1:
         fullGraphHalo = collect_and_sum_matrices_float(graphOnRank, comm)
+        fullGraphRho = collect_and_sum_matrices_float(graphRhoOnRank, comm)
         fullCharges = collect_and_sum_vectors_float(chargesOnRank, rank, numranks, comm)
         comm.Barrier()
     else:
         fullGraphHalo = graphOnRank
+        fullGraphRho = graphRhoOnRank
         fullCharges = chargesOnRank
-
+    nvtx.pop_range("get_singlePoint_charges")
     # print_graph(fullGraphRho)
-    return fullGraphHalo, fullCharges, subSysOnRank, mu
+
+    return fullGraphHalo, fullGraphRho, fullCharges, subSysOnRank, mu
 
 
 def get_adaptive_KernelSCFDM(
@@ -318,6 +343,17 @@ def get_adaptive_KernelSCFDM(
     dtype=torch.float64,
 ):
     fullGraph = graphNL
+    fullGraphRho = graphNL
+    if rank == 0:
+        with open('scf.log', 'w') as f:
+            f.write('scf starts...\n')
+        with open("edge.log", "w") as f:
+            f.write('scf starts...\n')
+            f.write(f"graphNL edge count: {np.sum(graphNL[:, 0])}\n")
+        with open('corehalo.log', 'w') as f:
+            f.write('scf starts...\n')
+        with open('corehalo2.log', 'w') as f:
+            f.write('scf starts...\n')
     # Initial guess for the excess ocupation vector. This is the negative of
     # the charge!
     charges = sy.charges
@@ -325,44 +361,96 @@ def get_adaptive_KernelSCFDM(
     chargesIn = None
     chargesOld = None
     chargesOut = None
-    scfError = 1.0
+    nbr_inds = None
+    disps = None
+    dists = None
+    PME_alpha = None
+    PME_data = None
+    scfError = 10.0
     kernel = 0
     # Partition the graph
+    nvtx.push_range("graph_partition", color="purple", domain="get_adaptiveSCFDM")
     parts = graph_partition(
         sdc, eng, fullGraph, sdc.partitionType, sdc.nparts, sy.coords, latticeVectors=sy.latticeVectors, graphweights=graphweights, verb=True
     )
+    nvtx.pop_range("get_adaptiveSCFDM")
     for gscf in range(sdc.numAdaptIter):
+        nvtx.push_range("SCF Iter", color="blue", domain="get_adaptiveSCFDM")
         msg = "Graph-adaptive iteration" + str(gscf)
         status_at("get_adaptiveSCFDM", msg)
+        nvtx.push_range("get_coreHaloIndices", color="blue", domain="get_adaptiveSCFDM")
         njumps = 1
         partsCoreHalo = []
         numCores = []
+        total = 0
         # print("\nCore and halos indices for every part:")
         for i in range(sdc.nparts):
             coreHalo, nc, nh = get_coreHaloIndices(parts[i], fullGraph, njumps)
+            total += nh
             partsCoreHalo.append(coreHalo)
             numCores.append(nc)
             print("core,halo size:", i, "=", nc, nh)
+            if rank == 0:
+                with open('corehalo.log', 'a') as f:
+                    f.write(f"gscf: {gscf}\n")
+                    f.write(f"core,halo size: {i} = {nc} {nh}\n")
+        if rank == 0:
+            with open('corehalo.log', 'a') as f:
+                f.write(f"avg. halo size: {total / sdc.nparts}\n")
+        nvtx.pop_range("get_adaptiveSCFDM")
+        #if gscf > 0 and len(parts) >= 48:
+        #    for fullGraphRho in fullGraphRho_list:
+        #        i = 47
+        #        coreHalo2, nc2, nh2 = get_coreHaloIndices(parts[i], fullGraphRho, njumps)
+        #        print("core,halo size:", i, "=", nc, nh)
+        #        if rank == 0:
+        #            with open('corehalo2.log', 'a') as f:
+        #                f.write(f"gscf: {gscf}\n")
+        #                f.write(f"core,halo size: {i} = {nc2} {nh2}\n")
         #    print("coreHalo for part", i, "=", coreHalo)
-        if rank == 0 and gscf == 0 and sum(charges == 0) != 0:
+        nvtx.push_range("PME solver", color="green", domain="get_adaptiveSCFDM")
+        if int(rank / 2) == 0 and gscf == 0 and sum(charges == 0) != 0:
             sy.coulvs = np.zeros(len(charges))
-        elif rank == 0:
-            sy.coulvs, ewald_e = get_PME_coulvs(
+        elif int(rank / 2) == 0:
+            sy.coulvs, ewald_e, nbr_inds, disps, dists, PME_alpha, PME_data = get_PME_coulvs(
                 charges,
                 sy.hubbard_u,
                 sy.coords,
                 sy.types,
                 sy.latticeVectors,
+                nbr_inds=nbr_inds,
+                disps=disps,
+                dists=dists,
+                alpha=PME_alpha,
+                PME_data=PME_data,
                 device=device,
             )
         if is_mpi_available and numranks > 1:
             sy.coulvs = comm.bcast(sy.coulvs, root=0)
+            if gscf == 1 and rank == 0:
+                nbr_inds = nbr_inds.cpu()
+                disps = disps.cpu()
+                dists = dists.cpu()
+                PME_data = tuple(
+                    item.cpu() if torch.is_tensor(item) else item for item in PME_data
+                )
+            if gscf == 1:
+                nbr_inds = comm.bcast(nbr_inds, root=0)
+                disps = comm.bcast(disps, root=0)
+                dists = comm.bcast(dists, root=0)
+                PME_alpha = comm.bcast(PME_alpha, root=0)
+                PME_data = comm.bcast(PME_data, root=0)
+            
+        nvtx.pop_range("get_adaptiveSCFDM")
         chargesOld = charges
-        fullGraphHalo, charges, subSysOnRank, mu = get_singlePoint_charges(
-            sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, gscf, mu, alpha=alpha,
+        nvtx.push_range("get_singlePoint_charges", color="orange", domain="get_adaptiveSCFDM")
+        fullGraphHalo, fullGraphRho, fullGraphRho_list, charges, subSysOnRank, mu = get_singlePoint_charges(
+            sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, gscf, mu=mu, alpha=alpha,
         )
+        nvtx.pop_range("get_adaptiveSCFDM")
         # print("Collected charges", charges)
-        if scfError > 0.0001:
+        scfError = np.linalg.norm(charges - chargesOld) / np.sqrt(sy.nats)
+        if scfError > 0.1:
             scfError, charges, chargesOld, chargesIn, chargesOut = diis_mix(
                 charges, chargesOld, chargesIn, chargesOut, gscf, verb=False
             )
@@ -370,12 +458,13 @@ def get_adaptive_KernelSCFDM(
         # if gscf == 0:
         #    scfError = sy.numel
         else:
-            scfError = np.linalg.norm(charges - chargesOld) / np.sqrt(sy.nats)
             if kernel == 0:
                 print("start building the full kernel...")
+                nvtx.push_range("get_kernel_byParts", color="red", domain="get_adaptiveSCFDM")
                 get_kernel_byParts(
-                    sdc, rank, numranks, parts, partsCoreHalo, sy, mu, device=device
+                    sdc, rank, numranks, parts, partsCoreHalo, sy, mu=mu, nbr_inds=nbr_inds, disps=disps, dists=dists, alpha=PME_alpha, PME_data=PME_data, device=device
                 )
+                nvtx.pop_range("get_adaptiveSCFDM")
                 syk = deepcopy(sy)
                 # KRes = apply_kernel_byParts(
                 #     charges, chargesOld, sdc, rank, numranks, comm, parts, sy
@@ -384,6 +473,7 @@ def get_adaptive_KernelSCFDM(
             else:
                 for i, subSy in enumerate(sy.subSy_list):
                     subSy.ker = syk.subSy_list[i].ker.clone()
+            nvtx.push_range("rankN_update_byParts", color="purple", domain="get_adaptiveSCFDM")
             KRes = rankN_update_byParts(
                 torch.from_numpy(charges).to(device).to(dtype),
                 torch.from_numpy(chargesOld).to(device).to(dtype),
@@ -396,22 +486,36 @@ def get_adaptive_KernelSCFDM(
                 partsCoreHalo,
                 sy,
                 mu=mu,
+                nbr_inds=nbr_inds,
+                disps=disps,
+                dists=dists,
+                alpha=PME_alpha,
+                PME_data=PME_data,
                 device=device,
             )
+            nvtx.pop_range("get_adaptiveSCFDM")
             KRes = KRes.cpu().numpy()
             
             # charges = charges - KRes
             charges = chargesOld - KRes
             # charges = charges - np.dot(sy.subSy_list[0].ker, g_charges - charges)
         # print_graph(fullGraphRho)
-
+        nvtx.push_range("add_graphs", color="pink", domain="get_adaptiveSCFDM")
+        fullGraphHalo = symmetrize_graph(fullGraphHalo)
         fullGraph = add_graphs(fullGraphHalo, fullGraph)
-        # fullGraph = multiply_graphs(fullGraphRho, graphNL)
-        # fullGraph = fullGraphRho
+        fullGraphRho = symmetrize_graph(fullGraphRho)
+        fullGraph = add_graphs(fullGraphRho, fullGraph)
+        nvtx.pop_range("get_adaptiveSCFDM")
         for i in range(sy.nats):
             print("Charges:", i, sy.symbols[sy.types[i]], charges[i])
         print("SCF ERR =", scfError)
         print("TotalCharge", sum(charges))
+        nvtx.pop_range("get_adaptiveSCFDM")
+        if rank == 0:
+            with open('scf.log', 'a') as f:
+                f.write(f'{scfError}\n')
+            with open("edge.log", "a") as f:
+                f.write(f"fullGraph edge count: {np.sum(fullGraph[:, 0])}\n")
 
         if scfError < sdc.scfTol:
             status_at(
@@ -421,6 +525,7 @@ def get_adaptive_KernelSCFDM(
 
         if gscf == sdc.numAdaptIter - 1:
             warning_at("get_adaptiveSCFDM", "SCF did not converged ... ")
+            break
 
     AtToPrint = 0
 
@@ -441,4 +546,4 @@ def get_adaptive_KernelSCFDM(
             "subSyG_fin.xyz", subSy.coords, subSy.types, subSy.symbols
         )
 
-    return fullGraph, charges, mu, parts, partsCoreHalo, subSysOnRank
+    return fullGraph, fullGraphRho, charges, mu, parts, partsCoreHalo, subSysOnRank

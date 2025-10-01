@@ -8,9 +8,10 @@ Graph adaptive self-consistent charge solver
 import time
 import numpy as np
 from pathlib import Path
+import torch
 import pickle
 
-from sedacs.graph import add_graphs, collect_graph_from_rho, print_graph, multiply_graphs, adaptive_halo_expansion
+from sedacs.graph import add_graphs, collect_graph_from_rho, print_graph, multiply_graphs, adaptive_halo_expansion, symmetrize_graph
 from sedacs.graph_partition import get_coreHaloIndices, graph_partition
 from sedacs.sdc_hamiltonian import get_hamiltonian
 from sedacs.sdc_density_matrix import get_density_matrix
@@ -20,6 +21,7 @@ from sedacs.mpi import (
     collect_and_sum_matrices,
     collect_and_sum_vectors_float,
     collect_and_concatenate_vectors,
+    collect_and_sum_matrices_float,
 )
 from sedacs.system import System, extract_subsystem, get_hindex
 from sedacs.coulombic import get_PME_coulvs, build_coul_ham
@@ -46,7 +48,7 @@ __all__ = ["get_singlePoint_charges", "get_adaptiveSCFDM"]
 
 
 def get_singlePoint_charges(
-    sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, gscf, mu=0.0
+    sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, gscf, mu=0.0, alpha=0.7,
 ):
     """
     Get the single point charges for the full system from graph-partitioned subsystems.
@@ -103,6 +105,7 @@ def get_singlePoint_charges(
     partIndex1 = rank * partsPerRank
     partIndex2 = (rank + 1) * partsPerRank
     graphOnRank = None
+    graphRhoOnRank = None
     chargesOnRank = None
     evalsOnRank = None
     dvalsOnRank = None
@@ -289,6 +292,18 @@ def get_singlePoint_charges(
             parts[partIndex],
             subSy.hindex,
             sy.coords,
+            alpha=alpha,
+        )
+
+        graphRhoOnRank = collect_graph_from_rho(
+            graphRhoOnRank,
+            rho,
+            sdc.gthresh,
+            sy.nats,
+            sdc.maxDeg,
+            partsCoreHalo[partIndex],
+            len(parts[partIndex]),
+            hindex,
         )
 
         chargesOnRank = collect_charges(
@@ -296,20 +311,24 @@ def get_singlePoint_charges(
         )
 
     if is_mpi_available and numranks > 1:
-        fullGraphHalo = collect_and_sum_matrices(graphOnRank, rank, numranks, comm)
+        fullGraphHalo = collect_and_sum_matrices_float(graphOnRank, rank, numranks, comm)
+        fullGraphRho = collect_and_sum_matrices_float(graphRhoOnRank, comm)
         fullCharges = collect_and_sum_vectors_float(chargesOnRank, rank, numranks, comm)
         comm.Barrier()
     else:
         fullGraphHalo = graphOnRank
+        fullGraphRho = graphRhoOnRank
         fullCharges = chargesOnRank
 
     # print_graph(fullGraphRho)
-    return fullGraphHalo, fullCharges, subSysOnRank, mu
+    return fullGraphHalo, fullGraphRho, fullCharges, subSysOnRank, mu
 
 
-def get_adaptiveSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu, graphweights=None, device="cuda"):
+def get_adaptiveSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu, alpha=0.7, graphweights=None, device="cuda", dtype=torch.float64,):
     fullGraph = graphNL
-
+    if rank == 0:
+        with open('scf.log', 'w') as f:
+            f.write('scf starts...\n')
     # Iitial guess for the excess ocupation vector. This is the negative of
     # the charge!
     charges = sy.charges
@@ -317,9 +336,15 @@ def get_adaptiveSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu, g
     chargesIn = None
     chargesOld = None
     chargesOut = None
+    nbr_inds = None
+    disps = None
+    dists = None
+    PME_alpha = None
+    PME_data = None
+    scfError = 10.0
     # Partition the graph
     parts = graph_partition(
-        sdc, eng, fullGraph, sdc.partitionType, sdc.nparts, sy.coords, graphweights=graphweights, verb=True
+        sdc, eng, fullGraph, sdc.partitionType, sdc.nparts, sy.coords, latticeVectors=sy.latticeVectors, graphweights=graphweights, verb=True
     )
     for gscf in range(sdc.numAdaptIter):
         msg = "Graph-adaptive iteration" + str(gscf)
@@ -338,18 +363,36 @@ def get_adaptiveSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu, g
         if rank == 0 and gscf == 0 and sum(charges == 0) != 0:
             sy.coulvs = np.zeros(len(charges))
         elif rank == 0:
-            sy.coulvs, ewald_e = get_PME_coulvs(
+            sy.coulvs, ewald_e, nbr_inds, disps, dists, PME_alpha, PME_data = get_PME_coulvs(
                 charges,
                 sy.hubbard_u,
                 sy.coords,
                 sy.types,
                 sy.latticeVectors,
+                nbr_inds=nbr_inds,
+                disps=disps,
+                dists=dists,
+                alpha=PME_alpha,
+                PME_data=PME_data,
                 device=device,
             )
         if is_mpi_available and numranks > 1:
             sy.coulvs = comm.bcast(sy.coulvs, root=0)
+            if gscf == 1 and rank == 0:
+                nbr_inds = nbr_inds.cpu()
+                disps = disps.cpu()
+                dists = dists.cpu()
+                PME_data = tuple(
+                    item.cpu() if torch.is_tensor(item) else item for item in PME_data
+                )
+            if gscf == 1:
+                nbr_inds = comm.bcast(nbr_inds, root=0)
+                disps = comm.bcast(disps, root=0)
+                dists = comm.bcast(dists, root=0)
+                PME_alpha = comm.bcast(PME_alpha, root=0)
+                PME_data = comm.bcast(PME_data, root=0)
 
-        fullGraphHalo, charges, subSysOnRank, mu = get_singlePoint_charges(
+        fullGraphHalo, fullGraphRho, charges, subSysOnRank, mu = get_singlePoint_charges(
             sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, gscf, mu
         )
         # print("Collected charges", charges)
@@ -362,7 +405,10 @@ def get_adaptiveSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu, g
         #    scfError = sy.numel
 
         # print_graph(fullGraphRho)
+        fullGraphHalo = symmetrize_graph(fullGraphHalo)
         fullGraph = add_graphs(fullGraphHalo, fullGraph)
+        fullGraphRho = symmetrize_graph(fullGraphRho)
+        fullGraph = add_graphs(fullGraphRho, fullGraph)
         #graphDH = multiply_graphs(fullGraphRho, graphNL)
         # fullGraph = fullGraphRho 
         #graphHD = multiply_graphs(graphNL, fullGraphRho)
@@ -371,6 +417,9 @@ def get_adaptiveSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu, g
             print("Charges:", i, sy.symbols[sy.types[i]], charges[i])
         print("SCF ERR =", scfError)
         print("TotalCharge", sum(charges))
+        if rank == 0:
+            with open('scf.log', 'a') as f:
+                f.write(f'{scfError}\n')
 
         if scfError < sdc.scfTol:
             status_at(

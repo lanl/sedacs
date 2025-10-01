@@ -898,27 +898,13 @@ def metis_partition(graph, nparts, graphweights=None, verb=False):
 
     nnodes = len(graph[:, 0])
     if(nparts > 1):
-        if graphweights is not None:
-            eweights = []
-            for i in range(len(graph[:, 0])):
-                eweights += list(map(int, graphweights[i, 1:graph[i,0]+1].tolist()))
-        else:
-            eweights = None
-        xadj = [0]
-        adjncy = []
-        for i in range(nnodes):
-            adjncy += list(map(int, graph[i, 1:graph[i,0]+1]))
-            xadj.append(len(adjncy))
-        #graph_list = []
-        #for i in range(len(graph[:, 0])):
-        #    graph_list.append(graph[i, 1:graph[i,0]+1])
-        #edgecuts, metisParts = pymetis.part_graph(nparts, adjacency=graph_list)
+        # Convert to networkx graph and use metis there
+        nxGraph = get_nx_graph(graph, graphweights)
         # Metis partition metis call
         # Metis returns nxParts which is a list of every's part (or "color")
         # to where they belong. Node "i" belongs to "metisParts[i]" part.
-        eweights = None
-        #edgecuts, metisParts = pymetis.part_graph(nparts, xadj=xadj, adjncy=adjncy, eweights=eweights, recursive=True)
-        edgecuts, metisParts = pymetis.part_graph(nparts, xadj=xadj, adjncy=adjncy, eweights=eweights, recursive=True)
+        edgecuts, metisParts = metis.part_graph(nxGraph, nparts, objtype='vol', contig=False, ctype='shem', iptype='grow', ncuts=10, niter=20, rtype='fm', minconn=True, recursive=False)
+        # edgecuts, metisParts = metis.part_graph(nxGraph, nparts, objtype='cut', contig=True, recursive=False)
 
         # The next lines will transform from metis to our partition format
         parts = []

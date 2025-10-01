@@ -7,8 +7,10 @@ Graph adaptive single-point charge, energy and force solver
 
 import time
 from pathlib import Path
+import nvtx 
+import pickle
 
-from sedacs.graph import add_graphs, collect_graph_from_rho, print_graph, multiply_graphs, adaptive_halo_expansion
+from sedacs.graph import add_graphs, collect_graph_from_rho, print_graph, multiply_graphs, adaptive_halo_expansion, symmetrize_graph
 from sedacs.graph_partition import get_coreHaloIndices, graph_partition
 from sedacs.sdc_hamiltonian import get_hamiltonian
 from sedacs.sdc_density_matrix import get_density_matrix
@@ -49,7 +51,7 @@ __all__ = ["get_singlePoint_energy_forces", "get_adaptive_sp_energy_forces"]
 
 
 def get_singlePoint_energy_forces(
-    sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu=0.0, alpha=0.7, expandonly=True,
+    sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu=0.0, alpha=0.7,
 ):
     """
     Get the single point charges, energy, and forces for the full system from graph-partitioned subsystems.
@@ -105,6 +107,7 @@ def get_singlePoint_energy_forces(
     partIndex1 = rank * partsPerRank
     partIndex2 = (rank + 1) * partsPerRank
     graphOnRank = None
+    graphRhoOnRank = None
     chargesOnRank = None
     evalsOnRank = None
     dvalsOnRank = None
@@ -133,6 +136,12 @@ def get_singlePoint_energy_forces(
             subSy.types,
             subSy.symbols,
         )
+        write_pdb_coordinates(
+            "subSy_core" + str(rank) + "_" + str(partIndex) + ".pdb",
+            subSy.coords[: len(parts[partIndex]), :],
+            subSy.types[: len(parts[partIndex])],
+            subSy.symbols,
+        )
         tic = time.perf_counter()
 
         # Get some electronic structure elements for the sybsystem
@@ -147,7 +156,7 @@ def get_singlePoint_energy_forces(
         norbsInCore = np.sum(tmpArray)
         print("Number of orbitals in the core =", norbsInCore)
         nocc = int(float(subSy.numel) / 2.0)  # Get the total occupied orbitals
-
+        nvtx.push_range("get_hamiltonian", color="blue", domain="get_singlePoint_charges")
         subSy.ham, subSy.over, subSy.zmat = get_hamiltonian(
             eng,
             partIndex,
@@ -161,11 +170,12 @@ def get_singlePoint_energy_forces(
             get_overlap=True,
             newsystem=True,
         )
-
+        nvtx.pop_range("get_singlePoint_charges")
         toc = time.perf_counter()
         print("Time for get_hamiltonian", toc - tic, "(s)")
 
         tic = time.perf_counter()
+        nvtx.push_range("get_evals_dvals", color="orange", domain="get_singlePoint_charges")
         subSy.evects, evalsInPart, dvalsInPart = get_evals_dvals(
             eng,
             partIndex,
@@ -183,13 +193,14 @@ def get_singlePoint_energy_forces(
             verb=False,
             newsystem=False,
         )
+        nvtx.pop_range("get_singlePoint_charges")
         subSy.evals = evalsInPart
         toc = time.perf_counter()
         print("Time for get_evals_dvals", toc - tic, "(s)")
 
         evalsOnRank = collect_evals(evalsOnRank, evalsInPart, verb=True)
         dvalsOnRank = collect_dvals(dvalsOnRank, dvalsInPart, verb=True)
-
+    nvtx.push_range("collect_evals_dvals", color="green", domain="get_singlePoint_charges")
     if is_mpi_available and numranks > 1:
         fullEvals = collect_and_concatenate_vectors(evalsOnRank, comm)
         fullDvals = collect_and_concatenate_vectors(dvalsOnRank, comm)
@@ -197,7 +208,9 @@ def get_singlePoint_energy_forces(
     else:
         fullEvals = evalsOnRank
         fullDvals = dvalsOnRank
+    nvtx.pop_range("get_singlePoint_charges")
     # Calculate the global chemical potential from the evals and dvals collected from all subsystems
+    nvtx.push_range("get_mu", color="purple", domain="get_singlePoint_charges")
     mu = get_mu(
         mu,
         fullEvals,
@@ -207,7 +220,9 @@ def get_singlePoint_energy_forces(
         kB=8.61739e-5,
         verb=True,
     )
+    nvtx.pop_range("get_singlePoint_charges")
     # Calculate the electronic entropy from the evals and dvals collected from all subsystems
+    nvtx.push_range("get_entropy", color="red", domain="get_singlePoint_charges")
     fullEntropy = get_entropy(
         mu,
         fullEvals,
@@ -216,7 +231,7 @@ def get_singlePoint_energy_forces(
         kB=8.61739e-5,
         verb=True,
     )
-
+    nvtx.pop_range("get_singlePoint_charges")
     for partIndex in range(partIndex1, partIndex2):
         numberOfCoreAtoms = len(parts[partIndex])
         subSy = sy.subSy_list[partIndex - partIndex1]
@@ -230,6 +245,7 @@ def get_singlePoint_energy_forces(
         subSy.latticeVectors = sy.latticeVectors
 
         tic = time.perf_counter()
+        nvtx.push_range("get_density_matrix", color="red", domain="get_singlePoint_charges")
         rho, chargesInPart = get_density_matrix(
             eng,
             partIndex,
@@ -251,7 +267,8 @@ def get_singlePoint_energy_forces(
             newsystem=True,
             keepmem=True,
         )
-
+        nvtx.pop_range("get_singlePoint_charges")
+        nvtx.push_range("get_energy_forces", color="brown", domain="get_singlePoint_charges")
         energyInPart, forcesInPart = get_energy_forces(
             eng,
             partIndex,
@@ -272,7 +289,7 @@ def get_singlePoint_energy_forces(
             newsystem=False,
             keepmem=False,
         )
-
+        nvtx.pop_range("get_singlePoint_charges")
         chargesInPart = chargesInPart[: len(parts[partIndex])]
         subSy.charges = chargesInPart
 
@@ -287,6 +304,7 @@ def get_singlePoint_energy_forces(
         toc = time.perf_counter()
         print("Time to get_densityMatrix", toc - tic, "(s)")
         # Adaptively expand the halo for the subsystem
+        nvtx.push_range("adaptive_halo_expansion", color="pink", domain="get_singlePoint_charges")
         graphOnRank = adaptive_halo_expansion(
             graphOnRank,
             rho,
@@ -298,9 +316,18 @@ def get_singlePoint_energy_forces(
             subSy.hindex,
             sy.coords,
             alpha=alpha,
-            expandonly=expandonly,
         )
-
+        graphRhoOnRank = collect_graph_from_rho(
+            graphRhoOnRank,
+            rho,
+            sdc.gthresh,
+            sy.nats,
+            sdc.maxDeg,
+            partsCoreHalo[partIndex],
+            len(parts[partIndex]),
+            hindex,
+        )
+        nvtx.pop_range("get_singlePoint_charges")
         chargesOnRank = collect_charges(
             chargesOnRank, chargesInPart, parts[partIndex], sy.nats, verb=True
         )
@@ -308,23 +335,25 @@ def get_singlePoint_energy_forces(
         forcesOnRank = collect_forces(
             forcesOnRank, forcesInPart, parts[partIndex], sy.nats, verb=True
         )
-
+    nvtx.push_range("collect_graph_and_charges", color="green", domain="get_singlePoint_charges")
     if is_mpi_available and numranks > 1:
         fullGraphHalo = collect_and_sum_matrices_float(graphOnRank, comm)
+        fullGraphRho = collect_and_sum_matrices_float(graphRhoOnRank, comm)
         fullCharges = collect_and_sum_vectors_float(chargesOnRank, rank, numranks, comm)
         fullEnergy = collect_and_sum_vectors_float(energyOnRank, rank, numranks, comm)
         fullForces = collect_and_sum_matrices_float(forcesOnRank, comm)
-        # fullForces = collect_and_sum_matrices(forcesOnRank, rank, numranks, comm, dtype=float)
         comm.Barrier()
     else:
         fullGraphHalo = graphOnRank
+        fullGraphRho = graphRhoOnRank
         fullCharges = chargesOnRank
         fullEnergy = energyOnRank
         fullForces = forcesOnRank
-
+    nvtx.pop_range("get_singlePoint_charges")
     # print_graph(fullGraphRho)
     return (
         fullGraphHalo,
+        fullGraphRho,
         fullCharges,
         fullEnergy[0],
         fullEntropy,
@@ -335,12 +364,13 @@ def get_singlePoint_energy_forces(
 
 
 def get_adaptive_sp_energy_forces(
-    sdc, eng, comm, rank, numranks, sy, parts, partsCoreHalo, hindex, graphNL, mu, alpha=0.7, shadow_md=True, device="cuda", expandonly=True,
+    sdc, eng, comm, rank, numranks, sy, parts, partsCoreHalo, hindex, graph, mu, alpha=0.7, shadow_md=True, device="cuda",
 ):
+    nvtx.push_range("SP energy forces", color="blue", domain="get_adaptiveSCFDM")
     charges = sy.charges
-
+    nvtx.push_range("PME solver", color="green", domain="get_adaptiveSCFDM")
     if rank == 0:
-        sy.coulvs, ecoul, fcoul = get_PME_coulvs(
+        sy.coulvs, ecoul, fcoul, nbr_inds, disps, dists, PME_alpha, PME_data = get_PME_coulvs(
             charges,
             sy.hubbard_u,
             sy.coords,
@@ -352,24 +382,29 @@ def get_adaptive_sp_energy_forces(
     else:
         ecoul = None
         fcoul = None
-    sy.coulvs = comm.bcast(sy.coulvs, root=0)
-    ecoul = comm.bcast(ecoul, root=0)
-    fcoul = comm.bcast(fcoul, root=0)
 
-    fullGraphHalo, charges, energy, entropy, forces, subSysOnRank, mu = (
+    if is_mpi_available and numranks > 1:
+        sy.coulvs = comm.bcast(sy.coulvs, root=0)
+        ecoul = comm.bcast(ecoul, root=0)
+        fcoul = comm.bcast(fcoul, root=0)
+    nvtx.pop_range("get_adaptiveSCFDM")
+    
+    nvtx.push_range("get_singlePoint_charges", color="orange", domain="get_adaptiveSCFDM")
+    fullGraphHalo, fullGraphRho, charges, energy, entropy, forces, subSysOnRank, mu = (
         get_singlePoint_energy_forces(
-            sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu, alpha=alpha, expandonly=expandonly,
+            sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu, alpha=alpha,
         )
     )
+    nvtx.pop_range("get_adaptiveSCFDM")
     if shadow_md:
         fcoul = ((2 * charges - sy.charges) / sy.charges)[:, None] * fcoul
         
     energy = energy - ecoul
     forces = forces + fcoul
 
-    fullGraph = add_graphs(fullGraphHalo, graphNL)
-    #fullGraph = fullGraphHalo
-
+    fullGraphHalo = symmetrize_graph(fullGraphHalo)
+    fullGraphRho = symmetrize_graph(fullGraphRho)
+    fullGraph = add_graphs(fullGraphRho, fullGraphHalo)
     AtToPrint = 0
 
     subSy = System(fullGraph[AtToPrint, 0])
@@ -387,5 +422,15 @@ def get_adaptive_sp_energy_forces(
         write_xyz_coordinates(
             "subSyG_fin.xyz", subSy.coords, subSy.types, subSy.symbols
         )
+
+    # if rank == 0:
+    #    with open('energy_forces.log', 'w') as f:
+    #        f.write(str(energy) + '\n')
+    #        f.write(np.array2string(forces[0], separator=', ') + '\n')
+    #    with open('forces.pkl', 'wb') as f:
+    #        pickle.dump(forces, f)
+        # with open('energy.log', 'a') as f:
+        #     f.write(str(band_energy) + ',' + str(ecoul) + '\n')
+    nvtx.pop_range("get_adaptiveSCFDM")
 
     return fullGraph, charges, energy, entropy, forces, mu, parts, partsCoreHalo, subSysOnRank

@@ -60,7 +60,7 @@ def get_initial_graph(coords, nl, radius, maxDeg, LBox, graphweights=False, verb
                     graph[i, ik] = jj
                     degi = degi + 1
                     if graphweights:
-                        eweights[i, ik] = np.round(1000 * np.exp(-2 * distance)).astype(int) + 1
+                        eweights[i, ik] = max(np.round(100 * np.exp(-.5 * (distance)**2)).astype(int), 1)
                     # if i == 0:
                     #     print(nl[i,j])
                 else:
@@ -106,12 +106,17 @@ def get_nx_graph(graph, w):
     n = len(graph[:, 0])
     m = len(graph[0, :])
     nxGraph = nx.Graph()
+    nxGraph.graph['edge_weight_attr'] = 'weight'
+    if w is None:
+        w = np.ones_like(graph, dtype=int)
     for i in range(0, n):
-        nxGraph.add_nodes_from([i, i])
+        nxGraph.add_node(i)
+    for i in range(0, n):
+        # nxGraph.add_nodes_from([i, i])
         for k in range(1, graph[i, 0] + 1):
             j = graph[i, k]
             if (j != -1) and (j != i):
-                nxGraph.add_edge(i, j, weight=w)
+                nxGraph.add_edge(i, j, weight=w[i, k])
 
     #print("graph", graph)
     #print("nxGraph", nxGraph)
@@ -363,6 +368,7 @@ def add_graphs(graphA, graphB):
         vectA[:] = False
         for j in range(1, graphA[i, 0] + 1):
             vectA[graphA[i, j]] = True
+
         # Create a logical row from the neighbors of i in adj B
         vectB[:] = False
         for j in range(1, graphB[i, 0] + 1):
@@ -647,6 +653,44 @@ def convert_to_graph(adj, maxDeg):
 
     return graph
 
+def symmetrize_graph(graph):
+    nnodes = graph.shape[0]
+    maxDeg = graph.shape[1] - 1
+
+    # Build adjacency list sets for symmetry
+    adj = [set() for _ in range(nnodes)]
+    for i in range(nnodes):
+        deg = graph[i, 0]
+        for j in range(deg):
+            nbr = graph[i, j+1]
+            adj[i].add(nbr)
+            adj[nbr].add(i)  # make symmetric
+
+    # Convert back to padded matrix
+    sym_graph = -np.ones((nnodes, maxDeg+1), dtype=int)
+    for i in range(nnodes):
+        neighbors = sorted(adj[i])
+        sym_graph[i, 0] = len(neighbors)
+        sym_graph[i, 1:len(neighbors)+1] = neighbors
+
+    return sym_graph
+
+def is_symmetric_graph(graph):
+    nnodes = graph.shape[0]
+
+    for i in range(nnodes):
+        deg = graph[i, 0]
+        for j in range(deg):
+            nbr = graph[i, j+1]
+            if nbr < 0:
+                continue
+            # check if i is in nbr's neighbor list
+            nbr_deg = graph[nbr, 0]
+            if i not in graph[nbr, 1:nbr_deg+1]:
+                return False
+    return True
+
+
 def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos, indicesCore, hindex, coords, alpha=0.7, expandonly=True):
     """
     Adaptively expanding the size of halo regions by multiplying the 
@@ -696,7 +740,7 @@ def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos
 
     if graph is None:
         graph = np.zeros((nnodes, maxDeg + 1), dtype=int)
-    graph[indicesCore, 1:] = -1  
+    #graph[indicesCore, 1:] = -1  
     weights = np.zeros((nnodes))
     ncores = len(indicesCore)
     nch = len(indicesCoreHalos)
@@ -714,6 +758,7 @@ def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos
     distances = np.linalg.norm(coords[:, np.newaxis] - corehalo_coords, axis=2)
     # Estimate the overlap matrix based on the distances
     overlap_matrix = np.exp(-alpha * distances ** 2)  # Exponential decay based on distance
+    # overlap_matrix = np.where(overlap_matrix > thresh, overlap_matrix, 0)
 
     # Contract the density matrix from number of orbitals to number of atoms by selecting the max # density matrix elements for each atom.
     # hindex is the number of orbitals for each atom, so we can use it to slice the density matrix
@@ -727,7 +772,8 @@ def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos
     for i in range(ncores):
         for j in range(nch):
             # Slice the density matrix according to hindex
-            reduced_rho[j, i] = np.max(rho[hindex[j]:hindex[j + 1], hindex[i]:hindex[i + 1]])  
+            reduced_rho[j, i] = np.max(rho[hindex[j]:hindex[j + 1], hindex[i]:hindex[i + 1]])
+    # reduced_rho = np.where(reduced_rho > thresh, reduced_rho, 0)
     # Matrix multiplication to get the new halo regions
     SD = overlap_matrix @ reduced_rho
     # assign indices
@@ -754,5 +800,6 @@ def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos
                 graph[ii, k] = jj
 
         graph[ii, 0] = k
+        graph[ii, k + 1:] = -1  # Fill the rest with -1s
 
     return graph

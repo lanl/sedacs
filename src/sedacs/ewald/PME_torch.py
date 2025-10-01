@@ -2,10 +2,11 @@ import torch
 import math
 from sedacs.ewald import ewald_real, CONV_FACTOR, ewald_self_energy, ewald_real_screening
 from typing import Optional, Tuple, List, Union
+import nvtx
 
 def b(m, order=4):
     k = torch.arange(order - 1, device=m.device).reshape(1,1,1,order-1)
-    M = compute_spline_coefficients(torch.tensor(1.0), order)[1:].flip(dims=(0,))
+    M = compute_spline_coefficients(torch.tensor(1.0, device=m.device), order)[1:].flip(dims=(0,))
     M = M.reshape(1,1,1,order-1)
     M = M.to(m.dtype).to(m.device)
     
@@ -18,10 +19,11 @@ def b(m, order=4):
     return res.real * res.real + res.imag * res.imag
 
 def B(mx, my, mz, order=4):
-    b_x = b(mx,order)
-    b_y = b(my,order)
-    b_z = b(mz,order)
-    return b_x * b_y * b_z
+    return b(mx, order) * b(my, order) * b(mz, order)
+    # b_x = b(mx,order)
+    # b_y = b(my,order)
+    # b_z = b(mz,order)
+    # return b_x * b_y * b_z
 
 def compute_spline_coefficients(w, order: int = 4):
     shape = w.shape
@@ -181,6 +183,8 @@ def calculate_PME_ewald(
     Notes:
         - Forces and charge derivatives for PME are computed via automatic differentiation.
     """
+    torch.cuda.synchronize()
+    nvtx.push_range("Ewald init", color="blue", domain="Ewald Summation")
     N = len(charges)
     # As the internal functions expects (3, N), transpose the position tensor as needed
     transpose = False
@@ -191,9 +195,13 @@ def calculate_PME_ewald(
     # transpose the disp. vectors as needed
     if nbr_disp_vecs.shape[2] == 3:
         nbr_disp_vecs = nbr_disp_vecs.permute(2, 0, 1).contiguous()
-    
+    torch.cuda.synchronize()
+    nvtx.pop_range("Ewald Summation")
     dq = None
     forces = None
+    torch.cuda.synchronize()
+    nvtx.push_range("Ewald real space", color="blue", domain="Ewald Summation")
+     # Real space contribution
     if screening:
         my_e_real, my_f_real, my_dq_real = ewald_real_screening(nbr_inds, nbr_disp_vecs, 
                                                     nbr_dists, charges, hubbard_u, atomtypes, alpha, 
@@ -208,6 +216,8 @@ def calculate_PME_ewald(
                                                     nbr_dists, charges, alpha, 
                                                     cutoff,
                                                     calculate_forces, calculate_dq)
+    torch.cuda.synchronize()
+    nvtx.pop_range("Ewald Summation")
     if calculate_dq:
         charges.grad = None
         charges.requires_grad = True
@@ -215,8 +225,11 @@ def calculate_PME_ewald(
     if calculate_forces:
         positions.grad = None
         positions.requires_grad = True
-
+    torch.cuda.synchronize()
+    nvtx.push_range("Ewald PME", color="red", domain="Ewald Summation")
     pme_e = calculate_PME_energy(positions, charges, box, alpha, PME_init_data)
+    torch.cuda.synchronize()
+    nvtx.pop_range("Ewald Summation")
     self_e, self_dq = ewald_self_energy(charges, alpha, calculate_dq)
 
     if calculate_dq or calculate_forces:
