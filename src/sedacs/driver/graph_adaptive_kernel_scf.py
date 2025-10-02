@@ -444,7 +444,7 @@ def get_adaptive_KernelSCFDM(
         nvtx.pop_range("get_adaptiveSCFDM")
         chargesOld = charges
         nvtx.push_range("get_singlePoint_charges", color="orange", domain="get_adaptiveSCFDM")
-        fullGraphHalo, fullGraphRho, fullGraphRho_list, charges, subSysOnRank, mu = get_singlePoint_charges(
+        fullGraphHalo, fullGraphRho, charges, subSysOnRank, mu = get_singlePoint_charges(
             sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, gscf, mu=mu, alpha=alpha,
         )
         nvtx.pop_range("get_adaptiveSCFDM")

@@ -20,7 +20,7 @@ import os
 from sedacs.periodic_table import PeriodicTable
 
 try: 
-    import pymetis
+    import metis
     metisLib = True
 except: 
     metisLib = False
