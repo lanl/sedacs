@@ -62,7 +62,7 @@ __all__ = ["get_singlePoint_charges", "get_adaptiveSCFDM"]
 
 
 def get_singlePoint_charges(
-    sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, gscf, mu=0.0, alpha=0.7,
+    sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu=0.0, alpha=0.7,
 ):
     """
     Get the single point charges for the full system from graph-partitioned subsystems.
@@ -119,7 +119,6 @@ def get_singlePoint_charges(
     partIndex1 = rank * partsPerRank
     partIndex2 = (rank + 1) * partsPerRank
     graphOnRank = None
-    graphRhoOnRank = None
     chargesOnRank = None
     evalsOnRank = None
     dvalsOnRank = None
@@ -213,15 +212,17 @@ def get_singlePoint_charges(
 
         evalsOnRank = collect_evals(evalsOnRank, evalsInPart, verb=True)
         dvalsOnRank = collect_dvals(dvalsOnRank, dvalsInPart, verb=True)
-    nvtx.push_range("collect_evals_dvals", color="green", domain="get_singlePoint_charges")
+    
     if is_mpi_available and numranks > 1:
+        nvtx.push_range("collect_evals_dvals", color="green", domain="get_singlePoint_charges")
         fullEvals = collect_and_concatenate_vectors(evalsOnRank, comm)
         fullDvals = collect_and_concatenate_vectors(dvalsOnRank, comm)
+        nvtx.pop_range("get_singlePoint_charges")
         comm.Barrier()
     else:
         fullEvals = evalsOnRank
         fullDvals = dvalsOnRank
-    nvtx.pop_range("get_singlePoint_charges")
+    
     # Calculate the global chemical potential from the evals and dvals collected from all subsystems
     nvtx.push_range("get_mu", color="purple", domain="get_singlePoint_charges")
     mu = get_mu(
@@ -294,37 +295,39 @@ def get_singlePoint_charges(
             parts[partIndex],
             subSy.hindex,
             sy.coords,
+            sy.latticeVectors,
+            sy.nl.cpu().numpy(),
             alpha=alpha,
         )
-
-        graphRhoOnRank = collect_graph_from_rho(
-            graphRhoOnRank,
+        nvtx.pop_range("get_singlePoint_charges")
+        nvtx.push_range("collect_graph_from_rho", color="brown", domain="get_singlePoint_charges")
+        graphOnRank = collect_graph_from_rho(
+            graphOnRank,
             rho,
             sdc.gthresh,
             sy.nats,
             sdc.maxDeg,
             partsCoreHalo[partIndex],
             len(parts[partIndex]),
-            hindex,
+            subSy.hindex,
         )
+        
         nvtx.pop_range("get_singlePoint_charges")
         chargesOnRank = collect_charges(
             chargesOnRank, chargesInPart, parts[partIndex], sy.nats, verb=True
         )
     nvtx.push_range("collect_graph_and_charges", color="green", domain="get_singlePoint_charges")
     if is_mpi_available and numranks > 1:
-        fullGraphHalo = collect_and_sum_matrices_float(graphOnRank, comm)
-        fullGraphRho = collect_and_sum_matrices_float(graphRhoOnRank, comm)
+        fullGraph = collect_and_sum_matrices_float(graphOnRank, comm)
         fullCharges = collect_and_sum_vectors_float(chargesOnRank, rank, numranks, comm)
         comm.Barrier()
     else:
-        fullGraphHalo = graphOnRank
-        fullGraphRho = graphRhoOnRank
+        fullGraph = graphOnRank
         fullCharges = chargesOnRank
     nvtx.pop_range("get_singlePoint_charges")
     # print_graph(fullGraphRho)
 
-    return fullGraphHalo, fullGraphRho, fullCharges, subSysOnRank, mu
+    return fullGraph, fullCharges, subSysOnRank, mu
 
 
 def get_adaptive_KernelSCFDM(
@@ -343,7 +346,6 @@ def get_adaptive_KernelSCFDM(
     dtype=torch.float64,
 ):
     fullGraph = graphNL
-    fullGraphRho = graphNL
     if rank == 0:
         with open('scf.log', 'w') as f:
             f.write('scf starts...\n')
@@ -361,34 +363,31 @@ def get_adaptive_KernelSCFDM(
     chargesIn = None
     chargesOld = None
     chargesOut = None
-    nbr_inds = None
-    disps = None
-    dists = None
-    PME_alpha = None
-    PME_data = None
+    parts = None
     scfError = 10.0
     kernel = 0
     # Partition the graph
     nvtx.push_range("graph_partition", color="purple", domain="get_adaptiveSCFDM")
-    parts = graph_partition(
-        sdc, eng, fullGraph, sdc.partitionType, sdc.nparts, sy.coords, latticeVectors=sy.latticeVectors, graphweights=graphweights, verb=True
-    )
+    if rank == 0:
+        parts = graph_partition(
+            sdc, eng, fullGraph, sdc.partitionType, sdc.nparts, sy.coords, latticeVectors=sy.latticeVectors, graphweights=graphweights, verb=True
+        )
+    parts = comm.bcast(parts, root=0)
+    njumps = 1
+    partsCoreHalo = [[] for _ in range(sdc.nparts)]
     nvtx.pop_range("get_adaptiveSCFDM")
     for gscf in range(sdc.numAdaptIter):
         nvtx.push_range("SCF Iter", color="blue", domain="get_adaptiveSCFDM")
         msg = "Graph-adaptive iteration" + str(gscf)
         status_at("get_adaptiveSCFDM", msg)
         nvtx.push_range("get_coreHaloIndices", color="blue", domain="get_adaptiveSCFDM")
-        njumps = 1
-        partsCoreHalo = []
-        numCores = []
+        
         total = 0
         # print("\nCore and halos indices for every part:")
         for i in range(sdc.nparts):
-            coreHalo, nc, nh = get_coreHaloIndices(parts[i], fullGraph, njumps)
+            coreHalo, nc, nh = get_coreHaloIndices(parts[i], fullGraph, njumps, partsCoreHalo[i])
             total += nh
-            partsCoreHalo.append(coreHalo)
-            numCores.append(nc)
+            partsCoreHalo[i] = coreHalo
             print("core,halo size:", i, "=", nc, nh)
             if rank == 0:
                 with open('corehalo.log', 'a') as f:
@@ -398,55 +397,36 @@ def get_adaptive_KernelSCFDM(
             with open('corehalo.log', 'a') as f:
                 f.write(f"avg. halo size: {total / sdc.nparts}\n")
         nvtx.pop_range("get_adaptiveSCFDM")
-        #if gscf > 0 and len(parts) >= 48:
-        #    for fullGraphRho in fullGraphRho_list:
-        #        i = 47
-        #        coreHalo2, nc2, nh2 = get_coreHaloIndices(parts[i], fullGraphRho, njumps)
-        #        print("core,halo size:", i, "=", nc, nh)
-        #        if rank == 0:
-        #            with open('corehalo2.log', 'a') as f:
-        #                f.write(f"gscf: {gscf}\n")
-        #                f.write(f"core,halo size: {i} = {nc2} {nh2}\n")
-        #    print("coreHalo for part", i, "=", coreHalo)
         nvtx.push_range("PME solver", color="green", domain="get_adaptiveSCFDM")
-        if int(rank / 2) == 0 and gscf == 0 and sum(charges == 0) != 0:
+        if rank == 0 and gscf == 0 and sum(charges == 0) != 0:
             sy.coulvs = np.zeros(len(charges))
-        elif int(rank / 2) == 0:
-            sy.coulvs, ewald_e, nbr_inds, disps, dists, PME_alpha, PME_data = get_PME_coulvs(
+        elif rank == 0:
+            sy.coulvs, ewald_e = get_PME_coulvs(
                 charges,
                 sy.hubbard_u,
                 sy.coords,
                 sy.types,
                 sy.latticeVectors,
-                nbr_inds=nbr_inds,
-                disps=disps,
-                dists=dists,
-                alpha=PME_alpha,
-                PME_data=PME_data,
+                sy.nl,
+                sy.nl_disps,
+                sy.nl_dists,
+                sy.ewald_alpha,
+                sdc.coulcut,
+                sy.PME_data,
                 device=device,
             )
         if is_mpi_available and numranks > 1:
             sy.coulvs = comm.bcast(sy.coulvs, root=0)
-            if gscf == 1 and rank == 0:
-                nbr_inds = nbr_inds.cpu()
-                disps = disps.cpu()
-                dists = dists.cpu()
-                PME_data = tuple(
-                    item.cpu() if torch.is_tensor(item) else item for item in PME_data
-                )
-            if gscf == 1:
-                nbr_inds = comm.bcast(nbr_inds, root=0)
-                disps = comm.bcast(disps, root=0)
-                dists = comm.bcast(dists, root=0)
-                PME_alpha = comm.bcast(PME_alpha, root=0)
-                PME_data = comm.bcast(PME_data, root=0)
-            
+
         nvtx.pop_range("get_adaptiveSCFDM")
         chargesOld = charges
         nvtx.push_range("get_singlePoint_charges", color="orange", domain="get_adaptiveSCFDM")
-        fullGraphHalo, fullGraphRho, charges, subSysOnRank, mu = get_singlePoint_charges(
-            sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, gscf, mu=mu, alpha=alpha,
+        fullGraph, charges, subSysOnRank, mu = get_singlePoint_charges(
+            sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu=mu, alpha=alpha,
         )
+        nvtx.pop_range("get_adaptiveSCFDM")
+        nvtx.push_range("symmetrize_graphs", color="pink", domain="get_adaptiveSCFDM")
+        fullGraph = symmetrize_graph(fullGraph)
         nvtx.pop_range("get_adaptiveSCFDM")
         # print("Collected charges", charges)
         scfError = np.linalg.norm(charges - chargesOld) / np.sqrt(sy.nats)
@@ -462,7 +442,7 @@ def get_adaptive_KernelSCFDM(
                 print("start building the full kernel...")
                 nvtx.push_range("get_kernel_byParts", color="red", domain="get_adaptiveSCFDM")
                 get_kernel_byParts(
-                    sdc, rank, numranks, parts, partsCoreHalo, sy, mu=mu, nbr_inds=nbr_inds, disps=disps, dists=dists, alpha=PME_alpha, PME_data=PME_data, device=device
+                    sdc, rank, numranks, parts, partsCoreHalo, sy, mu=mu, identity=True, nbr_inds=sy.nl, disps=sy.nl_disps, dists=sy.nl_dists, alpha=sy.ewald_alpha, PME_data=sy.PME_data, device=device
                 )
                 nvtx.pop_range("get_adaptiveSCFDM")
                 syk = deepcopy(sy)
@@ -486,11 +466,11 @@ def get_adaptive_KernelSCFDM(
                 partsCoreHalo,
                 sy,
                 mu=mu,
-                nbr_inds=nbr_inds,
-                disps=disps,
-                dists=dists,
-                alpha=PME_alpha,
-                PME_data=PME_data,
+                nbr_inds=sy.nl,
+                disps=sy.nl_disps,
+                dists=sy.nl_dists,
+                alpha=sy.ewald_alpha,
+                PME_data=sy.PME_data,
                 device=device,
             )
             nvtx.pop_range("get_adaptiveSCFDM")
@@ -499,13 +479,6 @@ def get_adaptive_KernelSCFDM(
             # charges = charges - KRes
             charges = chargesOld - KRes
             # charges = charges - np.dot(sy.subSy_list[0].ker, g_charges - charges)
-        # print_graph(fullGraphRho)
-        nvtx.push_range("add_graphs", color="pink", domain="get_adaptiveSCFDM")
-        fullGraphHalo = symmetrize_graph(fullGraphHalo)
-        fullGraph = add_graphs(fullGraphHalo, fullGraph)
-        fullGraphRho = symmetrize_graph(fullGraphRho)
-        fullGraph = add_graphs(fullGraphRho, fullGraph)
-        nvtx.pop_range("get_adaptiveSCFDM")
         for i in range(sy.nats):
             print("Charges:", i, sy.symbols[sy.types[i]], charges[i])
         print("SCF ERR =", scfError)
@@ -546,4 +519,4 @@ def get_adaptive_KernelSCFDM(
             "subSyG_fin.xyz", subSy.coords, subSy.types, subSy.symbols
         )
 
-    return fullGraph, fullGraphRho, charges, mu, parts, partsCoreHalo, subSysOnRank
+    return fullGraph, charges, mu, parts, partsCoreHalo, subSysOnRank

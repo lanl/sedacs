@@ -55,6 +55,18 @@ class Input:
         self.nparts = self.get_an_int("NumParts=", 1, keyVals, validKeys, verb)
         ## Radius cutoff
         self.rcut = self.get_a_real("Rcut=", 5.0, keyVals, validKeys, verb)
+        ## Coulomb cutoff
+        self.coulcut = self.get_a_real("Coulcut=", 5.0, keyVals, validKeys, verb)
+        ## Check cutoff size
+        if self.rcut > self.coulcut:
+            print("\n!!!ERROR: Rcut cannot be larger than Coulcut")
+            sys.exit(0)
+        ## Buffer size for neighbor list
+        self.rbuff = self.get_a_real("Rbuff=", 1.0, keyVals, validKeys, verb)
+        ## Force error for Ewald summation
+        self.ewaldErr = self.get_a_real("EwaldErr=", 5e-4, keyVals, validKeys, verb)
+        ## PME Order
+        self.pmeOrder = self.get_an_int("PMEOrder=", 6, keyVals, validKeys, verb)
         ## Alpha for DM mixing. DM_new = (1-alpha)*DM_old + alpha*DM_new
         self.alpha = self.get_a_real("Alpha=", 0.2, keyVals, validKeys, verb)
         ## A threshold read from input
@@ -120,7 +132,8 @@ class Input:
         self.etemp = self.get_a_real("ElectronicTemperature=",0.0,keyVals, validKeys,verb)
         ## Chemical potential calculation type
         self.mucalctype =self.get_a_string("MuCalculationType=","None",keyVals, validKeys,verb)
-        
+
+
         ## Will check to make sure there are only valid key name in the input
         err = self.validate_keys(keyVals, validKeys)
         if err:

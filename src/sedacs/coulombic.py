@@ -85,29 +85,18 @@ def get_coulvs(
     return coulvs
 
 
-# @torch.compile(dynamic=True)
-def calculate_dist_dips(pos_T, long_nbr_state):
-    disps = long_nbr_state.calculate_displacement(pos_T)
-    dists = torch.norm(disps, dim=0)
-    nbr_inds = torch.where(
-        (dists > long_nbr_state.cutoff) | (dists == 0.0), -1, long_nbr_state.nbr_inds
-    )
-    dists = torch.where(dists == 0, 1, dists)
-
-    return disps, dists, nbr_inds
-
-
 def get_PME_coulvs(
     charges,
     hubbard_u,
     coords,
     atomtypes,
     lattice_vecs,
-    nbr_inds=None,
-    disps=None,
-    dists=None,
-    alpha=None,
-    PME_data=None,
+    nbr_inds,
+    disps,
+    dists,
+    alpha,
+    cutoff,
+    PME_data,
     calculate_forces=0,
     device="cuda",
     use_torch=False,
@@ -153,14 +142,14 @@ def get_PME_coulvs(
     # so if box lengths are [10.0, 10.0, 10.0], cutoff shuold be at most 5.0.
     # because of the minumum image convention.
 
-    cutoff = 9.5  # real space cutoff
+    # cutoff = 5.0  # real space cutoff
     # if use_torch and cutoff > lattice_vecs[0][0].item():
     #     cutoff = lattice_vecs[0][0].item() / 2
     # elif not use_torch and cutoff > lattice_vecs[0][0]:
     #     cutoff = float(lattice_vecs[0][0]) / 2
-    buffer = 0.0  # buffer room
-    t_err = 5e-4  # force error
-    PME_order = 6
+    # buffer = 1.0  # buffer room
+    # t_err = 5e-4  # force error
+    # PME_order = 6
 
     if use_torch and convert:
         lattice_vecs = lattice_vecs.to(device).to(dtype)
@@ -175,34 +164,23 @@ def get_PME_coulvs(
         hubbard_u = torch.from_numpy(hubbard_u).to(device).to(dtype)
         atomtypes = torch.from_numpy(atomtypes).to(device).to(torch.int64)
     
-    if alpha is None or PME_data is None:
-        # init PME grid size and related data
-        alpha, grid_dimensions = calculate_alpha_and_num_grids(
-            lattice_vecs, cutoff, t_err
-        )
-        PME_data = init_PME_data(grid_dimensions, lattice_vecs, alpha, PME_order)
-    else:
-        PME_data = tuple(
-            item.to(device).to(dtype) if torch.is_tensor(item) else item
-            for item in PME_data
-        )
+    
+    PME_data = tuple(
+        item.to(device).to(dtype) if torch.is_tensor(item) else item
+        for item in PME_data
+    )
+    # alpha, grid_dimensions = calculate_alpha_and_num_grids(
+    #         lattice_vecs, cutoff, t_err
+    #     )
+    # PME_data = init_PME_data(grid_dimensions, lattice_vecs, alpha, PME_order)
+    
     torch.cuda.synchronize()
     nvtx.pop_range("Ewald Summation")
     torch.cuda.synchronize()
     nvtx.push_range("neighborlist", color="blue", domain="Ewald Summation")
-    if disps is None or dists is None or nbr_inds is None:
-        # coords_T: [3, N], coords: [N, 3]
-        coords_T = coords.T.contiguous()
-
-        nbr_state = NeighborState(
-            coords_T, lattice_vecs, None, cutoff, is_dense=True, buffer=buffer
-        )
-
-        disps, dists, nbr_inds = calculate_dist_dips(coords_T, nbr_state)
-    else:
-        nbr_inds = nbr_inds.to(device).to(torch.int64)
-        disps = disps.to(device).to(dtype)
-        dists = dists.to(device).to(dtype)
+    nbr_inds = nbr_inds.to(device).to(torch.int64)
+    disps = disps.to(device).to(dtype)
+    dists = dists.to(device).to(dtype)
 
     torch.cuda.synchronize()
     nvtx.pop_range("Ewald Summation")
@@ -232,9 +210,9 @@ def get_PME_coulvs(
         ewald_e = ewald_e.double().cpu().detach().numpy()
         coulvs = coulvs.double().cpu().numpy()
     if calculate_forces:
-        return coulvs, ewald_e, forces.double().cpu().numpy(), nbr_inds, disps, dists, alpha, PME_data
+        return coulvs, ewald_e, forces.double().cpu().numpy()
     else:
-        return coulvs, ewald_e, nbr_inds, disps, dists, alpha, PME_data
+        return coulvs, ewald_e
 
 ## Add coulombic potentials to the Hamiltonian
 # @param ham0 No-SCF Hamiltonian

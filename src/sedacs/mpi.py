@@ -196,12 +196,13 @@ def collect_and_sum_matrices_float(matOnRank: ArrayLike, comm: MPI.Comm) -> Arra
         raise ImportError("ERROR: Consider installing mpi4py and initializing MPI")
 
     # Initialize buffer for the result
-    fullMat = np.zeros_like(matOnRank)
+    # fullMat = np.zeros_like(matOnRank)
 
     # Perform element-wise sum across all ranks
-    comm.Allreduce(matOnRank, fullMat, op=MPI.SUM)
+    # comm.Allreduce(matOnRank, fullMat, op=MPI.SUM)
+    comm.Allreduce(MPI.IN_PLACE, matOnRank, op=MPI.SUM)
 
-    return fullMat 
+    return matOnRank 
 
 def collect_and_sum_vectors_float(vectOnRank: ArrayLike,
                                    rank: int,
@@ -231,13 +232,14 @@ def collect_and_sum_vectors_float(vectOnRank: ArrayLike,
 
         raise ImportError("ERROR: Consider installing mpi4py")
 
-    nDim = len(vectOnRank)
+    # nDim = len(vectOnRank)
 
-    fullVect = np.zeros(nDim, dtype=float)
+    # fullVect = np.zeros(nDim, dtype=float)
 
-    comm.Allreduce(vectOnRank,fullVect,op=MPI.SUM)
+    # comm.Allreduce(vectOnRank,fullVect,op=MPI.SUM)
+    comm.Allreduce(MPI.IN_PLACE, vectOnRank, op=MPI.SUM)
 
-    return fullVect
+    return vectOnRank
 
 
 def collect_and_sum_vectors_int(vectOnRank: ArrayLike,
@@ -298,19 +300,32 @@ def collect_and_concatenate_vectors(vectOnRank, comm) -> ArrayLike:
 
         raise ImportError("ERROR: Consider installing mpi4py")
 
-    # Gather the sizes of each vectOnRank
-    local_size = len(vectOnRank)
-    sizes = comm.allgather(local_size)
+    rank  = comm.Get_rank()
+    size  = comm.Get_size()
+    dtype = vectOnRank.dtype
+    # Make sure the local send buffer is contiguous and the right dtype
+    vectOnRank = np.ascontiguousarray(vectOnRank, dtype=dtype)
+    local_n    = np.array([vectOnRank.size], dtype=np.intp)   # counts in *elements*, not bytes
 
-    # Calculate the displacements for each rank
-    displacements = np.cumsum([0] + sizes[:-1])
+    # Gather sizes into a NumPy array (avoids Python list overhead)
+    recv_counts = np.empty(size, dtype=np.intp)
+    comm.Allgather(local_n, recv_counts)
 
-    # Create the full vector with the total size
-    total_size = sum(sizes)
-    fullVect = np.zeros(total_size, dtype=float)
+    # Compute displacements efficiently (also in elements)
+    displs = np.empty_like(recv_counts)
+    displs[0] = 0
+    if size > 1:
+        np.cumsum(recv_counts[:-1], out=displs[1:])
 
-    # Gather all vectors into fullVect
-    comm.Allgatherv(vectOnRank, [fullVect, sizes, displacements, MPI.DOUBLE])
+    total_n = int(recv_counts.sum())
+
+    # Allocate receive buffer without zeroing for speed
+    fullVect = np.empty(total_n, dtype=dtype)
+
+    # In-place Allgatherv: copy my local chunk into place, then collect the rest
+    start = int(displs[rank])
+    fullVect[start:start + int(local_n)] = vectOnRank
+    comm.Allgatherv(MPI.IN_PLACE, [fullVect, recv_counts, displs, MPI._typedict[dtype.char]])
 
     return fullVect
 

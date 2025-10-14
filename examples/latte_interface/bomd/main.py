@@ -23,6 +23,7 @@ from sedacs.driver.graph_adaptive_kernel_scf import get_adaptive_KernelSCFDM
 from sedacs.driver.graph_adaptive_sp_energy_forces import get_adaptive_sp_energy_forces
 from sedacs.file_io import read_latte_tbparams
 from sedacs.periodic_table import PeriodicTable
+from sedacs.neighbor_list import calculate_dist_dips 
 from mpi4py import MPI
 from sedacs.system import build_nlist
 from sedacs.graph import get_initial_graph, add_graphs
@@ -45,7 +46,7 @@ def main(args):
     # Set numpy printing threshold
     np.set_printoptions(threshold=sys.maxsize)
     # Initialize sedacs parameters
-    sdc, eng, comm, rank, numranks, sy, hindex, graphNL, graphweights, nl, nlTrX, nlTrY, nlTrZ = init(
+    sdc, eng, comm, rank, numranks, sy, hindex, graphNL, graphweights = init(
         args
     )
     if rank == 0:
@@ -260,6 +261,16 @@ def main(args):
         coords = coords + disp
         with torch.no_grad():
             unwrap_coords = unwrap_coords + disp
+        if rank == 0:
+            coords_T = torch.from_numpy(sy.coords).to(args.device).T.contiguous()
+            sy.nbr_state.update(coords_T)
+            sy.nl_disps, sy.nl_dists, sy.nl = calculate_dist_dips(coords_T, sy.nbr_state)
+            sy.nl = sy.nl.cpu()
+            sy.nl_disps = sy.nl_disps.cpu()
+            sy.nl_dists = sy.nl_dists.cpu()
+        sy.nl = comm.bcast(sy.nl, root=0)
+        sy.nl_disps = comm.bcast(sy.nl_disps, root=0)
+        sy.nl_dists = comm.bcast(sy.nl_dists, root=0)
         # Reset coordinates within the periodic box
         coords = coords - LBox * torch.floor(coords / LBox)
         # Update sy.coords in the system object

@@ -50,7 +50,7 @@ __all__ = ["get_kernel_byParts", "Canon_Response_dPdMu", "apply_kernel_byParts"]
 
 
 def get_kernel_byParts(
-    sdc, rank, numranks, parts, partsCoreHalo, sy, mu=0.0, nbr_inds=None, disps=None, dists=None, alpha=None, PME_data=None, device="cuda"
+    sdc, rank, numranks, parts, partsCoreHalo, sy, mu=0.0, identity=True, nbr_inds=None, disps=None, dists=None, alpha=None, PME_data=None, device="cuda"
 ):
     """
     Compute the kernel preconditioner for each subsystem in parallel with MPI support.
@@ -89,6 +89,19 @@ def get_kernel_byParts(
     partsPerRank = int(sdc.nparts / numranks)
     partIndex1 = rank * partsPerRank
     partIndex2 = (rank + 1) * partsPerRank
+    # If we want to use identity matrix to approximate kernel
+    if identity:
+        # Loop over all partitions in the current MPI rank
+        for partIndex in range(partIndex1, partIndex2):
+            # Get the number of atoms in the core region for the current part
+            numberOfCoreAtoms = len(parts[partIndex])
+            # Get the subsystem for the current part
+            subSy = sy.subSy_list[partIndex - partIndex1]
+            # negative identity matrix as approximate kernel
+            subSy.ker = -torch.eye(numberOfCoreAtoms, numberOfCoreAtoms, device=device, dtype=torch.float64)
+        nvtx.pop_range("get_kernel_byParts")
+        nvtx.pop_range("get_kernel_byParts")
+        return
     # Initialize charge perturbation vector
     chargePertVect = torch.zeros(sy.nats, dtype=dtype, device=device)
     # Convert numpy array to torch tensor
@@ -169,8 +182,8 @@ def get_kernel_byParts(
             torch.cuda.synchronize()
             nvtx.push_range("PME", color="yellow", domain="get_kernel_byParts")
             # Compute the Coulomb potential from charge perturbation vector
-            coulvs, ewald_e, nbr_inds, disps, dists, alpha, PME_data = get_PME_coulvs(
-                chargePertVect, hubbard_u, coords, atomtypes, lattice_vecs, nbr_inds=nbr_inds, disps=disps, dists=dists, alpha=alpha, PME_data=PME_data, device=device, use_torch=True, convert=False, 
+            coulvs, ewald_e = get_PME_coulvs(
+                chargePertVect, hubbard_u, coords, atomtypes, lattice_vecs, sy.nl, sy.nl_disps, sy.nl_dists, sy.ewald_alpha, sdc.coulcut, sy.PME_data, device=device, use_torch=True, convert=False, 
             )
             torch.cuda.synchronize()
             nvtx.pop_range("get_kernel_byParts")
@@ -270,8 +283,8 @@ def get_kernel_byParts(
         # Matrix inversion using PyTorch
         subSy.ker[:, :] = torch.linalg.inv(Jacobian)
         # Rescale summation of each column of the sub kernel to -1 for maintaining charge neutrality
-        subSy.ker = subSy.ker / subSy.ker.sum(dim=0, keepdim=True) * -1
         subSy.ker = subSy.ker.to(torch.float64)
+        subSy.ker = subSy.ker / subSy.ker.sum(dim=0, keepdim=True) * -1
         torch.cuda.synchronize()
         nvtx.pop_range("get_kernel_byParts")
         torch.cuda.synchronize()
@@ -525,8 +538,8 @@ def rankN_update_byParts(
         chargePertVect = vi[:, irank].clone() # cloning to avoid error in PME calculation below
         # Get the Coulomb potential from charge perturbation vector
         # Note that the Hubbard U correction is included in the computed Coulomb potential
-        coulvs, ewald_e, nbr_inds, disps, dists, alpha, PME_data = get_PME_coulvs(
-            chargePertVect, hubbard_u, coords, atomtypes, lattice_vecs, nbr_inds=nbr_inds, disps=disps, dists=dists, alpha=alpha, PME_data=PME_data, device=device, use_torch=True, convert=False,
+        coulvs, ewald_e = get_PME_coulvs(
+            chargePertVect, hubbard_u, coords, atomtypes, lattice_vecs, sy.nl, sy.nl_disps, sy.nl_dists, sy.ewald_alpha, sdc.coulcut, sy.PME_data, device=device, use_torch=True, convert=False,
         )
         nvtx.pop_range("rankN_update_byParts")
         # Initialize the core part of the charge response (q1, dqdmu) by the derivative of subsystem

@@ -297,41 +297,41 @@ def collect_graph_from_rho(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos,
     rhoDim = len(rho[:, 0])
     if graph is None:
         graph = np.zeros((nnodes, maxDeg + 1), dtype=int)
-    weights = np.zeros((nnodes))
     nch = len(indicesCoreHalos)
-    ki = 0
+
+    rho = np.abs(rho)
+    reduced_rho = np.zeros((nch, nch), dtype=float)
+    reduced_rho[:] = np.maximum.reduceat(
+                    np.maximum.reduceat(rho, hindex[:-1], axis=0),
+                    hindex[:-1], axis=1
+                )[:nch, :nch]
 
     for i in range(ncores):
         ii = indicesCoreHalos[i]
         # Recovering the connections we already have
-        weights[:] = 0.0
-        for j in range(1, graph[ii, 0]):
-            jj = graph[ii, j]
-            weights[jj] = thresh
+        deg = int(graph[ii, 0])
+        existing = graph[ii, 1:deg + 1] 
 
-        # Computing the new weights by rho
-        for oi in range(hindex[ii], hindex[ii + 1]):
-            kj = 0
-            for j in range(nch):
-                jj = indicesCoreHalos[j]
-                for oj in range(hindex[jj], hindex[jj + 1]):
-                    if abs(rho[ki, kj]) >= thresh: # Elementwise truncation test Anders
-                        weights[jj] = weights[jj] + abs(rho[ki, kj])
-                    kj = kj + 1
-            ki = ki + 1
+        # Contributions from rho for CH nodes for this core:
+        # Any CH node with sum >= thresh becomes a candidate.
+        cand_from_rho = np.array(indicesCoreHalos, dtype=int)[reduced_rho[i] >= thresh]
 
-        # Reasigning the connections to ii by the merged weights (the ones computed
-        # from rho and the ones already existing.
-        k = 0
-        for jj in range(nnodes):  # $$$ ??? this cycle could be interrupted ???
-            if (ii != jj) and (weights[jj] >= thresh):
-                k = k + 1
-                if k >= maxDeg + 1:
-                    raise ValueError(f"Max Degree parameter is too small: {maxDeg}")
-                graph[ii, k] = jj
+        # Union with existing neighbors (existing edges always retained at threshold)
+        # Exclude self-loop if present.
+        nbrs = np.unique(np.concatenate((existing, cand_from_rho)))
+        nbrs = nbrs[(nbrs != ii)]
 
+        # Degree check
+        k = nbrs.size
+        if k > maxDeg:
+            raise ValueError(f"Max Degree parameter is too small: {maxDeg} (< {k}).")
+
+        # Fill graph row ii: header then neighbors (ascending by construction of np.unique)
         graph[ii, 0] = k
-        graph[ii, k + 1:] = -1  # Fill the rest with -1s
+        if k:
+            graph[ii, 1:k+1] = nbrs
+        # Clear the tail with -1s
+        graph[ii, k + 1:] = -1
 
     return graph
 
@@ -691,7 +691,7 @@ def is_symmetric_graph(graph):
     return True
 
 
-def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos, indicesCore, hindex, coords, alpha=0.7, expandonly=True):
+def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos, indicesCore, hindex, coords, latticeVectors, nl, alpha=0.7):
     """
     Adaptively expanding the size of halo regions by multiplying the 
     overlap matrix (estimated from exponential decay of neighboring distances) 
@@ -725,6 +725,10 @@ def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos
         The orbital indices for orbital i goes from `hindex[i]` to `hindex[i+1]-1`.
     coords : np.ndarray
         Coordinates of the atoms in the system.
+    latticeVectors : np.ndarray
+        Lattice vectors of the system.
+    nl : np.ndarray
+        Neighbor list for the atoms in the system.
     alpha : float, optional
         Decay parameter for the overlap matrix, by default 0.7.
     expandonly : bool, optional
@@ -740,22 +744,30 @@ def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos
 
     if graph is None:
         graph = np.zeros((nnodes, maxDeg + 1), dtype=int)
-    #graph[indicesCore, 1:] = -1  
     weights = np.zeros((nnodes))
     ncores = len(indicesCore)
     nch = len(indicesCoreHalos)
 
     # Get the coordinates for the core halo regions
     corehalo_coords = coords[indicesCoreHalos]
-    # Get the coordinates for the non core halo regions
-    indicesAll = np.arange(nnodes)
-    if expandonly: 
-        indicesNonCoreHalos = np.setdiff1d(indicesAll, indicesCoreHalos)
-        coords = coords[indicesNonCoreHalos]
+    # Get the indices for the non core halo regions
+    nonCoreHalo_indices = np.setdiff1d(np.arange(nnodes), indicesCoreHalos)
+    # Identify the neighboring atoms within a certain cutoff distance
+    # This will help to reduce the computational cost of the overlap matrix
+    nl = nl[indicesCoreHalos]
+    neighbor_indices = np.unique(nl[nl >= 0])
+    nonCoreHalo_indices = np.intersect1d(neighbor_indices, nonCoreHalo_indices)
+    if len(nonCoreHalo_indices) == 0:
+        return graph
+    coords = coords[nonCoreHalo_indices]
     # Initialize the overlap matrix with zeros
     overlap_matrix = np.zeros((coords.shape[0], corehalo_coords.shape[0]), dtype=float)
     # Calculate the distance between core and core halo regions with vectorized operations
-    distances = np.linalg.norm(coords[:, np.newaxis] - corehalo_coords, axis=2)
+    # Considering periodic boundary conditions
+    delta = coords[:, np.newaxis] - corehalo_coords
+    LBox = latticeVectors.diagonal()
+    delta = delta - LBox[np.newaxis, np.newaxis, :] * np.round(delta / LBox[np.newaxis, np.newaxis, :])
+    distances = np.linalg.norm(delta, axis=2)
     # Estimate the overlap matrix based on the distances
     overlap_matrix = np.exp(-alpha * distances ** 2)  # Exponential decay based on distance
     # overlap_matrix = np.where(overlap_matrix > thresh, overlap_matrix, 0)
@@ -769,36 +781,40 @@ def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos
     rho = np.abs(rho)  # Ensure the density matrix is non-negative
     # Create a reduced density matrix for the core halo regions
     reduced_rho = np.zeros((nch, ncores), dtype=float)
-    for i in range(ncores):
-        for j in range(nch):
-            # Slice the density matrix according to hindex
-            reduced_rho[j, i] = np.max(rho[hindex[j]:hindex[j + 1], hindex[i]:hindex[i + 1]])
+    # Vectorized max pooling to get the reduced density matrix
+    reduced_rho[:] = np.maximum.reduceat(
+                    np.maximum.reduceat(rho, hindex[:-1], axis=0),
+                    hindex[:-1], axis=1
+                )[:nch, :ncores]
     # reduced_rho = np.where(reduced_rho > thresh, reduced_rho, 0)
     # Matrix multiplication to get the new halo regions
     SD = overlap_matrix @ reduced_rho
     # assign indices
-    if expandonly:
-        indices = indicesNonCoreHalos 
-    else:
-        indices = indicesAll
+    indices = nonCoreHalo_indices 
     # Thresholding the SD matrix to get the new halo regions
     for i in range(ncores):
         ii = indicesCoreHalos[i]
+        # Recovering the connections we already have
         weights[:] = 0.0
+        if graph[ii, 0]:
+            weights[graph[ii, 1:graph[ii, 0] + 1]] = thresh
         # Assign the weights
         weights[indices] += SD[:, i]
-        # Expand the connections to ii by the weights from each atom in the
-        # non core halo regions (the ones computed from SD)
-        k = 0
-        for j in range(len(indices)): 
-            jj = indices[j]
-            if (ii != jj) and (weights[jj] >= thresh):
-                k = k + 1
-                if k >= maxDeg + 1:
-                    msg = f"Max Degree parameter is too small, maxDeg: {maxDeg} ActuallDeg: {np.sum(weights >= thresh)}"
-                    raise ValueError(msg)
-                graph[ii, k] = jj
+        # Vectorized selection of candidates (keep the same order as `indices`)
+        mask = (indices != ii) & (weights[indices] >= thresh)
+        selected = indices[mask]
+        k = selected.size
 
+        # Degree guard 
+        if k > maxDeg:
+            msg = (
+                f"Max Degree parameter is too small, maxDeg: {maxDeg} "
+                f"ActuallDeg: {k}"
+            )
+            raise ValueError(msg)
+
+        # Write back neighbors
+        graph[ii, 1:k + 1] = selected
         graph[ii, 0] = k
         graph[ii, k + 1:] = -1  # Fill the rest with -1s
 

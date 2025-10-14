@@ -1299,7 +1299,7 @@ def get_parts_indices(parts, nnodes):
 # @param graph Graph to extract the halos from
 # @param njumps It will search the halos among the "njumps" nearest neighbors
 #
-def get_coreHaloIndices(core, graph, njumps, eng=None):
+def get_coreHaloIndices(core, graph, njumps, coreHalo=None, eng=None):
 
     # There are too many differences in how these things are computed across codes, at some point these
     # need to be universalized, or we need to ship functions like this off to interface specific python files
@@ -1336,22 +1336,25 @@ def get_coreHaloIndices(core, graph, njumps, eng=None):
     else:
 
         nc = len(core)
-        coreHalo = []*nc
-        coreHalo[:] = core[:]
-        nch = nc
+        # If provided coreHalo, keep halo from there
+        # but still only look for neighbors of core as halo for the first jump
+        if coreHalo is None or len(coreHalo) < nc:
+            coreHalo = []
+            coreHalo[:] = core[:]
+        nch = len(coreHalo)
         nnodes = len(graph[:, 0])
         nx = np.zeros((nnodes), dtype=bool)
         nx[:] = False  # Logical mask
 
-        for k in range(nc):
+        for k in range(nch):
             i = coreHalo[k]
-            if i != -1:
-                nx[i] = True
+            nx[i] = True
+
         # Add halos from graph
+        nc1 = nc
         for jump in range(njumps):
-            nc1 = nch
-            for k in range(nc1):
-                i = coreHalo[k]
+            for k in range(nc):
+                i = coreHalo[k] # first nc are core, then halos
                 degI = graph[i, 0]
                 for kk in range(1, degI+1):
                     # $$$ also this cycles needs to be interrupted when reaching -1 ???
@@ -1360,6 +1363,7 @@ def get_coreHaloIndices(core, graph, njumps, eng=None):
                         nch = nch + 1
                         coreHalo.append(j)
                         nx[j] = True
+            nc1 = nch
 
         return coreHalo, nc, nch
 

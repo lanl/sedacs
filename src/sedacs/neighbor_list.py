@@ -222,6 +222,17 @@ class NeighborState:
         else:
             return calculate_shift_sparse(coords, self.nbr_inds, self.lattice_lengths)
 
+@torch.compile(dynamic=True)
+def calculate_dist_dips(pos_T, long_nbr_state):
+    disps = long_nbr_state.calculate_displacement(pos_T)
+    dists = torch.norm(disps, dim=0)
+    nbr_inds = torch.where(
+        (dists > long_nbr_state.cutoff) | (dists == 0.0), -1, long_nbr_state.nbr_inds
+    )
+    dists = torch.where(dists == 0, 1, dists)
+
+    return disps, dists, nbr_inds
+
 @torch.compile
 def calculate_displacement(coords: Tensor, nbr_ids: Tensor, lattice_lengths: Tensor):
     '''

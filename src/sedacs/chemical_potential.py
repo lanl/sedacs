@@ -69,7 +69,8 @@ def get_mu(mu0, evals, etemp, nocc, dvals=None, kB=8.61739e-5, verb=False):
         dvals = np.ones((norbs))
     for i in range(nmax+1):
         fermi = fermi_dirac(mu, evals, etemp) 
-        occ = np.sum([fermi[j]*dvals[j] for j in range(norbs)])
+        # occ = np.sum([fermi[j]*dvals[j] for j in range(norbs)])
+        occ = np.sum(fermi * dvals)
         occErr = abs(occ - nocc)
         if abs(occErr) < tol:
             break
@@ -99,7 +100,8 @@ def get_mu(mu0, evals, etemp, nocc, dvals=None, kB=8.61739e-5, verb=False):
 
         #Sum of the occupations
         fermi = fermi_dirac(mu, evals, etemp)
-        ft1 = np.sum([fermi[i]*dvals[i] for i in range(norbs)])
+        # ft1 = np.sum([fermi[i]*dvals[i] for i in range(norbs)])
+        ft1 = np.sum(fermi * dvals)
         ft1 = ft1 - nocc
     
         for i in range(1000001):
@@ -121,7 +123,8 @@ def get_mu(mu0, evals, etemp, nocc, dvals=None, kB=8.61739e-5, verb=False):
 
             #New sum of the occupations
             fermi = fermi_dirac(mu, evals, etemp)
-            ft2 = np.sum([fermi[i]*dvals[i] for i in range(norbs)])
+            # ft2 = np.sum([fermi[i]*dvals[i] for i in range(norbs)])
+            ft2 = np.sum(fermi * dvals)
             occ = ft2
             ft2 = ft2 - nocc
 

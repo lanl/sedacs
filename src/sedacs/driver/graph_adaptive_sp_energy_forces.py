@@ -107,7 +107,6 @@ def get_singlePoint_energy_forces(
     partIndex1 = rank * partsPerRank
     partIndex2 = (rank + 1) * partsPerRank
     graphOnRank = None
-    graphRhoOnRank = None
     chargesOnRank = None
     evalsOnRank = None
     dvalsOnRank = None
@@ -315,17 +314,21 @@ def get_singlePoint_energy_forces(
             parts[partIndex],
             subSy.hindex,
             sy.coords,
+            sy.latticeVectors,
+            sy.nl.cpu().numpy(),
             alpha=alpha,
         )
-        graphRhoOnRank = collect_graph_from_rho(
-            graphRhoOnRank,
+        nvtx.pop_range("get_singlePoint_charges")
+        nvtx.push_range("collect_graph_from_rho", color="brown", domain="get_singlePoint_charges")
+        graphOnRank = collect_graph_from_rho(
+            graphOnRank,
             rho,
             sdc.gthresh,
             sy.nats,
             sdc.maxDeg,
             partsCoreHalo[partIndex],
             len(parts[partIndex]),
-            hindex,
+            subSy.hindex,
         )
         nvtx.pop_range("get_singlePoint_charges")
         chargesOnRank = collect_charges(
@@ -337,23 +340,20 @@ def get_singlePoint_energy_forces(
         )
     nvtx.push_range("collect_graph_and_charges", color="green", domain="get_singlePoint_charges")
     if is_mpi_available and numranks > 1:
-        fullGraphHalo = collect_and_sum_matrices_float(graphOnRank, comm)
-        fullGraphRho = collect_and_sum_matrices_float(graphRhoOnRank, comm)
+        fullGraph = collect_and_sum_matrices_float(graphOnRank, comm)
         fullCharges = collect_and_sum_vectors_float(chargesOnRank, rank, numranks, comm)
         fullEnergy = collect_and_sum_vectors_float(energyOnRank, rank, numranks, comm)
         fullForces = collect_and_sum_matrices_float(forcesOnRank, comm)
         comm.Barrier()
     else:
-        fullGraphHalo = graphOnRank
-        fullGraphRho = graphRhoOnRank
+        fullGraph = graphOnRank
         fullCharges = chargesOnRank
         fullEnergy = energyOnRank
         fullForces = forcesOnRank
     nvtx.pop_range("get_singlePoint_charges")
     # print_graph(fullGraphRho)
     return (
-        fullGraphHalo,
-        fullGraphRho,
+        fullGraph,
         fullCharges,
         fullEnergy[0],
         fullEntropy,
@@ -370,12 +370,18 @@ def get_adaptive_sp_energy_forces(
     charges = sy.charges
     nvtx.push_range("PME solver", color="green", domain="get_adaptiveSCFDM")
     if rank == 0:
-        sy.coulvs, ecoul, fcoul, nbr_inds, disps, dists, PME_alpha, PME_data = get_PME_coulvs(
+        sy.coulvs, ecoul, fcoul = get_PME_coulvs(
             charges,
             sy.hubbard_u,
             sy.coords,
             sy.types,
             sy.latticeVectors,
+            sy.nl,
+            sy.nl_disps,
+            sy.nl_dists,
+            sy.ewald_alpha,
+            sdc.coulcut,
+            sy.PME_data,
             calculate_forces=1,
             device=device,
         )
@@ -390,11 +396,14 @@ def get_adaptive_sp_energy_forces(
     nvtx.pop_range("get_adaptiveSCFDM")
     
     nvtx.push_range("get_singlePoint_charges", color="orange", domain="get_adaptiveSCFDM")
-    fullGraphHalo, fullGraphRho, charges, energy, entropy, forces, subSysOnRank, mu = (
+    fullGraph, charges, energy, entropy, forces, subSysOnRank, mu = (
         get_singlePoint_energy_forces(
             sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu, alpha=alpha,
         )
     )
+    nvtx.pop_range("get_adaptiveSCFDM")
+    nvtx.push_range("symmetrize_graphs", color="pink", domain="get_adaptiveSCFDM")
+    fullGraph = symmetrize_graph(fullGraph)
     nvtx.pop_range("get_adaptiveSCFDM")
     if shadow_md:
         fcoul = ((2 * charges - sy.charges) / sy.charges)[:, None] * fcoul
@@ -402,9 +411,6 @@ def get_adaptive_sp_energy_forces(
     energy = energy - ecoul
     forces = forces + fcoul
 
-    fullGraphHalo = symmetrize_graph(fullGraphHalo)
-    fullGraphRho = symmetrize_graph(fullGraphRho)
-    fullGraph = add_graphs(fullGraphRho, fullGraphHalo)
     AtToPrint = 0
 
     subSy = System(fullGraph[AtToPrint, 0])
