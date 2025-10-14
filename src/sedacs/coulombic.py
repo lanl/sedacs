@@ -129,7 +129,7 @@ def get_PME_coulvs(
     forces : 2D numpy array, dtype: float
         The forces on each atom, if calculated.
     """
-    torch.cuda.synchronize()
+    #torch.cuda.synchronize()
     nvtx.push_range("PME init", color="blue", domain="Ewald Summation")
     # np_dtype = np.float64
     # dtype = torch.float64
@@ -174,15 +174,15 @@ def get_PME_coulvs(
     #     )
     # PME_data = init_PME_data(grid_dimensions, lattice_vecs, alpha, PME_order)
     
-    torch.cuda.synchronize()
+    #torch.cuda.synchronize()
     nvtx.pop_range("Ewald Summation")
-    torch.cuda.synchronize()
+    #torch.cuda.synchronize()
     nvtx.push_range("neighborlist", color="blue", domain="Ewald Summation")
     nbr_inds = nbr_inds.to(device).to(torch.int64)
     disps = disps.to(device).to(dtype)
     dists = dists.to(device).to(dtype)
 
-    torch.cuda.synchronize()
+    #torch.cuda.synchronize()
     nvtx.pop_range("Ewald Summation")
     # When this is first run, torch.compile might give bunch of warnings about complex numbers
     # and overall tuning process, they are safe to ignore

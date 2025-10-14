@@ -183,7 +183,7 @@ def calculate_PME_ewald(
     Notes:
         - Forces and charge derivatives for PME are computed via automatic differentiation.
     """
-    torch.cuda.synchronize()
+    #torch.cuda.synchronize()
     nvtx.push_range("Ewald init", color="blue", domain="Ewald Summation")
     N = len(charges)
     # As the internal functions expects (3, N), transpose the position tensor as needed
@@ -195,11 +195,11 @@ def calculate_PME_ewald(
     # transpose the disp. vectors as needed
     if nbr_disp_vecs.shape[2] == 3:
         nbr_disp_vecs = nbr_disp_vecs.permute(2, 0, 1).contiguous()
-    torch.cuda.synchronize()
+    #torch.cuda.synchronize()
     nvtx.pop_range("Ewald Summation")
     dq = None
     forces = None
-    torch.cuda.synchronize()
+    #torch.cuda.synchronize()
     nvtx.push_range("Ewald real space", color="blue", domain="Ewald Summation")
      # Real space contribution
     if screening:
@@ -216,7 +216,7 @@ def calculate_PME_ewald(
                                                     nbr_dists, charges, alpha, 
                                                     cutoff,
                                                     calculate_forces, calculate_dq)
-    torch.cuda.synchronize()
+    #torch.cuda.synchronize()
     nvtx.pop_range("Ewald Summation")
     if calculate_dq:
         charges.grad = None
@@ -225,10 +225,10 @@ def calculate_PME_ewald(
     if calculate_forces:
         positions.grad = None
         positions.requires_grad = True
-    torch.cuda.synchronize()
+    #torch.cuda.synchronize()
     nvtx.push_range("Ewald PME", color="red", domain="Ewald Summation")
     pme_e = calculate_PME_energy(positions, charges, box, alpha, PME_init_data)
-    torch.cuda.synchronize()
+    #torch.cuda.synchronize()
     nvtx.pop_range("Ewald Summation")
     self_e, self_dq = ewald_self_energy(charges, alpha, calculate_dq)
 

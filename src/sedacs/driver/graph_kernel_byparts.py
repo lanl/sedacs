@@ -81,9 +81,9 @@ def get_kernel_byParts(
     None
     """
     dtype = torch.float32
-    torch.cuda.synchronize()
+    #torch.cuda.synchronize()
     nvtx.push_range("get_kernel_byParts", color="blue", domain="get_kernel_byParts")
-    torch.cuda.synchronize()
+    #torch.cuda.synchronize()
     nvtx.push_range("initialization", color="green", domain="get_kernel_byParts")
     # Get the partition indices for the current MPI rank
     partsPerRank = int(sdc.nparts / numranks)
@@ -109,11 +109,11 @@ def get_kernel_byParts(
     coords = torch.from_numpy(sy.coords).to(device).to(dtype)
     hubbard_u = torch.from_numpy(sy.hubbard_u).to(device).to(dtype)
     atomtypes = torch.from_numpy(sy.types).to(device).to(torch.int64)
-    torch.cuda.synchronize()
+    #torch.cuda.synchronize()
     nvtx.pop_range("get_kernel_byParts")
     # Loop over all partitions in the current MPI rank
     for partIndex in range(partIndex1, partIndex2):
-        torch.cuda.synchronize()
+        #torch.cuda.synchronize()
         nvtx.push_range(f"part {partIndex} init", color="purple", domain="get_kernel_byParts")
         # Get the number of atoms in the core region for the current part
         numberOfCoreAtoms = len(parts[partIndex])
@@ -165,13 +165,13 @@ def get_kernel_byParts(
         
         coreindex = torch.tensor(parts[partIndex]).to(device).to(torch.int64)
         corehaloindex = torch.tensor(partsCoreHalo[partIndex]).to(device).to(torch.int64)
-        torch.cuda.synchronize()
+        #torch.cuda.synchronize()
         nvtx.pop_range("get_kernel_byParts")
-        torch.cuda.synchronize()
+        #torch.cuda.synchronize()
         nvtx.push_range(f"loop over core regions", color="orange", domain="get_kernel_byParts")
         # Iterate through all atoms in the core region
         for i in range(numberOfCoreAtoms):
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.push_range("charge perturbation", color="yellow", domain="get_kernel_byParts")
             # Set the charge perturbation vector to zeros each time before starting each iteration
             # chargePertVect.zero_()
@@ -179,20 +179,20 @@ def get_kernel_byParts(
             # atom_index = coreindex[i]
             # chargePertVect[atom_index] = 1.0
             chargePertVect.index_fill_(0, coreindex[i], 1.0)
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.push_range("PME", color="yellow", domain="get_kernel_byParts")
             # Compute the Coulomb potential from charge perturbation vector
             coulvs, ewald_e = get_PME_coulvs(
                 chargePertVect, hubbard_u, coords, atomtypes, lattice_vecs, sy.nl, sy.nl_disps, sy.nl_dists, sy.ewald_alpha, sdc.coulcut, sy.PME_data, device=device, use_torch=True, convert=False, 
             )
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.pop_range("get_kernel_byParts")
             # Get the Coulomb potential and charges for the Core+Halo part
             # coulvsInPart[:] = torch.from_numpy(coulvs[partsCoreHalo[partIndex]]).to(device).to(dtype)
             coulvsInPart[:] = coulvs[corehaloindex]
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.pop_range("get_kernel_byParts")
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.push_range("build H_dq_v", color="yellow", domain="get_kernel_byParts")
             # Build the Hamiltonian from Coulomb potential and charges from charge perturbation
             H_dq_v.zero_()
@@ -202,27 +202,27 @@ def get_kernel_byParts(
             #     end = subSy.hindex[j + 1]
             #     H_dq_v[start:end, start:end] = coulvsInPart[j] * np.eye(end - start)
             H_dq_v = 0.5 * (torch.matmul(over, H_dq_v) + torch.matmul(H_dq_v, over))
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.pop_range("get_kernel_byParts")
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.push_range("H forward transform", color="yellow", domain="get_kernel_byParts")
             # H1 = Q'Z'*H_dq_v*ZQ  Forward transform
             H1[:, :] = torch.matmul(torch.matmul(ZQ_T, H_dq_v), ZQ)
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.pop_range("get_kernel_byParts")
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.push_range("canonical response", color="yellow", domain="get_kernel_byParts")
             # Compute canonical quantum perturbation
             dPdMu[:], P1[:, :] = Canon_Response_dPdMu(H1, sdc.etemp, evals, mu, 12)
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.pop_range("get_kernel_byParts")
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.push_range("rho compute", color="yellow", domain="get_kernel_byParts")
             # Initialize dPdMuAO matrix with diagonal elements from dPdMu
             dPdMuAO.zero_()
             # dPdMuAO[torch.arange(norbs), torch.arange(norbs)] = dPdMu
             dPdMuAO.diagonal().copy_(dPdMu)
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.push_range("matmuls", color="yellow", domain="get_kernel_byParts")
             # Transform P1 back to the nonortho-canonical basis set.
             P1[:, :] = torch.matmul(torch.matmul(ZQ, P1), ZQ_T)
@@ -238,7 +238,7 @@ def get_kernel_byParts(
             # dPdMuAO = torch.matmul(dPdMuAO, ZQ_T)
             # Multiply dPdMuAO with the overlap matrix
             dPdMuAOS[:, :] = torch.matmul(dPdMuAO, over)
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.pop_range("get_kernel_byParts")
             # P1, p1S, dPdMuAOS = matmuls(ZQ, P1, ZQ_T, over, dPdMuAO)
             # Get the diagonal elements of dPdMuAO and p1S only from the core region
@@ -256,17 +256,17 @@ def get_kernel_byParts(
             # Adjust P1 with the response to get the density matrix
             ptrho[:, :] = 2 * (P1 + mu1 * dPdMuAO)
             ptrho[:, :] = torch.matmul(ptrho, over)
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.pop_range("get_kernel_byParts")
             # del P1
             # del dPdMuAO
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.push_range("charge from rho", color="yellow", domain="get_kernel_byParts")
             # Get charges from the density matrix
             fullDiag[:] = torch.diagonal(ptrho)
             pt_charges.zero_()
             pt_charges.index_add_(0, pt_indices, fullDiag) # same as code below
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.pop_range("get_kernel_byParts")
             # for j in range(subSy.nats):
             #    pt_charges[j] = 0.0
@@ -278,18 +278,18 @@ def get_kernel_byParts(
             # chargePertVect[atom_index] = 0.0
             chargePertVect.index_fill_(0, coreindex[i], 0.0)
             # del ptrho, fullDiag, dPdMuAO_dia, p1_dia, trP1, trdPdMuAO, mu1, H1, dPdMu, P1, H_dq_v, coulvsInPart, coulvs, ewald_e
-        torch.cuda.synchronize()
+        #torch.cuda.synchronize()
         nvtx.push_range("kernel compute", color="orange", domain="get_kernel_byParts")
         # Matrix inversion using PyTorch
         subSy.ker[:, :] = torch.linalg.inv(Jacobian)
         # Rescale summation of each column of the sub kernel to -1 for maintaining charge neutrality
         subSy.ker = subSy.ker.to(torch.float64)
         subSy.ker = subSy.ker / subSy.ker.sum(dim=0, keepdim=True) * -1
-        torch.cuda.synchronize()
+        #torch.cuda.synchronize()
         nvtx.pop_range("get_kernel_byParts")
-        torch.cuda.synchronize()
+        #torch.cuda.synchronize()
         nvtx.pop_range("get_kernel_byParts")
-    torch.cuda.synchronize()
+    #torch.cuda.synchronize()
     nvtx.pop_range("get_kernel_byParts")
 
 
@@ -551,7 +551,7 @@ def rankN_update_byParts(
         trdPdMu = torch.zeros(1, device=device, dtype=dtype)
         nvtx.push_range("loop over parts", color="purple", domain="rankN_update_byParts")
         for partIndex in range(partIndex1, partIndex2):
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.push_range(f"part {partIndex} init", color="orange", domain="rankN_update_byParts")
             numberofCoreHaloAtoms = len(partsCoreHalo[partIndex])
             numberOfCoreAtoms = len(parts[partIndex])
@@ -574,9 +574,9 @@ def rankN_update_byParts(
             hindex = torch.from_numpy(subSy.hindex).to(device).to(torch.int64)
             # Extract the perturbation over the core part only
             v_core_i[0:numberOfCoreAtoms, partIndex - partIndex1, irank] = vi[parts[partIndex], irank]
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.pop_range("rankN_update_byParts")
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.push_range("build H_dq_v", color="orange", domain="rankN_update_byParts")
             # Build the Hamiltonian from Coulomb potential and charges from charge perturbation
             H_dq_v = torch.zeros((norbs, norbs), device=device, dtype=dtype)
@@ -588,9 +588,9 @@ def rankN_update_byParts(
             #     end = subSy.hindex[j + 1]
             #     H_dq_v[start:end, start:end] = np.diag(coulvsInPart[j] * np.ones(end - start))
             H_dq_v = 0.5 * (torch.matmul(over, H_dq_v) + torch.matmul(H_dq_v, over))
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.pop_range("rankN_update_byParts")
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.push_range("H forward transform", color="orange", domain="rankN_update_byParts")
             # H1 = Q'Z'*H_dq_v*ZQ  Forward transform
             # Compute transformations ZQ and (ZQ)^t transformation that takes from the canonical nonorthogonal
@@ -599,16 +599,16 @@ def rankN_update_byParts(
             ZQ_T = ZQ.T
             # Take H1 to the ortho-eigen basis set.
             H1 = torch.matmul(torch.matmul(ZQ_T, H_dq_v), ZQ)
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.pop_range("rankN_update_byParts")
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.push_range("canonical response", color="orange", domain="rankN_update_byParts")
             # Construct the "bare" response P1 and the derivative with respect to the
             # chemical potential (dPdMu). Everything in the ortho-eigen basis set
             dPdMu, P1 = Canon_Response_dPdMu(H1, sdc.etemp, evals, mu, 12)
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.pop_range("rankN_update_byParts")
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.push_range("rho compute", color="orange", domain="rankN_update_byParts")
             # Transform P1 back to the nonortho-canonical basis set.
             # P1 = torch.matmul(torch.matmul(ZQ, P1), ZQ_T)
@@ -624,9 +624,9 @@ def rankN_update_byParts(
             # dPdMuAO = matrix_transform(ZQ, dPdMuAO, ZQ_T)
             dPdMuAO = torch.matmul(ZQ, dPdMuAO)
             dPdMuAO = torch.matmul(dPdMuAO, ZQ_T)
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.pop_range("rankN_update_byParts")
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.push_range("charge from rho", color="orange", domain="rankN_update_byParts")
             # Here we compute the charges response (q1) from P1 and we store it on 
             # a vector q1 that stores all the previous q1s from past iranks iterations
@@ -675,7 +675,7 @@ def rankN_update_byParts(
             dqdmu[:numberOfCoreAtoms, partIndex - partIndex1] = pt_charges[:numberOfCoreAtoms]
             # Add up the partial trace contribution from the core region
             trdPdMu = trdPdMu + torch.sum(pt_charges[:numberOfCoreAtoms])
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             nvtx.pop_range("rankN_update_byParts")
             # gc.collect()
             # torch.cuda.empty_cache()
