@@ -62,7 +62,7 @@ __all__ = ["get_singlePoint_charges", "get_adaptiveSCFDM"]
 
 
 def get_singlePoint_charges(
-    sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu=0.0, alpha=0.7,
+    sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu=0.0, alpha=0.7, write_parts=False
 ):
     """
     Get the single point charges for the full system from graph-partitioned subsystems.
@@ -137,20 +137,21 @@ def get_singlePoint_charges(
         subSy.ncores = len(parts[partIndex])
         toc = time.perf_counter()
         print("Time for extract_subsystem", toc - tic, "(s)")
-        partFileName = "subSy" + str(rank) + "_" + str(partIndex) + ".pdb"
-        write_pdb_coordinates(partFileName, subSy.coords, subSy.types, subSy.symbols)
-        write_xyz_coordinates(
-            "subSy" + str(rank) + "_" + str(partIndex) + ".xyz",
-            subSy.coords,
-            subSy.types,
-            subSy.symbols,
-        )
-        write_pdb_coordinates(
-            "subSy_core" + str(rank) + "_" + str(partIndex) + ".pdb",
-            subSy.coords[: len(parts[partIndex]), :],
-            subSy.types[: len(parts[partIndex])],
-            subSy.symbols,
-        )
+        if write_parts:
+            partFileName = "subSy" + str(rank) + "_" + str(partIndex) + ".pdb"
+            write_pdb_coordinates(partFileName, subSy.coords, subSy.types, subSy.symbols)
+            write_xyz_coordinates(
+                "subSy" + str(rank) + "_" + str(partIndex) + ".xyz",
+                subSy.coords,
+                subSy.types,
+                subSy.symbols,
+            )
+            write_pdb_coordinates(
+                "subSy_core" + str(rank) + "_" + str(partIndex) + ".pdb",
+                subSy.coords[: len(parts[partIndex]), :],
+                subSy.types[: len(parts[partIndex])],
+                subSy.symbols,
+            )
         tic = time.perf_counter()
 
         # Get some electronic structure elements for the sybsystem
@@ -344,6 +345,7 @@ def get_adaptive_KernelSCFDM(
     graphweights=None,
     device="cuda",
     dtype=torch.float64,
+    write_parts=False
 ):
     fullGraph = graphNL
     if rank == 0:
@@ -353,8 +355,6 @@ def get_adaptive_KernelSCFDM(
             f.write('scf starts...\n')
             f.write(f"graphNL edge count: {np.sum(graphNL[:, 0])}\n")
         with open('corehalo.log', 'w') as f:
-            f.write('scf starts...\n')
-        with open('corehalo2.log', 'w') as f:
             f.write('scf starts...\n')
     # Initial guess for the excess ocupation vector. This is the negative of
     # the charge!
@@ -500,18 +500,18 @@ def get_adaptive_KernelSCFDM(
             warning_at("get_adaptiveSCFDM", "SCF did not converged ... ")
             break
 
-    AtToPrint = 0
+    if write_parts and rank == 0:
+        AtToPrint = 0
 
-    subSy = System(fullGraph[AtToPrint, 0])
-    subSy.symbols = sy.symbols
-    subSy.coords, subSy.types = extract_subsystem(
-        sy.coords,
-        sy.types,
-        sy.symbols,
-        fullGraph[AtToPrint, 1 : fullGraph[AtToPrint, 0] + 1],
-    )
+        subSy = System(fullGraph[AtToPrint, 0])
+        subSy.symbols = sy.symbols
+        subSy.coords, subSy.types = extract_subsystem(
+            sy.coords,
+            sy.types,
+            sy.symbols,
+            fullGraph[AtToPrint, 1 : fullGraph[AtToPrint, 0] + 1],
+        )
 
-    if rank == 0:
         write_pdb_coordinates(
             "subSyG_fin.pdb", subSy.coords, subSy.types, subSy.symbols
         )

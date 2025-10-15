@@ -51,7 +51,7 @@ __all__ = ["get_singlePoint_energy_forces", "get_adaptive_sp_energy_forces"]
 
 
 def get_singlePoint_energy_forces(
-    sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu=0.0, alpha=0.7,
+    sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu=0.0, alpha=0.7, write_parts=False,
 ):
     """
     Get the single point charges, energy, and forces for the full system from graph-partitioned subsystems.
@@ -127,20 +127,21 @@ def get_singlePoint_energy_forces(
         subSy.ncores = len(parts[partIndex])
         toc = time.perf_counter()
         print("Time for extract_subsystem", toc - tic, "(s)")
-        partFileName = "subSy" + str(rank) + "_" + str(partIndex) + ".pdb"
-        write_pdb_coordinates(partFileName, subSy.coords, subSy.types, subSy.symbols)
-        write_xyz_coordinates(
-            "subSy" + str(rank) + "_" + str(partIndex) + ".xyz",
-            subSy.coords,
-            subSy.types,
-            subSy.symbols,
-        )
-        write_pdb_coordinates(
-            "subSy_core" + str(rank) + "_" + str(partIndex) + ".pdb",
-            subSy.coords[: len(parts[partIndex]), :],
-            subSy.types[: len(parts[partIndex])],
-            subSy.symbols,
-        )
+        if write_parts:
+            partFileName = "subSy" + str(rank) + "_" + str(partIndex) + ".pdb"
+            write_pdb_coordinates(partFileName, subSy.coords, subSy.types, subSy.symbols)
+            write_xyz_coordinates(
+                "subSy" + str(rank) + "_" + str(partIndex) + ".xyz",
+                subSy.coords,
+                subSy.types,
+                subSy.symbols,
+            )
+            write_pdb_coordinates(
+                "subSy_core" + str(rank) + "_" + str(partIndex) + ".pdb",
+                subSy.coords[: len(parts[partIndex]), :],
+                subSy.types[: len(parts[partIndex])],
+                subSy.symbols,
+            )
         tic = time.perf_counter()
 
         # Get some electronic structure elements for the sybsystem
@@ -364,7 +365,7 @@ def get_singlePoint_energy_forces(
 
 
 def get_adaptive_sp_energy_forces(
-    sdc, eng, comm, rank, numranks, sy, parts, partsCoreHalo, hindex, graph, mu, alpha=0.7, shadow_md=True, device="cuda",
+    sdc, eng, comm, rank, numranks, sy, parts, partsCoreHalo, hindex, graph, mu, alpha=0.7, shadow_md=True, device="cuda", write_parts=False
 ):
     nvtx.push_range("SP energy forces", color="blue", domain="get_adaptiveSCFDM")
     charges = sy.charges
@@ -411,17 +412,18 @@ def get_adaptive_sp_energy_forces(
     energy = energy - ecoul
     forces = forces + fcoul
 
-    AtToPrint = 0
+    if write_parts and rank == 0:
+        AtToPrint = 0
 
-    subSy = System(fullGraph[AtToPrint, 0])
-    subSy.symbols = sy.symbols
-    subSy.coords, subSy.types = extract_subsystem(
-        sy.coords,
-        sy.types,
-        sy.symbols,
-        fullGraph[AtToPrint, 1 : fullGraph[AtToPrint, 0] + 1],
-    )
-    if rank == 0:
+        subSy = System(fullGraph[AtToPrint, 0])
+        subSy.symbols = sy.symbols
+        subSy.coords, subSy.types = extract_subsystem(
+            sy.coords,
+            sy.types,
+            sy.symbols,
+            fullGraph[AtToPrint, 1 : fullGraph[AtToPrint, 0] + 1],
+        )
+
         write_pdb_coordinates(
             "subSyG_fin.pdb", subSy.coords, subSy.types, subSy.symbols
         )
