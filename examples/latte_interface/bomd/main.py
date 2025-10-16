@@ -261,6 +261,11 @@ def main(args):
         coords = coords + disp
         with torch.no_grad():
             unwrap_coords = unwrap_coords + disp
+        # Reset coordinates within the periodic box
+        coords = coords - LBox * torch.floor(coords / LBox)
+        # Update sy.coords in the system object
+        sy.coords = coords.numpy()
+        # Update neighbor list
         if rank == 0:
             coords_T = torch.from_numpy(sy.coords).to(args.device).T.contiguous()
             sy.nbr_state.update(coords_T)
@@ -271,10 +276,6 @@ def main(args):
         sy.nl = comm.bcast(sy.nl, root=0)
         sy.nl_disps = comm.bcast(sy.nl_disps, root=0)
         sy.nl_dists = comm.bcast(sy.nl_dists, root=0)
-        # Reset coordinates within the periodic box
-        coords = coords - LBox * torch.floor(coords / LBox)
-        # Update sy.coords in the system object
-        sy.coords = coords.numpy()
 
         if not shadow_md:
             # Perform a graph-adaptive calculation of the charges with SCF cycles
@@ -317,7 +318,7 @@ def main(args):
                 parts,
                 partsCoreHalo,
                 hindex,
-                graphNL,
+                None,
                 mu,
                 alpha=localization,
                 shadow_md=shadow_md,
