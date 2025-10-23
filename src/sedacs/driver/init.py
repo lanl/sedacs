@@ -156,35 +156,37 @@ def init(args):
     hindex = comm.bcast(hindex, root=0)
 
     tic = time.perf_counter()
-    if rank == 0:
-        coords_T = torch.from_numpy(sy.coords).to(args.device).T.contiguous()
-        lattice_vecs = torch.from_numpy(sy.latticeVectors).to(args.device)
-        sy.nbr_state = NeighborState(
-                            coords_T, lattice_vecs, None, sdc.coulcut, is_dense=True, buffer=sdc.rbuff, use_triton=False,
-                        )
-        
-        sy.nl_disps, sy.nl_dists, sy.nl = calculate_dist_dips(coords_T, sy.nbr_state)
-        if sdc.rcut < sdc.coulcut:
-            nl = torch.where(
-                    (sy.nl_dists > sdc.rcut) | (sy.nl_dists == 0.0), -1, sy.nl
+    # if rank == 0:
+    coords_T = torch.from_numpy(sy.coords).to(args.device).T.contiguous()
+    lattice_vecs = torch.from_numpy(sy.latticeVectors).to(args.device)
+    sy.nbr_state = NeighborState(
+                        coords_T, lattice_vecs, None, sdc.coulcut, is_dense=True, buffer=sdc.rbuff, use_triton=False,
                     )
-        else:
-            nl = sy.nl
-        num_neighbors = torch.sum(nl != -1, dim=1)
-        nl = torch.cat((num_neighbors.unsqueeze(1), nl.sort(dim=1, descending=True)[0]), dim=1)
-        nl = nl.cpu().numpy()
-        sy.nl = sy.nl.cpu()
-        sy.nl_disps = sy.nl_disps.cpu()
-        sy.nl_dists = sy.nl_dists.cpu()
-        
-        sy.ewald_alpha, grid_dimensions = calculate_alpha_and_num_grids(
-                lattice_vecs, sdc.coulcut, sdc.ewaldErr
-            )
-        PME_data = init_PME_data(grid_dimensions, lattice_vecs, sy.ewald_alpha, sdc.pmeOrder)
-        sy.PME_data = tuple(
-            item.cpu() if torch.is_tensor(item) else item
-            for item in PME_data
+    
+    sy.nl_disps, sy.nl_dists, sy.nl = calculate_dist_dips(coords_T, sy.nbr_state)
+    if sdc.rcut < sdc.coulcut:
+        nl = torch.where(
+                (sy.nl_dists > sdc.rcut) | (sy.nl_dists == 0.0), -1, sy.nl
+                )
+    elif sdc.rcut == sdc.coulcut:
+        nl = sy.nl
+    else:
+        raise ValueError("rcut cannot be larger than coulcut!")
+    num_neighbors = torch.sum(nl != -1, dim=1)
+    nl = torch.cat((num_neighbors.unsqueeze(1), nl.sort(dim=1, descending=True)[0]), dim=1)
+    nl = nl.cpu().numpy()
+    sy.nl = sy.nl.cpu()
+    sy.nl_disps = sy.nl_disps.cpu()
+    sy.nl_dists = sy.nl_dists.cpu()
+    
+    sy.ewald_alpha, grid_dimensions = calculate_alpha_and_num_grids(
+            lattice_vecs, sdc.coulcut, sdc.ewaldErr
         )
+    PME_data = init_PME_data(grid_dimensions, lattice_vecs, sy.ewald_alpha, sdc.pmeOrder)
+    sy.PME_data = tuple(
+        item.cpu() if torch.is_tensor(item) else item
+        for item in PME_data
+    )
     # if(sy.nats > 100): 
     #     if args.use_torch:
     #         nl = build_nlist_torch(sy.coords, sy.latticeVectors, sdc.rcut, rank=rank, numranks=numranks, verb=False)
@@ -240,11 +242,6 @@ def init(args):
         eweights = None
     
     #comm.Barrier()
-    sy.nl = comm.bcast(sy.nl, root=0)
-    sy.nl_disps = comm.bcast(sy.nl_disps, root=0)
-    sy.nl_dists = comm.bcast(sy.nl_dists, root=0)
-    sy.ewald_alpha = comm.bcast(sy.ewald_alpha, root=0)
-    sy.PME_data = comm.bcast(sy.PME_data, root=0)
     graphNL = comm.bcast(graphNL, root=0)
     eweights = comm.bcast(eweights, root=0)
     fullGraph = np.zeros((sy.nats, sdc.maxDeg + 1), dtype=int)

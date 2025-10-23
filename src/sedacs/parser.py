@@ -59,8 +59,7 @@ class Input:
         self.coulcut = self.get_a_real("Coulcut=", 5.0, keyVals, validKeys, verb)
         ## Check cutoff size
         if self.rcut > self.coulcut:
-            print("\n!!!ERROR: Rcut cannot be larger than Coulcut")
-            sys.exit(0)
+            raise ValueError("\n!!!ERROR: Rcut cannot be larger than Coulcut")
         ## Buffer size for neighbor list
         self.rbuff = self.get_a_real("Rbuff=", 1.0, keyVals, validKeys, verb)
         ## Force error for Ewald summation

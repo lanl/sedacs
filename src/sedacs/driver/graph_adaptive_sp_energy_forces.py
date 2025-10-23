@@ -34,6 +34,7 @@ from sedacs.chemical_potential import get_mu
 from sedacs.entropy import get_entropy
 from sedacs.file_io import read_latte_tbparams
 import numpy as np
+import torch
 
 try:
     from mpi4py import MPI
@@ -51,7 +52,7 @@ __all__ = ["get_singlePoint_energy_forces", "get_adaptive_sp_energy_forces"]
 
 
 def get_singlePoint_energy_forces(
-    sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu=0.0, alpha=0.7, write_parts=False,
+    sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, mu=0.0, alpha=0.7, write_parts=False,
 ):
     """
     Get the single point charges, energy, and forces for the full system from graph-partitioned subsystems.
@@ -200,6 +201,7 @@ def get_singlePoint_energy_forces(
 
         evalsOnRank = collect_evals(evalsOnRank, evalsInPart, verb=True)
         dvalsOnRank = collect_dvals(dvalsOnRank, dvalsInPart, verb=True)
+    comm.Barrier()
     nvtx.push_range("collect_evals_dvals", color="green", domain="get_singlePoint_charges")
     if is_mpi_available and numranks > 1:
         fullEvals = collect_and_concatenate_vectors(evalsOnRank, comm)
@@ -339,6 +341,7 @@ def get_singlePoint_energy_forces(
         forcesOnRank = collect_forces(
             forcesOnRank, forcesInPart, parts[partIndex], sy.nats, verb=True
         )
+    comm.Barrier()
     nvtx.push_range("collect_graph_and_charges", color="green", domain="get_singlePoint_charges")
     if is_mpi_available and numranks > 1:
         fullGraph = collect_and_sum_matrices_float(graphOnRank, comm)
@@ -370,7 +373,7 @@ def get_adaptive_sp_energy_forces(
     nvtx.push_range("SP energy forces", color="blue", domain="get_adaptiveSCFDM")
     charges = sy.charges
     nvtx.push_range("PME solver", color="green", domain="get_adaptiveSCFDM")
-    if rank == 0:
+    if (rank == 0) or (not is_mpi_available):
         sy.coulvs, ecoul, fcoul = get_PME_coulvs(
             charges,
             sy.hubbard_u,
@@ -397,13 +400,19 @@ def get_adaptive_sp_energy_forces(
     nvtx.pop_range("get_adaptiveSCFDM")
     
     nvtx.push_range("get_singlePoint_charges", color="orange", domain="get_adaptiveSCFDM")
+    dm_start_time = time.perf_counter()
     fullGraph, charges, energy, entropy, forces, subSysOnRank, mu = (
         get_singlePoint_energy_forces(
-            sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, mu, alpha=alpha,
+            sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, mu, alpha=alpha,
         )
     )
+    dm_end_time = time.perf_counter()
+    if rank == 0:
+        with open('dm time.log', 'a') as f:
+            f.write(f"dm time: {dm_end_time - dm_start_time}\n")
     nvtx.pop_range("get_adaptiveSCFDM")
     nvtx.push_range("symmetrize_graphs", color="pink", domain="get_adaptiveSCFDM")
+    # fullGraph = torch.from_numpy(fullGraph).to(device)
     fullGraph = symmetrize_graph(fullGraph)
     nvtx.pop_range("get_adaptiveSCFDM")
     if shadow_md:

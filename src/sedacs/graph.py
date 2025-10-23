@@ -5,6 +5,7 @@ Some graph functions
 
 import sys
 
+from numba import njit
 import numpy as np
 import torch
 
@@ -39,35 +40,37 @@ except:
 #
 def get_initial_graph(coords, nl, radius, maxDeg, LBox, graphweights=False, verb=False):
     nats = len(coords[:, 0])
-    graph = np.zeros((nats, maxDeg + 1), dtype=int)
-    graph[:, :] = -1
+    graph = np.full((nats, maxDeg + 1), -1, dtype=int)
+    eweights = np.zeros((nats, maxDeg + 1), dtype=int) if graphweights else None
+    if nl.shape[1] < maxDeg + 1:
+        nl = np.pad(nl, ((0, 0), (0, maxDeg + 1 - nl.shape[1])), mode='constant', constant_values=-1)
+
+    # Vectorized computation of distances
+    delta = coords[:, np.newaxis, :] - coords[nl[:, 1:].astype(int)]
+    delta -= LBox * np.round(delta / LBox)
+    distances = np.linalg.norm(delta, axis=2)
+
+    # Mask for valid neighbors within the radius
+    valid_mask = (distances < radius) & (nl[:, 1:] >= 0)
+
+    # Compute degrees (number of valid neighbors per atom)
+    degs = valid_mask.sum(axis=1)
+
+    # Initialize graph and eweights arrays
+    graph[:, 0] = degs
+
+    # Fill neighbor indices
+    # We'll mask out invalid neighbors using valid_mask
+    graph[:, 1:] = np.where(valid_mask, nl[:, 1:], -1)
+
     if graphweights:
-        eweights = np.zeros((nats, maxDeg + 1), dtype=int)
-    else:
-        eweights = None
-    for i in range(nats):
-        ik = 0
-        degi = 0
-        for j in range(1, nl[i, 0] + 1):
-            jj = nl[i, j]
+        # Compute weights for all pairs at once
+        weights = np.exp(-0.5 * distances**2)
+        weights = np.round(100 * weights).astype(int)
+        weights = np.maximum(weights, 1)
 
-            delta = coords[i, :] - coords[jj, :]
-            delta -= LBox * np.round(delta / LBox)
-            distance = np.linalg.norm(delta)
-            if distance < radius:
-                ik = ik + 1
-                if ik < maxDeg + 1:
-                    graph[i, ik] = jj
-                    degi = degi + 1
-                    if graphweights:
-                        eweights[i, ik] = max(np.round(100 * np.exp(-.5 * (distance)**2)).astype(int), 1)
-                    # if i == 0:
-                    #     print(nl[i,j])
-                else:
-                    print("!!!WARNING: at get_initial_graph. maxDeg exceeded. Consider increasing this number")
-                    break
-
-        graph[i, 0] = degi  # Storing the degrees
+        # Mask invalid entries
+        eweights[:, 1:] = np.where(valid_mask, weights, 0)
 
     return graph, eweights
 
@@ -294,7 +297,6 @@ def collect_graph_from_rho_PYSEQM(graph,rho,thresh,nnodes,maxDeg,indices,hindex=
 # of node i. NOTE: The 0 entry of every row is reserved to store the degree of every node.
 #
 def collect_graph_from_rho(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos, ncores, hindex=None, verb=False):
-    rhoDim = len(rho[:, 0])
     if graph is None:
         graph = np.zeros((nnodes, maxDeg + 1), dtype=int)
     nch = len(indicesCoreHalos)
@@ -304,7 +306,7 @@ def collect_graph_from_rho(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos,
     reduced_rho[:] = np.maximum.reduceat(
                     np.maximum.reduceat(rho, hindex[:-1], axis=0),
                     hindex[:-1], axis=1
-                )[:nch, :nch]
+                )
 
     for i in range(ncores):
         ii = indicesCoreHalos[i]
@@ -329,7 +331,7 @@ def collect_graph_from_rho(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos,
         # Fill graph row ii: header then neighbors (ascending by construction of np.unique)
         graph[ii, 0] = k
         if k:
-            graph[ii, 1:k+1] = nbrs
+            graph[ii, 1:k + 1] = nbrs
         # Clear the tail with -1s
         graph[ii, k + 1:] = -1
 
@@ -653,27 +655,209 @@ def convert_to_graph(adj, maxDeg):
 
     return graph
 
+# def symmetrize_graph(graph):
+#     nnodes = graph.shape[0]
+#     maxDeg = graph.shape[1] - 1
+
+#     # Build adjacency list sets for symmetry
+#     adj = [set() for _ in range(nnodes)]
+#     for i in range(nnodes):
+#         deg = graph[i, 0]
+#         for j in range(deg):
+#             nbr = graph[i, j+1]
+#             adj[i].add(nbr)
+#             adj[nbr].add(i)  # make symmetric
+
+#     # Convert back to padded matrix
+#     sym_graph = -np.ones((nnodes, maxDeg+1), dtype=int)
+#     for i in range(nnodes):
+#         neighbors = sorted(adj[i])
+#         sym_graph[i, 0] = len(neighbors)
+#         sym_graph[i, 1:len(neighbors)+1] = neighbors
+
+#     return sym_graph
+
+@njit
 def symmetrize_graph(graph):
     nnodes = graph.shape[0]
     maxDeg = graph.shape[1] - 1
 
-    # Build adjacency list sets for symmetry
-    adj = [set() for _ in range(nnodes)]
+    # ----- Build inbound adjacency (CSR-like) -----
+    indeg = np.zeros(nnodes, np.int64)
+    total_edges = 0
     for i in range(nnodes):
-        deg = graph[i, 0]
-        for j in range(deg):
-            nbr = graph[i, j+1]
-            adj[i].add(nbr)
-            adj[nbr].add(i)  # make symmetric
+        d = graph[i, 0]
+        total_edges += d
+        for j in range(d):
+            indeg[graph[i, j + 1]] += 1
 
-    # Convert back to padded matrix
-    sym_graph = -np.ones((nnodes, maxDeg+1), dtype=int)
+    offsets = np.empty(nnodes + 1, np.int64)
+    offsets[0] = 0
     for i in range(nnodes):
-        neighbors = sorted(adj[i])
-        sym_graph[i, 0] = len(neighbors)
-        sym_graph[i, 1:len(neighbors)+1] = neighbors
+        offsets[i + 1] = offsets[i] + indeg[i]
+
+    inv = np.empty(total_edges, np.int64)
+    fill = offsets.copy()
+    for i in range(nnodes):
+        d = graph[i, 0]
+        for j in range(d):
+            nbr = graph[i, j + 1]
+            inv[fill[nbr]] = i
+            fill[nbr] += 1
+
+    # ----- First pass: count unique degree (timestamp trick) -----
+    seen = np.full(nnodes, -1, np.int64)
+    sym_deg = np.zeros(nnodes, np.int64)
+    for i in range(nnodes):
+        cnt = 0
+        # out-neighbors
+        d = graph[i, 0]
+        for j in range(d):
+            nbr = graph[i, j + 1]
+            if seen[nbr] != i:
+                seen[nbr] = i
+                cnt += 1
+        # inbound neighbors
+        s, e = offsets[i], offsets[i + 1]
+        for p in range(s, e):
+            src = inv[p]
+            if seen[src] != i:
+                seen[src] = i
+                cnt += 1
+        sym_deg[i] = cnt
+        # Assumption per user: cnt <= maxDeg (no checks/clamps)
+
+    # ----- Allocate output with original maxDeg (no resize) -----
+    sym_graph = np.full((nnodes, maxDeg + 1), -1, dtype=graph.dtype)
+
+    # ----- Second pass: write neighbors in existing order (no sort) -----
+    for i in range(nnodes):
+        mark = i + nnodes  # different epoch from first pass
+        w = 0
+
+        # write out-neighbors first (preserve given order)
+        d = graph[i, 0]
+        for j in range(d):
+            nbr = graph[i, j + 1]
+            if seen[nbr] != mark:
+                seen[nbr] = mark
+                sym_graph[i, 1 + w] = nbr
+                w += 1
+
+        # then inbound neighbors (order of inv slice)
+        s, e = offsets[i], offsets[i + 1]
+        for p in range(s, e):
+            src = inv[p]
+            if seen[src] != mark:
+                seen[src] = mark
+                sym_graph[i, 1 + w] = src
+                w += 1
+
+        sym_graph[i, 0] = w  # by assumption w <= maxDeg
 
     return sym_graph
+
+# @njit
+# def update_graph(graph, adds, dels, indices):
+#     nnodes = graph.shape[0]
+#     if len(indices) != nnodes:
+#         raise ValueError("Length of indices must match number of nodes in graph")
+#     maxDeg = graph.shape[1] - 1
+
+#     # O(1) membership with “epoch” trick — no clearing between iterations.
+#     # mark_seen[v] == epoch  => v currently a neighbor
+#     # mark_del[v] == epoch   => v requested to be deleted this iteration
+#     mark_seen = np.zeros(nnodes, dtype=np.int64)
+#     mark_del  = np.zeros(nnodes, dtype=np.int64)
+
+#     # Scratch buffers reused every iteration
+#     kept = np.empty(maxDeg, dtype=graph.dtype)
+
+#     for ii in range(nnodes):
+#         row = indices[ii]
+#         epoch = ii + 1  # unique per-iteration tag; safe and fast
+
+#         # Mark current neighbors
+#         deg = graph[row, 0]
+#         for j in range(deg):
+#             v = graph[row, j + 1]
+#             mark_seen[v] = epoch
+
+#         # Mark deletions
+#         d = dels[ii]
+#         for j in range(d.size):
+#             mark_del[d[j]] = epoch
+
+#         # Keep neighbors not marked for deletion
+#         t = 0
+#         for j in range(deg):
+#             v = graph[row, j + 1]
+#             if mark_del[v] != epoch:
+#                 kept[t] = v
+#                 t += 1
+
+#         # Add new neighbors if not already present
+#         a = adds[ii]
+#         for j in range(a.size):
+#             v = a[j]
+#             if mark_seen[v] != epoch:  # not already a neighbor
+#                 if t < maxDeg:
+#                     kept[t] = v
+#                     t += 1
+#                     mark_seen[v] = epoch
+#                 # else: silently drop extras (or raise if you prefer)
+
+#         # Write back
+#         graph[row, 0] = t
+#         if t > 0:
+#             graph[row, 1:1+t] = kept[:t]
+
+#     return graph
+
+
+# @torch.compile
+# def symmetrize_graph(graph, device="cpu"):
+#     device = graph.device
+#     nnodes = graph.shape[0]
+#     maxDeg = graph.shape[1] - 1
+
+#     degs = graph[:, 0]
+#     neighs = graph[:, 1:]
+
+#     # Mask valid neighbors
+#     col_mask = torch.arange(maxDeg, device=device).expand(nnodes, maxDeg) < degs[:, None]
+#     src = torch.arange(nnodes, device=device).repeat_interleave(degs)
+#     dst = neighs[col_mask]
+
+#     # Add reversed edges
+#     src_all = torch.cat([src, dst])
+#     dst_all = torch.cat([dst, src])
+
+#     # deduplication
+#     edges = torch.stack((src_all, dst_all), dim=1)
+#     edges = edges[torch.argsort(edges[:, 0] * nnodes + edges[:, 1])]  # sort by (src, dst)
+#     keep = torch.ones(edges.size(0), dtype=torch.bool, device=device)
+#     keep[1:] = (edges[1:] != edges[:-1]).any(dim=1)
+#     edges = edges[keep]
+
+#     src_sorted, dst_sorted = edges[:, 0], edges[:, 1]
+
+#     # Count new degrees
+#     degs = torch.bincount(src_sorted, minlength=nnodes)
+#     if degs.max() > maxDeg:
+#         raise ValueError("Symmetrized graph has larger degree than original maxDeg")
+
+#     # Compute rank within each src group
+#     # rank is the index of each edge within its source node's edge list
+#     starts = torch.cumsum(torch.cat([torch.tensor([0], device=device), degs[:-1]]), 0)
+#     ranks = torch.arange(len(edges), device=device) - starts[src_sorted]
+
+#     # Build output
+#     sym_graph = torch.full((nnodes, maxDeg + 1), -1, dtype=graph.dtype, device=device)
+#     sym_graph[:, 0] = degs
+#     sym_graph[src_sorted, ranks + 1] = dst_sorted
+
+#     return sym_graph.cpu().numpy()
 
 def is_symmetric_graph(graph):
     nnodes = graph.shape[0]

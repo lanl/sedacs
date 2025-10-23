@@ -13,6 +13,8 @@ import torch
 import numpy as np
 import gc
 from copy import deepcopy
+import time
+import nvtx
 
 torch.set_default_dtype(torch.float64)
 
@@ -169,6 +171,9 @@ def main(args):
     unwrap_coords = coords.clone().detach().double()
 
     renew = 0
+    kernel_update_time = 0
+    kernel_update_count = 0
+    md_start_time = time.perf_counter()
     # MAIN MD LOOP {dR2(0)/dt2: V(0)->V(1/2); dn2(0)/dt2: n(0)->n(1); V(1/2): R(0)->R(1); dR2(1)/dt2: V(1/2)->V(1)}
     for MD_step in range(MD_Iter):
         # Calculate kinetic energy from particle velocities
@@ -189,7 +194,7 @@ def main(args):
             # Here we record the time, temperature, and charges. Note that the last term, q, would be constant if not solving exact charges during MD
             with torch.no_grad():
                 Energy_dat.write(
-                    f"{Time/1000:<16.8f} {ETOT.item():<16.16f} {entropy:<16.16f} {Temperature.item():<16.8f} {EKIN.item():<16.16f} {EPOT.item():<16.16f} {torch.sum(q).item():<16.16f} {torch.sum(n_0).item():<16.16f} {mu:<16.16f}\n"
+                    f"{Time/1000:<16.8f} {ETOT.item():<16.16f} {entropy:<16.16f} {Temperature.item():<16.8f} {EKIN.item():<16.16f} {EPOT.item():<16.16f} {torch.sum(q).item():<16.16f} {torch.sum(n_0).item():<16.16f} {mu:<16.16f} {torch.linalg.norm(q - n_0) / torch.sqrt(sy.nats)}\n"
                 )
             corehalo_log.write(
                 f"max., min., avg. core+halo size: {max_corehalo}, {min_corehalo}, {total_corehalo / sdc.nparts}\n"
@@ -224,9 +229,13 @@ def main(args):
             if MD_step > 0:
                 for i, subSy in enumerate(sy.subSy_list):
                     subSy.ker = deepcopy(syk.subSy_list[i].ker)
+                start_time = time.perf_counter()
                 dn2dt2 = -rankN_update_byParts(
                         q.to(device), n_0.to(device), 12, sdc, rank, numranks, comm, parts, partsCoreHalo, sy, mu=mu, device=device
                         )
+                end_time = time.perf_counter()
+                kernel_update_time += (end_time - start_time)
+                kernel_update_count += 1
                 dn2dt2 = dn2dt2.to("cpu")
         else:
             dn2dt2 = 0.8 * Res
@@ -265,17 +274,15 @@ def main(args):
         coords = coords - LBox * torch.floor(coords / LBox)
         # Update sy.coords in the system object
         sy.coords = coords.numpy()
+        nvtx.push_range("neighbor list update", color="purple", domain="main")
         # Update neighbor list
-        if rank == 0:
-            coords_T = torch.from_numpy(sy.coords).to(args.device).T.contiguous()
-            sy.nbr_state.update(coords_T)
-            sy.nl_disps, sy.nl_dists, sy.nl = calculate_dist_dips(coords_T, sy.nbr_state)
-            sy.nl = sy.nl.cpu()
-            sy.nl_disps = sy.nl_disps.cpu()
-            sy.nl_dists = sy.nl_dists.cpu()
-        sy.nl = comm.bcast(sy.nl, root=0)
-        sy.nl_disps = comm.bcast(sy.nl_disps, root=0)
-        sy.nl_dists = comm.bcast(sy.nl_dists, root=0)
+        coords_T = torch.from_numpy(sy.coords).to(args.device).T.contiguous()
+        sy.nbr_state.update(coords_T)
+        sy.nl_disps, sy.nl_dists, sy.nl = calculate_dist_dips(coords_T, sy.nbr_state)
+        sy.nl = sy.nl.cpu()
+        sy.nl_disps = sy.nl_disps.cpu()
+        sy.nl_dists = sy.nl_dists.cpu()
+        nvtx.pop_range("main")
 
         if not shadow_md:
             # Perform a graph-adaptive calculation of the charges with SCF cycles
@@ -334,11 +341,15 @@ def main(args):
 
         # dR2(1)/dt2: V(1/2)->V(1)
         V = V + 0.5 * dt * F2V * FTOT / Mnuc.unsqueeze(1)
-    
+    md_end_time = time.perf_counter()
     if rank == 0:
         MD_xyz.close()
         Energy_dat.close()
         corehalo_log.close()
+        with open('md_time.log', 'w') as f:
+            f.write(f"Avg. MD iter. time: {(md_end_time - md_start_time) / MD_Iter:.6f} seconds")
+        with open('kernel_time.log', 'w') as f:
+            f.write(f"Avg. kernel update time: {(kernel_update_time) / kernel_update_count:.6f} seconds")
 
 
 if __name__ == "__main__":

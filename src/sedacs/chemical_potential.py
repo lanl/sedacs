@@ -28,7 +28,11 @@ def fermi_dirac(mu, energy, temp, kB=8.61739e-5):
     '''
         Get Fermi probability distributions (values are between 0 and 1)
     '''
-    fermi = np.where((energy - mu)/(kB*temp) < 100, 1/(1 + np.exp((energy - mu)/(kB*temp))), 0.0)
+#    fermi = np.where((energy - mu)/(kB*temp) < 100, 1/(1 + np.exp((energy - mu)/(kB*temp))), 0.0)
+    x = (energy - mu) / (kB * temp)
+    fermi = np.zeros_like(x)
+    mask = x < 100
+    fermi[mask] = 1.0 / (1.0 + np.exp(x[mask]))
 
     return fermi
 

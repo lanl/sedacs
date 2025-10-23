@@ -196,13 +196,12 @@ def collect_and_sum_matrices_float(matOnRank: ArrayLike, comm: MPI.Comm) -> Arra
         raise ImportError("ERROR: Consider installing mpi4py and initializing MPI")
 
     # Initialize buffer for the result
-    # fullMat = np.zeros_like(matOnRank)
+    fullMat = np.zeros_like(matOnRank)
 
     # Perform element-wise sum across all ranks
-    # comm.Allreduce(matOnRank, fullMat, op=MPI.SUM)
-    comm.Allreduce(MPI.IN_PLACE, matOnRank, op=MPI.SUM)
+    comm.Allreduce(matOnRank, fullMat, op=MPI.SUM)
 
-    return matOnRank 
+    return fullMat 
 
 def collect_and_sum_vectors_float(vectOnRank: ArrayLike,
                                    rank: int,
@@ -234,12 +233,12 @@ def collect_and_sum_vectors_float(vectOnRank: ArrayLike,
 
     # nDim = len(vectOnRank)
 
-    # fullVect = np.zeros(nDim, dtype=float)
+    fullVect = np.zeros_like(vectOnRank)
 
-    # comm.Allreduce(vectOnRank,fullVect,op=MPI.SUM)
-    comm.Allreduce(MPI.IN_PLACE, vectOnRank, op=MPI.SUM)
+    comm.Allreduce(vectOnRank,fullVect,op=MPI.SUM)
+    # comm.Allreduce(MPI.IN_PLACE, vectOnRank, op=MPI.SUM)
 
-    return vectOnRank
+    return fullVect
 
 
 def collect_and_sum_vectors_int(vectOnRank: ArrayLike,

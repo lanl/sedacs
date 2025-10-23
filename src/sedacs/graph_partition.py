@@ -903,7 +903,8 @@ def metis_partition(graph, nparts, graphweights=None, verb=False):
         # Metis partition metis call
         # Metis returns nxParts which is a list of every's part (or "color")
         # to where they belong. Node "i" belongs to "metisParts[i]" part.
-        edgecuts, metisParts = metis.part_graph(nxGraph, nparts, objtype='vol', contig=False, ctype='shem', iptype='grow', ncuts=10, niter=20, rtype='fm', minconn=True, recursive=False)
+        edgecuts, metisParts = metis.part_graph(nxGraph, nparts, objtype='vol', contig=False, ctype='shem', iptype='grow', ncuts=10, niter=10, rtype='fm', minconn=True, recursive=False)
+        # edgecuts, metisParts = metis.part_graph(nxGraph, nparts)
         # edgecuts, metisParts = metis.part_graph(nxGraph, nparts, objtype='cut', contig=True, recursive=False)
 
         # The next lines will transform from metis to our partition format
@@ -1335,35 +1336,48 @@ def get_coreHaloIndices(core, graph, njumps, coreHalo=None, eng=None):
             return coreHalo, nc, nch
     else:
 
+        # nc = len(core)
+        # # If provided coreHalo, keep halo from there
+        # # but still only look for neighbors of core as halo for the first jump
+        # if coreHalo is None or len(coreHalo) < nc:
+        #     coreHalo = []
+        #     coreHalo[:] = core[:]
+        # nch = len(coreHalo)
+        # nnodes = len(graph[:, 0])
+        # nx = np.zeros((nnodes), dtype=bool)
+        # nx[:] = False  # Logical mask
+
+        # for k in range(nch):
+        #     i = coreHalo[k]
+        #     nx[i] = True
+
+        # # Add halos from graph
+        # nc1 = nc
+        # for jump in range(njumps):
+        #     for k in range(nc):
+        #         i = coreHalo[k] # first nc are core, then halos
+        #         degI = graph[i, 0]
+        #         for kk in range(1, degI+1):
+        #             # $$$ also this cycles needs to be interrupted when reaching -1 ???
+        #             j = graph[i, kk]
+        #             if (not nx[j]):
+        #                 nch = nch + 1
+        #                 coreHalo.append(j)
+        #                 nx[j] = True
+        #     nc1 = nch
+
         nc = len(core)
-        # If provided coreHalo, keep halo from there
-        # but still only look for neighbors of core as halo for the first jump
         if coreHalo is None or len(coreHalo) < nc:
             coreHalo = []
             coreHalo[:] = core[:]
+        core = np.asarray(core, dtype=np.intp)
+        halo = graph[:, 1:][core].ravel()
+        halo = halo[halo != -1]
+        coreHalo = np.asarray(coreHalo, dtype=np.intp)
+        halo = np.setdiff1d(halo, coreHalo, assume_unique=False)
+        coreHalo = np.concatenate( (coreHalo, halo) ).tolist()
+        
         nch = len(coreHalo)
-        nnodes = len(graph[:, 0])
-        nx = np.zeros((nnodes), dtype=bool)
-        nx[:] = False  # Logical mask
-
-        for k in range(nch):
-            i = coreHalo[k]
-            nx[i] = True
-
-        # Add halos from graph
-        nc1 = nc
-        for jump in range(njumps):
-            for k in range(nc):
-                i = coreHalo[k] # first nc are core, then halos
-                degI = graph[i, 0]
-                for kk in range(1, degI+1):
-                    # $$$ also this cycles needs to be interrupted when reaching -1 ???
-                    j = graph[i, kk]
-                    if (not nx[j]):
-                        nch = nch + 1
-                        coreHalo.append(j)
-                        nx[j] = True
-            nc1 = nch
 
         return coreHalo, nc, nch
 
