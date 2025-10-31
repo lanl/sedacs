@@ -128,7 +128,7 @@ def main(args):
     # Perform a single-point graph-adaptive calculation of the energy and forces
     graphDH, sy.charges, EPOT, entropy, FTOT, mu, parts, partsCoreHalo, subSysOnRank = (
         get_adaptive_sp_energy_forces(
-            sdc, eng, comm, rank, numranks, sy, parts, partsCoreHalo, hindex, graphNL, mu, alpha=localization, device=device, shadow_md=shadow_md,
+            sdc, eng, comm, rank, numranks, sy, parts, partsCoreHalo, hindex, graphDH, mu, alpha=localization, device=device, shadow_md=shadow_md,
         )
     )
     # Convert the charges to a tensor
@@ -325,7 +325,7 @@ def main(args):
                 parts,
                 partsCoreHalo,
                 hindex,
-                None,
+                graphDH,
                 mu,
                 alpha=localization,
                 shadow_md=shadow_md,

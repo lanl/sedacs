@@ -40,7 +40,6 @@ try:
 except ImportError:
     is_torch_available = False
 
-is_torch_available = False
 
 __all__ = ["available_device", "init"]
 
@@ -72,8 +71,8 @@ def get_args():
     parser.add_argument("--input-file", help="Specify input file", required=False, type=str, default="input.in")
 
     args = parser.parse_args()
-    if args.use_torch:
-        args.device = available_device()
+    #if args.use_torch:
+    args.device = available_device()
 
     return args
 

@@ -5,9 +5,11 @@ Some graph functions
 
 import sys
 
-from numba import njit
+import mpi4py.MPI as MPI
+from numba import njit, prange
 import numpy as np
 import torch
+import nvtx
 
 global nxLib
 try:
@@ -875,6 +877,30 @@ def is_symmetric_graph(graph):
     return True
 
 
+def graph_to_adjlist(graph, graphweights=None):
+    nnodes = graph.shape[0]
+    adjlist = []
+
+    if graphweights is None:
+        for i in range(nnodes):
+            deg = graph[i, 0]
+            neighbors = []
+            for j in range(deg):
+                nbr = graph[i, j + 1]
+                neighbors.append(nbr)
+            adjlist.append(tuple(neighbors))
+    else:
+        for i in range(nnodes):
+            deg = graph[i, 0]
+            neighbors_weights = []
+            for j in range(deg):
+                nbr = graph[i, j + 1]
+                weight = graphweights[i, j + 1]
+                neighbors_weights.append((nbr, weight))
+            adjlist.append(tuple(neighbors_weights))
+
+    return adjlist
+
 def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos, indicesCore, hindex, coords, latticeVectors, nl, alpha=0.7):
     """
     Adaptively expanding the size of halo regions by multiplying the 
@@ -1003,3 +1029,215 @@ def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos
         graph[ii, k + 1:] = -1  # Fill the rest with -1s
 
     return graph
+
+
+@njit
+def compute_added(G1, G2, NNZ1, NNZ2, nnodes, maxToAddRemove=100):
+    """
+    Compute, for each vertex i, which neighbors in G2[i, :] are NOT already in G1[i, :].
+
+    Parameters
+    ----------
+    G1 : numpy 2D array 
+        Adjacency list (row i has up to NNZ1[i] valid entries).
+    G2 : numpy 2D array 
+        Second adjacency list (row i has up to NNZ2[i] valid entries).
+    NNZ1 : numpy 1D array
+        Counts per row for G1.
+    NNZ2 : numpy 1D array
+        Counts per row for G2.
+    nnodes : int
+        Number of nodes in the graph.
+    maxToAddRemove : int, optional
+        Maximum number of neighbors to add per row, by default 100.
+
+    Returns
+    -------
+    G_added : numpy 2D array
+        For each row i, the neighbors from G2 not in G1, packed in columns [0:N_added[i]).
+    N_added : numpy 1D array
+        Number of added neighbors per row.
+    """
+    N = G1.shape[0]
+    M = G1.shape[1] # max possible new neighbors per row
+    G_added = np.zeros((N, maxToAddRemove), dtype=G2.dtype)
+    N_added = np.zeros(N, dtype=np.int64)
+
+    # marker vector for membership checks
+    v = np.zeros(nnodes, dtype=np.uint8)
+
+    for i in range(N):
+        # mark all G1 neighbors of i
+        for j in range(NNZ1[i]):
+            v[G1[i, j]] = 1
+
+        # collect G2 neighbors not in G1
+        k = 0
+        for j in range(NNZ2[i]):
+            b = G2[i, j]
+            if v[b] == 0:
+                G_added[i, k] = b
+                k += 1
+
+        N_added[i] = k
+
+        # clear marks for the next row
+        for j in range(NNZ1[i]):
+            v[G1[i, j]] = 0
+        for j in range(NNZ2[i]):
+            v[G2[i, j]] = 0
+
+    return G_added, N_added
+
+@njit
+def compute_removed(G1, G2, NNZ1, NNZ2, nnodes, maxToAddRemove=100):
+    """
+    Compute, for each vertex i, which neighbors in G1[i, :] that are not in G2[i, :].
+
+    Parameters
+    ----------
+    G1 : numpy 2D array 
+        Adjacency list (row i has up to NNZ1[i] valid entries).
+    G2 : numpy 2D array 
+        Second adjacency list (row i has up to NNZ2[i] valid entries).
+    NNZ1 : numpy 1D array
+        Counts per row for G1.
+    NNZ2 : numpy 1D array
+        Counts per row for G2.
+    nnodes : int
+        Number of nodes in the graph.
+    maxToAddRemove : int, optional
+        Maximum number of neighbors to remove per row, by default 100.
+
+    Returns
+    -------
+    G_removed : numpy 2D array
+        For each row i, the neighbors from G1 not in G2, packed in columns [0:N_added[i]).
+    N_removed : numpy 1D array
+        Number of removed neighbors per row.
+    """
+    N = G1.shape[0]
+    M = G1.shape[1]
+    G_removed = np.zeros((N, maxToAddRemove), dtype=G1.dtype)
+    N_removed = np.zeros(N, dtype=np.int64)
+
+    # marker vector for membership checks
+    v = np.zeros(nnodes, dtype=np.uint8)
+
+    for i in range(N):
+        # mark all G2 neighbors of i
+        for j in range(NNZ2[i]):
+            v[G2[i, j]] = 1
+
+        # collect G1 neighbors not in G2
+        k = 0
+        for j in range(NNZ1[i]):
+            b = G1[i, j]
+            if v[b] == 0:
+                G_removed[i, k] = b
+                k += 1
+
+        N_removed[i] = k
+
+        # clear marks for the next row
+        for j in range(NNZ1[i]):
+            v[G1[i, j]] = 0
+        for j in range(NNZ2[i]):
+            v[G2[i, j]] = 0
+
+    return G_removed, N_removed
+
+# Use G_removed and G_added to update from G1 to G2
+@njit(parallel=True, nogil=True)
+def update_graph(G1, NNZ1, G_removed, N_removed, G_added, N_added):
+    """
+    Update G1 by removing neighbors in G_removed and adding neighbors in G_added.
+
+    Parameters
+    ----------
+    G1 : int64[:, :]
+        Adjacency list to be updated (row i has up to NNZ1[i] valid entries).
+    G_removed : int64[:, :]
+        Neighbors to be removed from G1 (row i has up to N_removed[i] valid entries).
+    N_removed : int64[:]
+        Number of neighbors to remove per row.
+    G_added : int64[:, :]
+        Neighbors to be added to G1 (row i has up to N_added[i] valid entries).
+    N_added : int64[:]
+        Number of neighbors to add per row.
+
+    Returns
+    -------
+    G_updated : int64[:, :]
+        Updated adjacency list.
+    """
+    N, maxDeg = G1.shape
+    G_updated = np.full((N, maxDeg + 1), -1, dtype=G1.dtype)
+    NNZ_updated = np.zeros(N, dtype=np.int64)
+
+    for i in prange(N):
+        # thread-local marker vector (safe in parallel)
+        v = np.zeros(N, dtype=np.uint8)
+
+        # 1) mark existing neighbors
+        nnz1 = NNZ1[i]
+        for j in range(nnz1):
+            v[G1[i, j]] = 1
+
+        # 2) unmark neighbors to be removed
+        nrem = N_removed[i]
+        for j in range(nrem):
+            v[G_removed[i, j]] = 0
+
+        # 3) keep remaining neighbors
+        cnt = 0
+        for j in range(nnz1):
+            b = G1[i, j]
+            if v[b] == 1:
+                G_updated[i, cnt + 1] = b
+                cnt += 1
+
+        # 4) add new neighbors
+        nadd = N_added[i]
+        NNZ_updated[i] = cnt + nadd
+        for j in range(nadd):
+            G_updated[i, cnt + j + 1] = G_added[i, j]
+
+        G_updated[i, 0] = NNZ_updated[i]
+        
+        # 5) sort the neighbor list
+        if NNZ_updated[i] > 1:
+            neighbors = G_updated[i, 1:NNZ_updated[i] + 1]
+            neighbors.sort()
+            G_updated[i, 1:NNZ_updated[i] + 1] = neighbors
+
+    return G_updated
+
+
+def graph_diff_and_update(prevGraph, graphOnRank, partsOnRank, comm, maxToAddRemove=100):
+    nnodes = prevGraph.shape[0]
+    # Initialize added, removed, and updated graph
+    G_added = np.zeros((nnodes, maxToAddRemove + 1), dtype=prevGraph.dtype)
+    G_removed = np.zeros((nnodes, maxToAddRemove + 1), dtype=prevGraph.dtype)
+    
+    # Get the local graph on this rank
+    localGraph = prevGraph[partsOnRank]
+    localGraph_new = graphOnRank[partsOnRank]
+
+    # Compute added and removed neighbors
+    G_added[partsOnRank, 1:], G_added[partsOnRank, 0] = compute_added(localGraph[:, 1:], localGraph_new[:, 1:], localGraph[:, 0], localGraph_new[:, 0], nnodes, maxToAddRemove=maxToAddRemove)
+    G_removed[partsOnRank, 1:], G_removed[partsOnRank, 0] = compute_removed(localGraph[:, 1:], localGraph_new[:, 1:], localGraph[:, 0], localGraph_new[:, 0], nnodes, maxToAddRemove=maxToAddRemove)
+
+    if max(G_added[:,0]) > maxToAddRemove or max(G_removed[:,0]) > maxToAddRemove:
+        raise ValueError("maxToAddRemove is too small to accommodate the number of added/removed neighbors.")
+
+    # MPI Allreduce to gather added and removed neighbors across all ranks
+    comm.Allreduce(MPI.IN_PLACE, G_added, op=MPI.SUM)
+    comm.Allreduce(MPI.IN_PLACE, G_removed, op=MPI.SUM)
+
+    nvtx.push_range("update_graph test")
+    # Update the graph using the added and removed neighbors
+    updatedGraph = update_graph(prevGraph[:, 1:], prevGraph[:, 0], G_removed[:, 1:], G_removed[:, 0], G_added[:, 1:], G_added[:, 0])
+    nvtx.pop_range()
+
+    return updatedGraph

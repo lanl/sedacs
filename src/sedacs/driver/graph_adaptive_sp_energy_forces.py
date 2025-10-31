@@ -10,7 +10,7 @@ from pathlib import Path
 import nvtx 
 import pickle
 
-from sedacs.graph import add_graphs, collect_graph_from_rho, print_graph, multiply_graphs, adaptive_halo_expansion, symmetrize_graph
+from sedacs.graph import add_graphs, collect_graph_from_rho, print_graph, multiply_graphs, adaptive_halo_expansion, symmetrize_graph, graph_diff_and_update
 from sedacs.graph_partition import get_coreHaloIndices, graph_partition
 from sedacs.sdc_hamiltonian import get_hamiltonian
 from sedacs.sdc_density_matrix import get_density_matrix
@@ -52,7 +52,7 @@ __all__ = ["get_singlePoint_energy_forces", "get_adaptive_sp_energy_forces"]
 
 
 def get_singlePoint_energy_forces(
-    sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, mu=0.0, alpha=0.7, write_parts=False,
+    sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, prevGraph, mu=0.0, alpha=0.7, write_parts=False,
 ):
     """
     Get the single point charges, energy, and forces for the full system from graph-partitioned subsystems.
@@ -341,10 +341,15 @@ def get_singlePoint_energy_forces(
         forcesOnRank = collect_forces(
             forcesOnRank, forcesInPart, parts[partIndex], sy.nats, verb=True
         )
+    # Collect core indices from all ranks as one list
+    partsOnRank = []
+    for partIndex in range(partIndex1, partIndex2):
+        partsOnRank.extend(parts[partIndex])
     comm.Barrier()
     nvtx.push_range("collect_graph_and_charges", color="green", domain="get_singlePoint_charges")
     if is_mpi_available and numranks > 1:
-        fullGraph = collect_and_sum_matrices_float(graphOnRank, comm)
+        # fullGraph = collect_and_sum_matrices_float(graphOnRank, comm)
+        fullGraph = graph_diff_and_update(prevGraph, graphOnRank, partsOnRank, comm)
         fullCharges = collect_and_sum_vectors_float(chargesOnRank, rank, numranks, comm)
         fullEnergy = collect_and_sum_vectors_float(energyOnRank, rank, numranks, comm)
         fullForces = collect_and_sum_matrices_float(forcesOnRank, comm)
@@ -403,7 +408,7 @@ def get_adaptive_sp_energy_forces(
     dm_start_time = time.perf_counter()
     fullGraph, charges, energy, entropy, forces, subSysOnRank, mu = (
         get_singlePoint_energy_forces(
-            sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, mu, alpha=alpha,
+            sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, graph, mu, alpha=alpha,
         )
     )
     dm_end_time = time.perf_counter()

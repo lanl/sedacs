@@ -899,11 +899,12 @@ def metis_partition(graph, nparts, graphweights=None, verb=False):
     nnodes = len(graph[:, 0])
     if(nparts > 1):
         # Convert to networkx graph and use metis there
-        nxGraph = get_nx_graph(graph, graphweights)
+        # nxGraph = get_nx_graph(graph, graphweights)
+        adjlist = graph_to_adjlist(graph, graphweights)
         # Metis partition metis call
         # Metis returns nxParts which is a list of every's part (or "color")
         # to where they belong. Node "i" belongs to "metisParts[i]" part.
-        edgecuts, metisParts = metis.part_graph(nxGraph, nparts, objtype='vol', contig=False, ctype='shem', iptype='grow', ncuts=10, niter=10, rtype='fm', minconn=True, recursive=False)
+        edgecuts, metisParts = metis.part_graph(adjlist, nparts, objtype='vol', contig=False, ctype='shem', iptype='grow', ncuts=10, niter=10, rtype='fm', minconn=True, recursive=False)
         # edgecuts, metisParts = metis.part_graph(nxGraph, nparts)
         # edgecuts, metisParts = metis.part_graph(nxGraph, nparts, objtype='cut', contig=True, recursive=False)
 
@@ -1371,7 +1372,7 @@ def get_coreHaloIndices(core, graph, njumps, coreHalo=None, eng=None):
             coreHalo = []
             coreHalo[:] = core[:]
         core = np.asarray(core, dtype=np.intp)
-        halo = graph[:, 1:][core].ravel()
+        halo = graph[core, 1:].ravel()
         halo = halo[halo != -1]
         coreHalo = np.asarray(coreHalo, dtype=np.intp)
         halo = np.setdiff1d(halo, coreHalo, assume_unique=False)
