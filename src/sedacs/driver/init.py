@@ -100,6 +100,12 @@ def init(args):
         comm = None
         rank = 0
         numranks = 1
+
+    if args.device == "cuda":
+        local_rank = rank % torch.cuda.device_count()
+        args.device = f"cuda:{local_rank}"
+        torch.cuda.set_device(local_rank)
+
     if rank == 0:    
         # Initialize the code by reading the input file
         sdc = Input(args.input_file, verb=True)

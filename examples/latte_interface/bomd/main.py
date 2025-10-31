@@ -60,10 +60,10 @@ def main(args):
     sdc.verb = False
     # Get device
     device = args.device
-    if device == "cuda":
-        local_rank = rank % torch.cuda.device_count()
-        device = f"cuda:{local_rank}"
-        torch.cuda.set_device(local_rank)
+    #if device == "cuda":
+    #    local_rank = rank % torch.cuda.device_count()
+    #    device = f"cuda:{local_rank}"
+    #    torch.cuda.set_device(local_rank)
     # Chemical potential
     mu = args.mu
     # Degree of localization for adaptive halo expansion
@@ -194,7 +194,7 @@ def main(args):
             # Here we record the time, temperature, and charges. Note that the last term, q, would be constant if not solving exact charges during MD
             with torch.no_grad():
                 Energy_dat.write(
-                    f"{Time/1000:<16.8f} {ETOT.item():<16.16f} {entropy:<16.16f} {Temperature.item():<16.8f} {EKIN.item():<16.16f} {EPOT.item():<16.16f} {torch.sum(q).item():<16.16f} {torch.sum(n_0).item():<16.16f} {mu:<16.16f} {torch.linalg.norm(q - n_0) / torch.sqrt(sy.nats)}\n"
+                    f"{Time/1000:<16.8f} {ETOT.item():<16.16f} {entropy:<16.16f} {Temperature.item():<16.8f} {EKIN.item():<16.16f} {EPOT.item():<16.16f} {torch.sum(q).item():<16.16f} {torch.sum(n_0).item():<16.16f} {mu:<16.16f} {torch.linalg.norm(q - n_0) / torch.sqrt(torch.tensor(sy.nats))}\n"
                 )
             corehalo_log.write(
                 f"max., min., avg. core+halo size: {max_corehalo}, {min_corehalo}, {total_corehalo / sdc.nparts}\n"
@@ -276,7 +276,7 @@ def main(args):
         sy.coords = coords.numpy()
         nvtx.push_range("neighbor list update", color="purple", domain="main")
         # Update neighbor list
-        coords_T = torch.from_numpy(sy.coords).to(args.device).T.contiguous()
+        coords_T = torch.from_numpy(sy.coords).to(device).T.contiguous()
         sy.nbr_state.update(coords_T)
         sy.nl_disps, sy.nl_dists, sy.nl = calculate_dist_dips(coords_T, sy.nbr_state)
         sy.nl = sy.nl.cpu()
