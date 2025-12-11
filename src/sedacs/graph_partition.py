@@ -5,6 +5,7 @@ from sedacs.file_io import (
         write_xyz_coordinates,
         write_pdb_coordinates
 )
+from sedacs.sedacs_partition.sedacs_part import *
 #import matplotlib.pyplot as plt
 #
 
@@ -72,13 +73,15 @@ DEBUG_LEVEL = 0  # > 0 gives assert statements, > 1 gives print statements.
 # @param verb Verbosity level
 # @return parts Partition containing a "list of parts" where every
 # part is a list of nodes
-def graph_partition(sdc, eng, graph, partitionType, nparts, coords, verb=False):
+def graph_partition(sdc, eng, graph, partitionType, nparts, coords, latticeVectors=None, graphweights=None, verb=False):
     if partitionType == "Regular":
         parts = regular_partition(graph, nparts, verb)
     elif partitionType == "Metis":
-        parts = metis_partition(graph, nparts, verb)
+        parts = metis_partition(graph, nparts, graphweights=graphweights, verb=verb)
     elif partitionType == "MinCut":
         parts = mincut_partition(graph, nparts, verb)
+    elif partitionType == "SEDACS":
+        parts = sedacs_partition(graph, nparts, coords, latticeVectors, verb)
     elif(partitionType == "SpectralClustering"):
         parts = spectral_clustering_partition(sdc, graph, nparts, coords, do_xyz=True)
 
@@ -614,7 +617,7 @@ def get_core_halo(nodeIPartition, nodeIConnections, nodeIDegree, k,
 # @param graph Graph to extract the halos from
 # @param njumps It will search the halos among the "njumps" nearest neighbors
 #
-def get_coreHaloIndices(eng, core,graph,njumps, *args):
+def _get_coreHaloIndices(eng, core, graph, njumps, *args):
     coreHalo = np.array(core.copy())
     nc = len(coreHalo)
     nch = nc
@@ -884,7 +887,7 @@ def coords_partition(
 # @return parts Partition containing a "list of parts" where every
 # part is a list of nodes
 #
-def metis_partition(graph, nparts, verb=False):
+def metis_partition(graph, nparts, graphweights=None, verb=False):
     """Partitions using metis"""
     if metisLib == False:
         raise ImportError("Consider installing Metis library")
@@ -895,12 +898,16 @@ def metis_partition(graph, nparts, verb=False):
 
     nnodes = len(graph[:, 0])
     if(nparts > 1):
-        nxGraph = get_nx_graph(graph, 1.0)
+        # Convert to networkx graph and use metis there
+        # nxGraph = get_nx_graph(graph, graphweights)
+        adjlist = graph_to_adjlist(graph, graphweights)
         # Metis partition metis call
         # Metis returns nxParts which is a list of every's part (or "color")
         # to where they belong. Node "i" belongs to "metisParts[i]" part.
-        edgecuts, metisParts = metis.part_graph(nxGraph, nparts)
-
+        try:
+            edgecuts, metisParts = metis.part_graph(adjlist, nparts, objtype='vol', contig=True, ctype='shem', iptype='grow', ncuts=10, niter=10, rtype='fm', minconn=True, recursive=False)
+        except:
+            edgecuts, metisParts = metis.part_graph(adjlist, nparts)
         # The next lines will transform from metis to our partition format
         parts = []
         for k in range(nparts):
@@ -919,6 +926,24 @@ def metis_partition(graph, nparts, verb=False):
     # plot_graph(nxGraph)
     return parts
 
+def sedacs_partition(graph, nparts, coords, latticeVectors, verb):
+    nnodes = len(graph[:, 0])
+    if(nparts > 1):
+        nx = 4; ny = 4; nz = 3
+        rank = 1; numranks = 1
+        degs = graph[:, 0]
+
+        err, boxOfI, nparts = sedacs_nlistbox(coords,latticeVectors,nx,ny,nz,rank,numranks,verb)
+
+        err, whichParts_guess_out = sedacs_part(boxOfI,graph,degs,nparts,verb)
+        parts = []
+        for i in range(nparts):
+            parts.append(np.where(whichParts_guess_out == i)[0].tolist())
+    else:
+        parts = []
+        parts.append(list(range(0, nnodes)))
+
+    return parts 
 
 ## MinCut local partition optimization.
 # @brief This will optimize a given partition based on a mincut algorithm.
@@ -1276,7 +1301,7 @@ def get_parts_indices(parts, nnodes):
 # @param graph Graph to extract the halos from
 # @param njumps It will search the halos among the "njumps" nearest neighbors
 #
-def get_coreHaloIndices(core, graph, njumps, eng=None):
+def get_coreHaloIndices(core, graph, njumps, coreHalo=None, eng=None):
 
     # There are too many differences in how these things are computed across codes, at some point these
     # need to be universalized, or we need to ship functions like this off to interface specific python files
@@ -1312,31 +1337,49 @@ def get_coreHaloIndices(core, graph, njumps, eng=None):
             return coreHalo, nc, nch
     else:
 
-        nc = len(core)
-        coreHalo = []*nc
-        coreHalo[:] = core[:]
-        nch = nc
-        nnodes = len(graph[:, 0])
-        nx = np.zeros((nnodes), dtype=bool)
-        nx[:] = False  # Logical mask
+        # nc = len(core)
+        # # If provided coreHalo, keep halo from there
+        # # but still only look for neighbors of core as halo for the first jump
+        # if coreHalo is None or len(coreHalo) < nc:
+        #     coreHalo = []
+        #     coreHalo[:] = core[:]
+        # nch = len(coreHalo)
+        # nnodes = len(graph[:, 0])
+        # nx = np.zeros((nnodes), dtype=bool)
+        # nx[:] = False  # Logical mask
 
-        for k in range(nc):
-            i = coreHalo[k]
-            if i != -1:
-                nx[i] = True
-        # Add halos from graph
-        for jump in range(njumps):
-            nc1 = nch
-            for k in range(nc1):
-                i = coreHalo[k]
-                degI = graph[i, 0]
-                for kk in range(1, degI+1):
-                    # $$$ also this cycles needs to be interrupted when reaching -1 ???
-                    j = graph[i, kk]
-                    if (not nx[j]):
-                        nch = nch + 1
-                        coreHalo.append(j)
-                        nx[j] = True
+        # for k in range(nch):
+        #     i = coreHalo[k]
+        #     nx[i] = True
+
+        # # Add halos from graph
+        # nc1 = nc
+        # for jump in range(njumps):
+        #     for k in range(nc):
+        #         i = coreHalo[k] # first nc are core, then halos
+        #         degI = graph[i, 0]
+        #         for kk in range(1, degI+1):
+        #             # $$$ also this cycles needs to be interrupted when reaching -1 ???
+        #             j = graph[i, kk]
+        #             if (not nx[j]):
+        #                 nch = nch + 1
+        #                 coreHalo.append(j)
+        #                 nx[j] = True
+        #     nc1 = nch
+
+        nc = len(core)
+        if coreHalo is None or len(coreHalo) < nc:
+            coreHalo = []
+            coreHalo[:] = core[:]
+        core = np.asarray(core, dtype=np.intp)
+        halo = graph[core, 1:].ravel()
+        halo = halo[halo != -1]
+        coreHalo = np.asarray(coreHalo, dtype=np.intp)
+        halo = np.setdiff1d(halo, coreHalo, assume_unique=False)
+        coreHalo = np.concatenate( (coreHalo, halo) ).tolist()
+        
+        nch = len(coreHalo)
+
         return coreHalo, nc, nch
 
 def get_coreHaloIndicesPYSEQM(eng, core,graph,njumps, *args):

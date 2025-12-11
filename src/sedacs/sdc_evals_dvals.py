@@ -24,6 +24,7 @@ def get_evals_dvals(
     norbsInCore=None,
     mu=None,
     etemp=0.0,
+    overlap=None,
     verb=False,
     newsystem=True,
 ):
@@ -58,6 +59,8 @@ def get_evals_dvals(
         Chemical potential for the system.
     etemp : float, optional
         Electronic temperature for the system.
+    overlap : 2D numpy array, dtype: float, optional
+        The overlap matrix.
     verb : bool, optional
         If True, enables verbose output.
     newsystem : bool, optional
@@ -91,6 +94,8 @@ def get_evals_dvals(
             nocc,
             norbsInCore=norbsInCore,
             mu=mu,
+            etemp=etemp,
+            overlap=overlap,
             verb=verb,
             newsystem=newsystem,
         )

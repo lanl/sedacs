@@ -67,7 +67,7 @@ def build_nlist_torch(coords: np.ndarray,
 
     nats = len(coords[:, 0])
     if numranks > 1:
-        print("NUM RNAKS", numranks)
+        print("NUM RANKS", numranks)
         comm = MPI.COMM_WORLD
     natsPerRank = int(nats / numranks)
     if rank == numranks - 1:

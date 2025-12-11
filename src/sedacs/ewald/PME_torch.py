@@ -5,7 +5,7 @@ from typing import Optional, Tuple, List, Union
 
 def b(m, order=4):
     k = torch.arange(order - 1, device=m.device).reshape(1,1,1,order-1)
-    M = compute_spline_coefficients(torch.tensor(1.0), order)[1:].flip(dims=(0,))
+    M = compute_spline_coefficients(torch.tensor(1.0, device=m.device), order)[1:].flip(dims=(0,))
     M = M.reshape(1,1,1,order-1)
     M = M.to(m.dtype).to(m.device)
     
@@ -18,10 +18,7 @@ def b(m, order=4):
     return res.real * res.real + res.imag * res.imag
 
 def B(mx, my, mz, order=4):
-    b_x = b(mx,order)
-    b_y = b(my,order)
-    b_z = b(mz,order)
-    return b_x * b_y * b_z
+    return b(mx, order) * b(my, order) * b(mz, order)
 
 def compute_spline_coefficients(w, order: int = 4):
     shape = w.shape
@@ -191,17 +188,17 @@ def calculate_PME_ewald(
     # transpose the disp. vectors as needed
     if nbr_disp_vecs.shape[2] == 3:
         nbr_disp_vecs = nbr_disp_vecs.permute(2, 0, 1).contiguous()
-    
     dq = None
     forces = None
+    # Real space contribution
     if screening:
         my_e_real, my_f_real, my_dq_real = ewald_real_screening(nbr_inds, nbr_disp_vecs, 
                                                     nbr_dists, charges, hubbard_u, atomtypes, alpha, 
                                                     cutoff,
                                                     calculate_forces, calculate_dq)
         
-        # if my_f_real is not None and my_f_real.device.type == 'cuda':
-        #     my_f_real = my_f_real.T.contiguous() 
+        if my_f_real is not None and my_f_real.device.type == "cpu":
+             my_f_real = my_f_real.T.contiguous() 
 
     else:
         my_e_real, my_f_real, my_dq_real = ewald_real(nbr_inds, nbr_disp_vecs, 

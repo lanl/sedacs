@@ -160,6 +160,18 @@ class System:
         self.evects = None
         ## Eigenvalues
         self.evals = None
+        ## Neighbor state
+        self.nbr_state = None
+        ## Neighbor list
+        self.nl = None
+        ## Neighbor list displacements
+        self.nl_disps = None
+        ## Neighbor list distances
+        self.nl_dists = None
+        ## Ewald Alpha
+        self.ewald_alpha = 2.5
+        ## PME data (tuple)
+        self.PME_data = None 
 
     def extract_types_and_symbols(self,symbols_list_for_all_atoms):
         """

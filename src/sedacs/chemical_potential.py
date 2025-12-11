@@ -28,7 +28,11 @@ def fermi_dirac(mu, energy, temp, kB=8.61739e-5):
     '''
         Get Fermi probability distributions (values are between 0 and 1)
     '''
-    fermi = np.where((energy - mu)/(kB*temp) < 100, 1/(1 + np.exp((energy - mu)/(kB*temp))), 0.0)
+#    fermi = np.where((energy - mu)/(kB*temp) < 100, 1/(1 + np.exp((energy - mu)/(kB*temp))), 0.0)
+    x = (energy - mu) / (kB * temp)
+    fermi = np.zeros_like(x)
+    mask = x < 100
+    fermi[mask] = 1.0 / (1.0 + np.exp(x[mask]))
 
     return fermi
 
@@ -69,7 +73,8 @@ def get_mu(mu0, evals, etemp, nocc, dvals=None, kB=8.61739e-5, verb=False):
         dvals = np.ones((norbs))
     for i in range(nmax+1):
         fermi = fermi_dirac(mu, evals, etemp) 
-        occ = np.sum([fermi[j]*dvals[j] for j in range(norbs)])
+        # occ = np.sum([fermi[j]*dvals[j] for j in range(norbs)])
+        occ = np.sum(fermi * dvals)
         occErr = abs(occ - nocc)
         if abs(occErr) < tol:
             break
@@ -99,7 +104,8 @@ def get_mu(mu0, evals, etemp, nocc, dvals=None, kB=8.61739e-5, verb=False):
 
         #Sum of the occupations
         fermi = fermi_dirac(mu, evals, etemp)
-        ft1 = np.sum([fermi[i]*dvals[i] for i in range(norbs)])
+        # ft1 = np.sum([fermi[i]*dvals[i] for i in range(norbs)])
+        ft1 = np.sum(fermi * dvals)
         ft1 = ft1 - nocc
     
         for i in range(1000001):
@@ -121,7 +127,8 @@ def get_mu(mu0, evals, etemp, nocc, dvals=None, kB=8.61739e-5, verb=False):
 
             #New sum of the occupations
             fermi = fermi_dirac(mu, evals, etemp)
-            ft2 = np.sum([fermi[i]*dvals[i] for i in range(norbs)])
+            # ft2 = np.sum([fermi[i]*dvals[i] for i in range(norbs)])
+            ft2 = np.sum(fermi * dvals)
             occ = ft2
             ft2 = ft2 - nocc
 

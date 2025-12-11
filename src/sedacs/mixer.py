@@ -93,7 +93,7 @@ def diis_mix(charges: ArrayLike,
         charges = (1.0 - mixCoeff)*chargesOld + mixCoeff*charges
 
         # Compute the SCF error.
-        scfError = np.linalg.norm(charges)
+        scfError = np.linalg.norm(charges) / np.sqrt(len(charges))
 
         if(verb):
             print("SCF error =", scfError)

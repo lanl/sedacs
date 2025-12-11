@@ -1,5 +1,5 @@
 """
-graph_adaptive_scf_sp2.py
+graph_adaptive_scf_xtb.py
 ====================================
 Graph adaptive self-consistent charge solver
 
@@ -10,6 +10,7 @@ import numpy as np
 from pathlib import Path
 import pickle
 
+from sedacs.periodic_table import PeriodicTable
 from sedacs.graph import add_graphs, collect_graph_from_rho, print_graph, multiply_graphs
 from sedacs.graph_partition import get_coreHaloIndices, graph_partition
 from sedacs.sdc_hamiltonian import get_hamiltonian
@@ -29,6 +30,8 @@ from sedacs.message import status_at, error_at, warning_at
 from sedacs.mixer import diis_mix, linear_mix
 from sedacs.chemical_potential import get_mu
 from sedacs.file_io import read_latte_tbparams
+
+from tblite.interface import Calculator
 
 try:
     from mpi4py import MPI
@@ -143,24 +146,106 @@ def get_singlePoint_charges(
         print("Number of orbitals in the core =", norbsInCore)
         nocc = int(float(subSy.numel) / 2.0)  # Get the total occupied orbitals
 
-        ham, over, zmat = get_hamiltonian(
-            eng,
-            partIndex,
-            sdc.nparts,
-            norbs,
-            sy.latticeVectors,
-            subSy.coords,
-            subSy.types,
-            subSy.symbols,
-            verb=False,
-            get_overlap=True,
-            newsystem=True,
+        # Initialize xtb calculator
+        pt = PeriodicTable()
+        # Initializing the atomic numbers array
+        atomicNumbers = np.zeros_like(subSy.types, dtype=np.int32)
+        # Filling the atomic numbers array with the atomic numbers corresponding to the symbols
+        for i in range(len(subSy.types)):
+            atomicNumbers[i] = pt.get_atomic_number(subSy.symbols[subSy.types[i]])
+        calc = Calculator(
+            method="GFN2-xTB",
+            numbers=atomicNumbers,
+            positions=subSy.coords * 1.8897259886, # Angstrom to Bohr
+            lattice=sy.latticeVectors * 1.8897259886, # Angstrom to Bohr
+            periodic=np.array([1, 1, 1]),
+            #periodic=np.array([0, 0, 0]),
         )
-        
+        calc.set("save-integrals", True) # This allows saving overlap and hamiltonian matrices
+        calc.set("accuracy", 1e9) # Set to a large value to avoid error raised from SCF not converged 
+        calc.set("max-iter", 1)
+
+        res = calc.singlepoint()
+        ham = res.get("hamiltonian-matrix") * 27.211386245981 # Hartree to eV
+        over = res.get("overlap-matrix")
+
         ham = build_coul_ham(eng,ham,sy.coulvs[partsCoreHalo[partIndex]],subSy.types,subSy.charges,False,subSy.hindex,overlap=over,verb=False)
 
         toc = time.perf_counter()
         print("Time for get_hamiltonian", toc - tic, "(s)")
+
+        tic = time.perf_counter()
+        evects, evalsInPart, dvalsInPart = get_evals_dvals(
+            eng,
+            partIndex,
+            sdc.nparts,
+            sy.latticeVectors,
+            subSy.coords,
+            subSy.types,
+            subSy.symbols,
+            ham,
+            sy.coulvs[partsCoreHalo[partIndex]],
+            nocc=nocc,
+            norbsInCore=norbsInCore,
+            mu=mu,
+            etemp=sdc.etemp,
+            overlap=over,
+            verb=False,
+            newsystem=False,
+        )
+
+        toc = time.perf_counter()
+        print("Time for get_evals_dvals", toc - tic, "(s)")
+
+        evalsOnRank = collect_evals(evalsOnRank, evalsInPart, verb=True)
+        dvalsOnRank = collect_dvals(dvalsOnRank, dvalsInPart, verb=True)
+
+    if is_mpi_available and numranks > 1:
+        fullEvals = collect_and_concatenate_vectors(evalsOnRank, comm)
+        fullDvals = collect_and_concatenate_vectors(dvalsOnRank, comm)
+        comm.Barrier()
+    else:
+        fullEvals = evalsOnRank
+        fullDvals = dvalsOnRank
+    # Calculate the global chemical potential from the evals and dvals collected from all subsystems
+    mu = get_mu(
+        mu,
+        fullEvals,
+        sdc.etemp,
+        int(sy.numel / 2),
+        dvals=fullDvals,
+        kB=8.61739e-5,
+        verb=True,
+    )
+
+    for partIndex in range(partIndex1, partIndex2):
+        numberOfCoreAtoms = len(parts[partIndex])
+        subSy = System(len(partsCoreHalo[partIndex]))
+        subSy.symbols = sy.symbols
+        tic = time.perf_counter()
+        subSy.coords, subSy.types = extract_subsystem(
+            sy.coords, sy.types, sy.symbols, partsCoreHalo[partIndex]
+        )
+        subSy.ncores = len(parts[partIndex])
+        toc = time.perf_counter()
+        print("Time for extract_subsystem", toc - tic, "(s)")
+
+        tic = time.perf_counter()
+
+        # Get some electronic structure elements for the sybsystem
+        # This could eventually be computed in the engine if no basis set is
+        # provided in the SEDACS input file.
+        subSy.norbs, subSy.orbs, subSy.hindex, subSy.numel, subSy.znuc = get_hindex(
+            sdc.orbs, subSy.symbols, subSy.types, verb=True
+        )
+
+        norbs = subSy.norbs  # We have as many orbitals as columns in the Hamiltonian
+        tmpArray = np.zeros(numberOfCoreAtoms)
+        tmpArray[:] = subSy.orbs[subSy.types[0:numberOfCoreAtoms]]
+
+        norbsInCore = np.sum(tmpArray)
+        nocc = int(float(subSy.numel) / 2.0)  # Get the total occupied orbitals
+        subSy.latticeVectors = sy.latticeVectors
 
         tic = time.perf_counter()
 
@@ -261,13 +346,14 @@ def get_adaptiveSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu):
             sy.coulvs, ewald_e = get_PME_coulvs(
                 charges, sy.hubbard_u, sy.coords, sy.types, sy.latticeVectors
             )
+
         fullGraphRho, charges, subSysOnRank, mu = get_singlePoint_charges(
             sdc, eng, rank, numranks, comm, parts, partsCoreHalo, sy, hindex, gscf, mu
         )
         # print("Collected charges", charges)
 
         scfError, charges, chargesOld, chargesIn, chargesOut = diis_mix(
-            charges, chargesOld, chargesIn, chargesOut, gscf, verb=True
+            charges, chargesOld, chargesIn, chargesOut, gscf, verb=False
         )
         # scfError,charges,chargesOld = linear_mix(0.25,charges,chargesOld,gscf)
         # if gscf == 0:
@@ -275,7 +361,8 @@ def get_adaptiveSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu):
 
         # print_graph(fullGraphRho)
         # fullGraph = add_graphs(fullGraphRho, graphNL)
-        fullGraph = multiply_graphs(fullGraphRho, graphNL)
+        #fullGraph = multiply_graphs(fullGraphRho, graphNL)
+        fullGraph = multiply_graphs(fullGraphRho, fullGraph)
         # with open('graphNL.pkl', 'wb') as f:
         #     pickle.dump(graphNL, f)
         # with open('fullGraphRho.pkl', 'wb') as f:

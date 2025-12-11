@@ -6,7 +6,7 @@ optimization"""
 import sys
 
 import numpy as np
-from sedacs.driver.graph_adaptive_scf_sp2 import get_adaptiveSCFDM
+from sedacs.driver.graph_adaptive_scf import get_adaptiveSCFDM
 from sedacs.driver.init import get_args, init
 from proxies.python.proxy_global import bring_tbparams
 import sedacs.globals as gl
@@ -32,7 +32,8 @@ sy.hubbard_u = Hubbard_U
 
 # Perform a graph-adaptive calculation of the density matrix
 mu = 0.0
-graphDH, sy.charges, mu, parts, partsCoreHalo, subSysOnRank = get_adaptiveSCFDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu)
+graphDH, sy.charges, mu, parts, partsCoreHalo, subSysOnRank = get_adaptiveSCFDM(
+    sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu)
 
 
 
