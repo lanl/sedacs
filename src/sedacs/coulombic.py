@@ -8,7 +8,6 @@ Some functions to compute Coulombic interactions
 from sedacs.message import *
 from sedacs.interface_modules import build_coul_ham_module
 from sedacs.ewald import calculate_PME_ewald
-from sedacs.ewald import init_PME_data, calculate_alpha_and_num_grids
 from sedacs.neighbor_list import NeighborState
 import numpy as np
 import torch
@@ -169,10 +168,6 @@ def get_PME_coulvs(
         item.to(device).to(dtype) if torch.is_tensor(item) else item
         for item in PME_data
     )
-    # alpha, grid_dimensions = calculate_alpha_and_num_grids(
-    #         lattice_vecs, cutoff, t_err
-    #     )
-    # PME_data = init_PME_data(grid_dimensions, lattice_vecs, alpha, PME_order)
     
     #torch.cuda.synchronize()
     nvtx.pop_range("Ewald Summation")

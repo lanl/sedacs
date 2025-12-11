@@ -6,7 +6,8 @@ Some graph functions
 import sys
 
 import mpi4py.MPI as MPI
-from numba import njit, prange
+from sedacs.mpi import collect_and_sum_matrices_float
+from numba import njit
 import numpy as np
 import torch
 import nvtx
@@ -329,6 +330,8 @@ def collect_graph_from_rho(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos,
         k = nbrs.size
         if k > maxDeg:
             raise ValueError(f"Max Degree parameter is too small: {maxDeg} (< {k}).")
+        if len(existing) > k:
+            raise ValueError("Existing degree larger than new degree, something went wrong.")
 
         # Fill graph row ii: header then neighbors (ascending by construction of np.unique)
         graph[ii, 0] = k
@@ -727,7 +730,10 @@ def symmetrize_graph(graph):
                 seen[src] = i
                 cnt += 1
         sym_deg[i] = cnt
-        # Assumption per user: cnt <= maxDeg (no checks/clamps)
+    # Check max degree constraint
+    for i in range(nnodes):
+        if sym_deg[i] > maxDeg:
+            raise ValueError("Symmetrized graph has larger degree than original maxDeg")
 
     # ----- Allocate output with original maxDeg (no resize) -----
     sym_graph = np.full((nnodes, maxDeg + 1), -1, dtype=graph.dtype)
@@ -1010,10 +1016,10 @@ def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos
             weights[graph[ii, 1:graph[ii, 0] + 1]] = thresh
         # Assign the weights
         weights[indices] += SD[:, i]
-        # Vectorized selection of candidates (keep the same order as `indices`)
-        mask = (indices != ii) & (weights[indices] >= thresh)
-        selected = indices[mask]
-        k = selected.size
+        # Vectorized selection of candidates above the threshold and not including self loop
+        selected = np.where(weights >= thresh)[0]
+        # selected = selected[selected != ii]
+        k = len(selected)
 
         # Degree guard 
         if k > maxDeg:
@@ -1078,6 +1084,8 @@ def compute_added(G1, G2, NNZ1, NNZ2, nnodes, maxToAddRemove=100):
             if v[b] == 0:
                 G_added[i, k] = b
                 k += 1
+            if k > maxToAddRemove:
+                break
 
         N_added[i] = k
 
@@ -1136,6 +1144,8 @@ def compute_removed(G1, G2, NNZ1, NNZ2, nnodes, maxToAddRemove=100):
             if v[b] == 0:
                 G_removed[i, k] = b
                 k += 1
+            if k > maxToAddRemove:
+                break
 
         N_removed[i] = k
 
@@ -1148,7 +1158,7 @@ def compute_removed(G1, G2, NNZ1, NNZ2, nnodes, maxToAddRemove=100):
     return G_removed, N_removed
 
 # Use G_removed and G_added to update from G1 to G2
-@njit(parallel=True, nogil=True)
+@njit
 def update_graph(G1, NNZ1, G_removed, N_removed, G_added, N_added):
     """
     Update G1 by removing neighbors in G_removed and adding neighbors in G_added.
@@ -1175,7 +1185,7 @@ def update_graph(G1, NNZ1, G_removed, N_removed, G_added, N_added):
     G_updated = np.full((N, maxDeg + 1), -1, dtype=G1.dtype)
     NNZ_updated = np.zeros(N, dtype=np.int64)
 
-    for i in prange(N):
+    for i in range(N):
         # thread-local marker vector (safe in parallel)
         v = np.zeros(N, dtype=np.uint8)
 
@@ -1216,20 +1226,33 @@ def update_graph(G1, NNZ1, G_removed, N_removed, G_added, N_added):
 
 def graph_diff_and_update(prevGraph, graphOnRank, partsOnRank, comm, maxToAddRemove=100):
     nnodes = prevGraph.shape[0]
+    
     # Initialize added, removed, and updated graph
     G_added = np.zeros((nnodes, maxToAddRemove + 1), dtype=prevGraph.dtype)
     G_removed = np.zeros((nnodes, maxToAddRemove + 1), dtype=prevGraph.dtype)
     
     # Get the local graph on this rank
     localGraph = prevGraph[partsOnRank]
-    localGraph_new = graphOnRank[partsOnRank]
+    localGraph_new = graphOnRank[partsOnRank].copy()
 
     # Compute added and removed neighbors
     G_added[partsOnRank, 1:], G_added[partsOnRank, 0] = compute_added(localGraph[:, 1:], localGraph_new[:, 1:], localGraph[:, 0], localGraph_new[:, 0], nnodes, maxToAddRemove=maxToAddRemove)
     G_removed[partsOnRank, 1:], G_removed[partsOnRank, 0] = compute_removed(localGraph[:, 1:], localGraph_new[:, 1:], localGraph[:, 0], localGraph_new[:, 0], nnodes, maxToAddRemove=maxToAddRemove)
 
+    local_full_collection = False
     if max(G_added[:,0]) > maxToAddRemove or max(G_removed[:,0]) > maxToAddRemove:
-        raise ValueError("maxToAddRemove is too small to accommodate the number of added/removed neighbors.")
+        #raise ValueError("maxToAddRemove is too small to accommodate the number of added/removed neighbors.")
+        print("maxToAddRemove is too small to accommodate the number of added/removed neighbors.\n")
+        print("Do full collection instead\n")
+        local_full_collection = True
+    
+    # Use logical OR reduction to see if ANY rank has True
+    global_full_collection = comm.allreduce(1 if local_full_collection else 0, op=MPI.SUM) > 0 
+
+    if global_full_collection:
+        print("Collecting the full graph")  
+        fullGraph = collect_and_sum_matrices_float(graphOnRank, comm)
+        return fullGraph
 
     # MPI Allreduce to gather added and removed neighbors across all ranks
     comm.Allreduce(MPI.IN_PLACE, G_added, op=MPI.SUM)

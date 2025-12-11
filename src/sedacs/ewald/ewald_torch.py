@@ -399,8 +399,11 @@ def ewald_energy(
     I: torch.Tensor,
     alpha: float,
     cutoff: float,
+    hubbard_u: torch.Tensor,
+    atomtypes: torch.Tensor,
     calculate_forces: int,
     calculate_dq: int = 0,
+    screening: int = 1,
 ) -> Tuple[float, float, Optional[torch.Tensor], Optional[torch.Tensor]]:
     """
     Computes the Ewald sum energy and forces in a distributed way.
@@ -447,10 +450,20 @@ def ewald_energy(
 
     device = positions.device
     N = positions.shape[1]
-    my_e_real, my_f_real, my_dq_real = ewald_real(nbr_inds, nbr_disp_vecs, 
-                                                nbr_dists, charges, alpha, 
-                                                cutoff,
-                                                calculate_forces, calculate_dq)
+    if screening:
+        my_e_real, my_f_real, my_dq_real = ewald_real_screening(nbr_inds, nbr_disp_vecs, 
+                                                    nbr_dists, charges, hubbard_u, atomtypes, alpha, 
+                                                    cutoff,
+                                                    calculate_forces, calculate_dq)
+        
+        if my_f_real is not None and my_f_real.device.type == "cpu":
+             my_f_real = my_f_real.T.contiguous() 
+
+    else:
+        my_e_real, my_f_real, my_dq_real = ewald_real(nbr_inds, nbr_disp_vecs, 
+                                                    nbr_dists, charges, alpha, 
+                                                    cutoff,
+                                                    calculate_forces, calculate_dq)
     vol = torch.det(cell)
     alpha = torch.tensor(alpha)
     my_r_vals, my_i_vals = ewald_kspace_part1(positions, charges, kvecs) 

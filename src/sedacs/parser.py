@@ -65,7 +65,7 @@ class Input:
         ## Force error for Ewald summation
         self.ewaldErr = self.get_a_real("EwaldErr=", 5e-4, keyVals, validKeys, verb)
         ## PME Order
-        self.pmeOrder = self.get_an_int("PMEOrder=", 6, keyVals, validKeys, verb)
+        self.pmeOrder = self.get_an_int("PMEOrder=", 5, keyVals, validKeys, verb)
         ## Alpha for DM mixing. DM_new = (1-alpha)*DM_old + alpha*DM_new
         self.alpha = self.get_a_real("Alpha=", 0.2, keyVals, validKeys, verb)
         ## A threshold read from input
@@ -169,7 +169,7 @@ class Input:
             if err:
                 print("\n!!!ERROR: Invalid keyword", key)
                 print("\nValid keywords are the following:", validKeys)
-                break
+                raise ValueError("\n!!!ERROR: Invalid keyword")
 
         return err
 

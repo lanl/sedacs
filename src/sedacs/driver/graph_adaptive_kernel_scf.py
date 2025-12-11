@@ -443,7 +443,7 @@ def get_adaptive_KernelSCFDM(
         nvtx.pop_range("get_adaptiveSCFDM")
         # print("Collected charges", charges)
         scfError = np.linalg.norm(charges - chargesOld) / np.sqrt(sy.nats)
-        if (not kernel_scf) or scfError > 0.1:
+        if (not kernel_scf) or scfError > 0.01:
             scfError, charges, chargesOld, chargesIn, chargesOut = diis_mix(
                 charges, chargesOld, chargesIn, chargesOut, gscf, verb=False
             )
@@ -452,20 +452,22 @@ def get_adaptive_KernelSCFDM(
         #    scfError = sy.numel
         else:
             if kernel == 0:
-                print("start building the full kernel...")
+                print("start building the full kernel...", flush=True)
                 nvtx.push_range("get_kernel_byParts", color="red", domain="get_adaptiveSCFDM")
                 get_kernel_byParts(
                     sdc, rank, numranks, parts, partsCoreHalo, sy, mu=mu, identity=True, nbr_inds=sy.nl, disps=sy.nl_disps, dists=sy.nl_dists, alpha=sy.ewald_alpha, PME_data=sy.PME_data, device=device
                 )
                 nvtx.pop_range("get_adaptiveSCFDM")
-                syk = deepcopy(sy)
+                syk_ker_list = []
+                for i, subSy in enumerate(sy.subSy_list):
+                    syk_ker_list.append(subSy.ker.clone())
                 # KRes = apply_kernel_byParts(
                 #     charges, chargesOld, sdc, rank, numranks, comm, parts, sy
                 # )
                 kernel = 1
             else:
                 for i, subSy in enumerate(sy.subSy_list):
-                    subSy.ker = syk.subSy_list[i].ker.clone()
+                    subSy.ker = syk_ker_list[i]
             nvtx.push_range("rankN_update_byParts", color="purple", domain="get_adaptiveSCFDM")
             KRes = rankN_update_byParts(
                 torch.from_numpy(charges).to(device).to(dtype),

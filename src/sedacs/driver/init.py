@@ -159,31 +159,32 @@ def init(args):
     eng = comm.bcast(eng, root=0)
     sy = comm.bcast(sy, root=0)
     hindex = comm.bcast(hindex, root=0)
-
-    tic = time.perf_counter()
-    # if rank == 0:
-    coords_T = torch.from_numpy(sy.coords).to(args.device).T.contiguous()
+    
     lattice_vecs = torch.from_numpy(sy.latticeVectors).to(args.device)
+    coords_T = torch.from_numpy(sy.coords).to(args.device).T.contiguous()
     sy.nbr_state = NeighborState(
                         coords_T, lattice_vecs, None, sdc.coulcut, is_dense=True, buffer=sdc.rbuff, use_triton=False,
                     )
-    
     sy.nl_disps, sy.nl_dists, sy.nl = calculate_dist_dips(coords_T, sy.nbr_state)
-    if sdc.rcut < sdc.coulcut:
-        nl = torch.where(
-                (sy.nl_dists > sdc.rcut) | (sy.nl_dists == 0.0), -1, sy.nl
-                )
-    elif sdc.rcut == sdc.coulcut:
-        nl = sy.nl
-    else:
-        raise ValueError("rcut cannot be larger than coulcut!")
-    num_neighbors = torch.sum(nl != -1, dim=1)
-    nl = torch.cat((num_neighbors.unsqueeze(1), nl.sort(dim=1, descending=True)[0]), dim=1)
-    nl = nl.cpu().numpy()
     sy.nl = sy.nl.cpu()
     sy.nl_disps = sy.nl_disps.cpu()
     sy.nl_dists = sy.nl_dists.cpu()
     
+    if sdc.rcut < sdc.coulcut:
+        nl = torch.where(
+                (sy.nl_dists > sdc.rcut) | (sy.nl_dists == 0.0), -1, sy.nl
+                )
+        nl = nl.sort(dim=1, descending=True)[0]
+        nl = nl[:, : torch.max(torch.sum(nl != -1, dim=1))]
+    elif sdc.rcut == sdc.coulcut:
+        nl = sy.nl
+    else:
+        raise ValueError("rcut cannot be larger than coulcut!")
+    
+    num_neighbors = torch.sum(nl != -1, dim=1)
+    nl = torch.cat((num_neighbors.unsqueeze(1), nl.sort(dim=1, descending=True)[0]), dim=1)
+    nl = nl.cpu().numpy()
+
     sy.ewald_alpha, grid_dimensions = calculate_alpha_and_num_grids(
             lattice_vecs, sdc.coulcut, sdc.ewaldErr
         )

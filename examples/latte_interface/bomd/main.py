@@ -60,10 +60,10 @@ def main(args):
     sdc.verb = False
     # Get device
     device = args.device
-    #if device == "cuda":
-    #    local_rank = rank % torch.cuda.device_count()
-    #    device = f"cuda:{local_rank}"
-    #    torch.cuda.set_device(local_rank)
+    if device == "cuda":
+        local_rank = rank % torch.cuda.device_count()
+        device = f"cuda:{local_rank}"
+        torch.cuda.set_device(local_rank)
     # Chemical potential
     mu = args.mu
     # Degree of localization for adaptive halo expansion
@@ -84,7 +84,7 @@ def main(args):
     element_type = np.array(sy.symbols)[sy.types]
     # Load the LATTE tight-binding parameters
     latte_tbparams = read_latte_tbparams(
-        "../../../parameters/latte/TBparam/electrons.dat"
+       "../../../parameters/latte/TBparam/electrons.dat"
     )
     # Get the Hubbard U values for each atom in the system
     Hubbard_U = [latte_tbparams[symbol]["HubbardU"] for symbol in sy.symbols]
@@ -163,9 +163,27 @@ def main(args):
     V = torch.sqrt(Temperature / KE2T / MVV2KE / Mnuc).unsqueeze(1) * torch.randn_like(
         coords
     )
-    # Compute and remvoe center of mass velocity
+    # Compute and remove center of mass velocity
     COM_V = torch.sum(V.T * Mnuc, axis=1) / Mnuc.sum()
     V = V - COM_V
+    # Remove net angular momentum
+    R_center = torch.sum(coords.T * Mnuc, axis=1) / Mnuc.sum()
+    R_shift = coords - R_center.unsqueeze(0)
+    L = torch.sum(
+        torch.linalg.cross(R_shift, Mnuc.unsqueeze(1) * V), dim=0
+    )
+    # vectorized calculation of inertia tensor
+    I = torch.zeros((3, 3), dtype=torch.double)
+    I[0, 0] = torch.sum(Mnuc * (R_shift[:, 1] ** 2 + R_shift[:, 2] ** 2))
+    I[1, 1] = torch.sum(Mnuc * (R_shift[:, 0] ** 2 + R_shift[:, 2] ** 2))
+    I[2, 2] = torch.sum(Mnuc * (R_shift[:, 0] ** 2 + R_shift[:, 1] ** 2))
+    I[0, 1] = I[1, 0] = -torch.sum(Mnuc * R_shift[:, 0] * R_shift[:, 1])
+    I[0, 2] = I[2, 0] = -torch.sum(Mnuc * R_shift[:, 0] * R_shift[:, 2])
+    I[1, 2] = I[2, 1] = -torch.sum(Mnuc * R_shift[:, 1] * R_shift[:, 2])
+    I_inv = torch.linalg.inv(I)
+    # vectorized calculation of angular velocity
+    omega = I_inv @ L
+    V = V - torch.linalg.cross(omega.unsqueeze(0), coords - R_center.unsqueeze(0))
 
     # Record unwrapped coordsinates
     unwrap_coords = coords.clone().detach().double()
@@ -223,15 +241,17 @@ def main(args):
         if use_kernel:
             if MD_step == 0 or renew == 1:
                 get_kernel_byParts(sdc, rank, numranks, parts, partsCoreHalo, sy, mu, device=device) 
-                syk = deepcopy(sy)
+                syk_ker_list = []
+                for i, subSy in enumerate(sy.subSy_list):
+                    syk_ker_list.append(subSy.ker.clone())
                 dn2dt2 = 0
                 renew = 0
             if MD_step > 0:
                 for i, subSy in enumerate(sy.subSy_list):
-                    subSy.ker = deepcopy(syk.subSy_list[i].ker)
+                    subSy.ker = syk_ker_list[i] 
                 start_time = time.perf_counter()
                 dn2dt2 = -rankN_update_byParts(
-                        q.to(device), n_0.to(device), 12, sdc, rank, numranks, comm, parts, partsCoreHalo, sy, mu=mu, device=device
+                        q.to(device), n_0.to(device), 6, sdc, rank, numranks, comm, parts, partsCoreHalo, sy, mu=mu, device=device
                         )
                 end_time = time.perf_counter()
                 kernel_update_time += (end_time - start_time)
@@ -276,7 +296,7 @@ def main(args):
         sy.coords = coords.numpy()
         nvtx.push_range("neighbor list update", color="purple", domain="main")
         # Update neighbor list
-        coords_T = torch.from_numpy(sy.coords).to(device).T.contiguous()
+        coords_T = torch.from_numpy(sy.coords).to(args.device).T.contiguous()
         sy.nbr_state.update(coords_T)
         sy.nl_disps, sy.nl_dists, sy.nl = calculate_dist_dips(coords_T, sy.nbr_state)
         sy.nl = sy.nl.cpu()
@@ -290,7 +310,7 @@ def main(args):
                 sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu, alpha=localization, graphweights=graphweights, device=device,
             )
 
-        if MD_step % 100 == 99:
+        if Time % 100 == 99:
             if rank == 0:
                 parts = graph_partition(
                     sdc, eng, graphDH, sdc.partitionType, sdc.nparts, sy.coords, graphweights=None, verb=True
@@ -299,6 +319,41 @@ def main(args):
 
             renew = 1
             
+        if renew:
+            njumps = 1
+            partsCoreHalo = []
+            numCores = []
+            total_corehalo = 0
+            max_corehalo = 0
+            min_corehalo = 100000
+            for i in range(sdc.nparts):
+                coreHalo, nc, nh = get_coreHaloIndices(parts[i], graphDH, njumps)
+                partsCoreHalo.append(coreHalo)
+                numCores.append(nc)
+                total_corehalo += nh
+                max_corehalo = max(max_corehalo, nh) 
+                min_corehalo = min(min_corehalo, nh) 
+                print("MD_step, core,halo size:", MD_step, i, "=", nc, nh)
+            graphDH, sy.charges, EPOT, entropy, FTOT, mu, parts, partsCoreHalo, subSysOnRank = (
+                get_adaptive_sp_energy_forces(
+                    sdc,
+                    eng,
+                    comm,
+                    rank,
+                    numranks,
+                    sy,
+                    parts,
+                    partsCoreHalo,
+                    hindex,
+                    graphDH,
+                    mu,
+                    alpha=localization,
+                    shadow_md=shadow_md,
+                    device=device,
+                    gate=False,
+                )
+            )
+
         njumps = 1
         partsCoreHalo = []
         numCores = []

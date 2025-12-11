@@ -373,7 +373,7 @@ def get_singlePoint_energy_forces(
 
 
 def get_adaptive_sp_energy_forces(
-    sdc, eng, comm, rank, numranks, sy, parts, partsCoreHalo, hindex, graph, mu, alpha=0.7, shadow_md=True, device="cuda", write_parts=False
+    sdc, eng, comm, rank, numranks, sy, parts, partsCoreHalo, hindex, graph, mu, alpha=0.7, shadow_md=True, device="cuda", write_parts=False,
 ):
     nvtx.push_range("SP energy forces", color="blue", domain="get_adaptiveSCFDM")
     charges = sy.charges
@@ -453,6 +453,8 @@ def get_adaptive_sp_energy_forces(
     #        pickle.dump(forces, f)
         # with open('energy.log', 'a') as f:
         #     f.write(str(band_energy) + ',' + str(ecoul) + '\n')
+        # with open('charges.log', 'a') as f:
+        #     f.write(str(sum(charges)) + '\n')
     nvtx.pop_range("get_adaptiveSCFDM")
 
     return fullGraph, charges, energy, entropy, forces, mu, parts, partsCoreHalo, subSysOnRank
