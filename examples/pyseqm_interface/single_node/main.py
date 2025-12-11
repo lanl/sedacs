@@ -7,9 +7,17 @@ import sys
 import os
 
 # ADD PROXYA_PATH to PYTHONPATH
-sedacs_base = importlib.util.find_spec("sedacs").submodule_search_locations[0]
-target_path = os.path.abspath(os.path.join(sedacs_base, "../../"))
-sys.path.append(target_path)
+# sedacs_base = importlib.util.find_spec("sedacs").submodule_search_locations[0]
+# target_path = os.path.abspath(os.path.join(sedacs_base, "../../"))
+# sys.path.append(target_path)
+
+# ADD PROXYA_PATH to PYTHONPATH
+proxya_path = "/home/maxim/Projects/SEDACS_github/sedacs"
+sys.path.append(proxya_path)
+
+### ADD PATH TO PYSEQM ###
+pyseqm_path = "/home/maxim/Projects/git2/PYSEQM_dev/"
+sys.path.insert(1, pyseqm_path)
 
 DTYPE = torch.float64
 torch.set_default_dtype(DTYPE)

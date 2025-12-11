@@ -96,7 +96,7 @@ def get_hamiltonian(sdc, eng, coords, types, symbols,
         else:
             with torch.no_grad():
                 molSub = get_molecule_pyseqm(sdc, molecule_whole.coordinates[:,partsCoreHaloIndex], symbols, types, device=P_contr.device)[0]
-        M_sub, _, __, ___ = hcore(molSub, doTETCI=False) # off-diagonal h1elec
+        M_sub, _, __, ___, _, _ = hcore(molSub, doTETCI=False) # off-diagonal h1elec
         del _, __, ___
         ham_timing['h1elNonDi'] = time.time() - tic
         #print("t: h1elNonDi {:>7.3f} |".format(time.time() - tic), end=" ")
@@ -213,7 +213,7 @@ def get_hamiltonian(sdc, eng, coords, types, symbols,
             #print("idxi&idxj {:>7.3f} |".format(time.time() - tic), end=" ")
 
             tic = time.time() # compute 2c2e and diagonal h1elec
-            coulInts_test, e1b, e2a, _, _ = TETCI(molecule_whole.const, iii, jjj,
+            coulInts_test, e1b, e2a, _, _, _, _ = TETCI(molecule_whole.const, iii, jjj,
                     molecule_whole.Z[iii], molecule_whole.Z[jjj], x_ij, r_ij, molecule_whole.Z,\
                     molecule_whole.parameters['zeta_s'], molecule_whole.parameters['zeta_p'], molecule_whole.parameters['zeta_d'],\
                     molecule_whole.parameters['s_orb_exp_tail'], molecule_whole.parameters['p_orb_exp_tail'], molecule_whole.parameters['d_orb_exp_tail'],\

@@ -19,7 +19,7 @@ dependencies = [
     "numpy>=1",
     "torch>=2",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
 classifiers = [
@@ -49,19 +49,19 @@ graph = [
     "metis>=0.2a5"
 ]
 
-[build-system]
-requires = ["scikit-build-core","setuptools", "wheel"]
-build-backend = "scikit_build_core.build"
+#[build-system]
+#requires = ["scikit-build-core","setuptools", "wheel"]
+#build-backend = "scikit_build_core.build"
 
-[tool.scikit-build]
-minimum-version = "0.5"
-cmake.source-dir = "src/sedacs/gpu/nvda/"
-cmake.args = [
-  "-DCMAKE_CXX_COMPILER=nvc++",
-  "-DCMAKE_CXX_FLAGS=-O3 -cuda -gpu=cc89 -acc=gpu -Minfo=accel -fPIC --diag_suppress=bad_macro_redef --diag_suppress=cuda_compile",
-  "-DCMAKE_VERBOSE_MAKEFILE=ON"
-]
-build-dir = "src/sedacs/gpu/nvda/build"
+#[tool.scikit-build]
+#minimum-version = "0.5"
+#cmake.source-dir = "src/sedacs/gpu/nvda/"
+#cmake.args = [
+#  "-DCMAKE_CXX_COMPILER=nvc++",
+#  "-DCMAKE_CXX_FLAGS=-O3 -cuda -gpu=cc89 -acc=gpu -Minfo=accel -fPIC --diag_suppress=bad_macro_redef --diag_suppress=cuda_compile",
+#  "-DCMAKE_VERBOSE_MAKEFILE=ON"
+#]
+#build-dir = "src/sedacs/gpu/nvda/build"
 
 
 [tool.pdm]
