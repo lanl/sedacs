@@ -59,11 +59,12 @@ class Input:
         self.coulcut = self.get_a_real("Coulcut=", 5.0, keyVals, validKeys, verb)
         ## Check cutoff size
         if self.rcut > self.coulcut:
-            raise ValueError("\n!!!ERROR: Rcut cannot be larger than Coulcut")
+            print("\n!!!ERROR: Rcut cannot be larger than Coulcut")
+            sys.exit(0)
         ## Buffer size for neighbor list
         self.rbuff = self.get_a_real("Rbuff=", 1.0, keyVals, validKeys, verb)
         ## Force error for Ewald summation
-        self.ewaldErr = self.get_a_real("EwaldErr=", 5e-4, keyVals, validKeys, verb)
+        self.ewaldErr = self.get_a_real("EwaldErr=", 1e-5, keyVals, validKeys, verb)
         ## PME Order
         self.pmeOrder = self.get_an_int("PMEOrder=", 5, keyVals, validKeys, verb)
         ## Alpha for DM mixing. DM_new = (1-alpha)*DM_old + alpha*DM_new
@@ -169,7 +170,7 @@ class Input:
             if err:
                 print("\n!!!ERROR: Invalid keyword", key)
                 print("\nValid keywords are the following:", validKeys)
-                raise ValueError("\n!!!ERROR: Invalid keyword")
+                break
 
         return err
 
