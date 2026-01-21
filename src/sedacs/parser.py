@@ -63,6 +63,8 @@ class Input:
             sys.exit(0)
         ## Buffer size for neighbor list
         self.rbuff = self.get_a_real("Rbuff=", 1.0, keyVals, validKeys, verb)
+        ## Enable SEDACS Coulomb solver
+        self.coulsolv = self.get_a_real("Coulsolv=", 1, keyVals, validKeys, verb)
         ## Force error for Ewald summation
         self.ewaldErr = self.get_a_real("EwaldErr=", 1e-5, keyVals, validKeys, verb)
         ## PME Order

@@ -185,14 +185,18 @@ def init(args):
     nl = torch.cat((num_neighbors.unsqueeze(1), nl.sort(dim=1, descending=True)[0]), dim=1)
     nl = nl.cpu().numpy()
 
-    sy.ewald_alpha, grid_dimensions = calculate_alpha_and_num_grids(
-            lattice_vecs, sdc.coulcut, sdc.ewaldErr
+    if sdc.coulsolv:
+        sy.ewald_alpha, grid_dimensions = calculate_alpha_and_num_grids(
+                lattice_vecs, sdc.coulcut, sdc.ewaldErr
+            )
+        PME_data = init_PME_data(grid_dimensions, lattice_vecs, sy.ewald_alpha, sdc.pmeOrder)
+        sy.PME_data = tuple(
+            item.cpu() if torch.is_tensor(item) else item
+            for item in PME_data
         )
-    PME_data = init_PME_data(grid_dimensions, lattice_vecs, sy.ewald_alpha, sdc.pmeOrder)
-    sy.PME_data = tuple(
-        item.cpu() if torch.is_tensor(item) else item
-        for item in PME_data
-    )
+    else:
+        print("SEDACS Coulomb Solver Disabled")
+
     # if(sy.nats > 100): 
     #     if args.use_torch:
     #         nl = build_nlist_torch(sy.coords, sy.latticeVectors, sdc.rcut, rank=rank, numranks=numranks, verb=False)

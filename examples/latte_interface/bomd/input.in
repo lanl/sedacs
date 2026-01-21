@@ -18,4 +18,5 @@ ElectronicTemperature= 1000
 MuCalculationType=  #FromParts, Dynamical, None
 Orbitals= {"H":1,"O":4} #This has to be know for each engine
 NumAdaptiveIter= 100 #Number of graph adaptive iterations
+Coulsolv= 0 
 Engine= {"Name":"LATTE","InterfaceType":"Module","Path":"/home/cnegre/sedacs-Qi/proxies/python/","Executable":"/home/cnegre/","RhoSolverMethod":"Diag","Accelerator":"No","AcceleratorPath":"/home/finkeljo/vescratch/sedacs-gpmdsp2/src/sedacs/gpu/nvda"} #The name of the external code
