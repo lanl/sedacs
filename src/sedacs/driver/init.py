@@ -21,6 +21,8 @@ from sedacs.ewald import init_PME_data, calculate_alpha_and_num_grids
 #from seqm.seqm_functions.pack import pack
 import sedacs.globals 
 import os
+import subprocess
+from pathlib import Path
 
 
 MPI = None
@@ -256,6 +258,15 @@ def init(args):
     if "Proxy" in eng.name:
         #Initialize proxy/guest code
         init_proxy(sy.symbols,sy.orbs)
+    elif eng.name == "LATTE":
+        latte_root = subprocess.check_output(
+            ["spack", "location", "-i", "latte"],
+            text=True
+        ).strip()
+
+        latte_lib = str(Path(latte_root) / "lib")
+
+        os.environ["LATTE_PATH"] = latte_lib
     eng.up = True
 
     return sdc, eng, comm, rank, numranks, sy, hindex, fullGraph, eweights

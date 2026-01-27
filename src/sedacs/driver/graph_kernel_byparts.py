@@ -772,9 +772,6 @@ def rankN_update_byParts(
         if rank == 0:
             print("Error Rank-Update", error.item(), irank, "\n")
     nvtx.pop_range("rankN_update_byParts")
-    if rank == 0:
-        with open("rank.log", "a") as f:
-            f.write(f"number of rank: {irank + 1}\n")
     return KK0Res
 
 
