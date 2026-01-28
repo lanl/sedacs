@@ -1,0 +1,10 @@
+numpy 
+scipy
+torch 
+triton==3.2.0
+nvtx
+matplotlib
+metis
+numba
+mpi4py
+toml

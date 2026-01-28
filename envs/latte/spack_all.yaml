@@ -1,0 +1,30 @@
+# This is a Spack Environment file.
+#
+# It describes a set of packages to be installed, along with
+# configuration settings.
+spack:
+  # add package specs to the `specs` list
+  specs:
+  - gcc
+  - python
+  - cuda+allow-unsupported-compilers
+  - openmpi@4.1.6 schedulers=auto
+  - nvhpc
+  - openblas
+  - bml@master~magma #+magma+cusolver to enable latte with gpu 
+  - qmd-progress@spack~benchmarks
+  - py-nvtx
+  - py-numpy
+  - py-scipy
+  - py-torch+cuda~mkldnn~valgrind cuda_arch=89 # adjust according to your gpu platform 
+  - py-triton@3.2.0
+  - py-matplotlib
+  - py-metis
+  - py-numba
+  - py-mpi4py
+  - py-toml
+  - latte@=lattepy+interface+mpi+progress 
+  - py-pip
+  view: true
+  concretizer:
+    unify: true

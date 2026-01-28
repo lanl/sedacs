@@ -360,7 +360,7 @@ def main(args):
 if __name__ == "__main__":
     # Pass arguments from command line
     parser = argparse.ArgumentParser(
-        description="Regular Born-Oppenheimer MD with sedacs"
+        description="Extended-Lagrangian Born-Oppenheimer molecular dynamics with SEDACS-LATTE interface"
     )
     parser.add_argument(
         "--device", help="CPU/GPU device", type=str, default="cuda",

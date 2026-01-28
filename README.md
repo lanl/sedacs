@@ -1,4 +1,4 @@
-# sedacs
+# SEDACS
 
 Scalable Ecosystem, Driver, and Analyzer for Complex Chemistry Simulations (SEDACS) enables 
 massively parallel atomistic simulations that can seamlessly integrate with a diverse
@@ -18,24 +18,54 @@ that uses AI-hardware accelerators.
 Our target customer is a Computational Chemist domain expert working on complex materials systems 
 or developing  new quantum capabilities that can easily be deployed at scale. 
 
-We hence provide transparent implementations that closely follow a “white-board” physics and mathematics presentation. The threshold to understand and work with this codebase for a domain
+We hence provide transparent implementations that closely follow a "white-board" physics and mathematics presentation. The threshold to understand and work with this codebase for a domain
 expert is purposely kept low. 
 
-
+---
 
 ## Installation
 
-### In Mac conda environment with MPS acceleration
+### Setup SEDACS–LATTE Interface
 
+#### For rapid deployment using lighter-weight Spack + pip setup:
+
+Install Spack
 ```shell
-conda create -n sedacs  pytorch::pytorch torchvision torchaudio openmpi mpi4py scipy jupyter nb_conda_kernels python=3.10 -c pytorch
+git clone --depth=2 https://github.com/spack/spack.git
+. ~/spack/share/spack/setup-env.sh # add this to your .bashrc to initialize Spack
 ```
-
-### In Linux conda environment with CUDA acceleration
-
+Clone SEDACS
 ```shell
-conda create -n sedacs pytorch torchvision torchaudio pytorch-cuda=11.8 openmpi mpi4py scipy jupyter nb_conda_kernels python=3.10 -c pytorch -c nvidia
+git clone https://github.com/lanl/sedacs.git
 ```
+Setting up spack environment using spack.yaml provided in this repo
+```shell
+spack env create sedacs sedacs/envs/latte/spack.yaml
+spack env activate -p sedacs
+spack concretize -f
+spack install
+```
+Install required python dependencies using pip from spack
+```shell
+pip install -r sedacs/envs/latte/requirements.txt
+cd sedacs
+```
+Install SEDACS in editable mode
+```shell
+pip install -e .
+```
+#### Full Spack build:
+
+Build and install the complete SEDACS–LATTE stack using Spack:
+```shell
+spack env create sedacs sedacs/envs/latte/spack_all.yaml
+spack env activate -p sedacs
+spack concretize -f
+spack install
+```
+This approach enables platform-specific optimization and can improve the performance of the SEDACS–LATTE interface on tailored HPC systems. Note that minor modifications to `spack_all.yaml` may be required to resolve dependency or compiler issues on different architectures and platforms.
+
+---
 
 ## Folder structure
 
@@ -75,6 +105,8 @@ to develop SEDACS.
 ### `driver`
 
 Scripts to exercise the code.
+
+---
 
 # License O# (O4732)
 
