@@ -12,7 +12,7 @@ spack:
   - qmd-progress@6b03dfca14428a9c479d1e0e96453ee62758644c~benchmarks
   - latte@=lattepy+interface+mpi+progress
   - py-pip
-  - python@3.13.2
+  - python@3.12.12
   view: true
   concretizer:
     unify: true
