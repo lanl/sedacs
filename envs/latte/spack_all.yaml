@@ -12,7 +12,7 @@ spack:
   - nvhpc
   - openblas
   - bml@master~magma #+magma+cusolver to enable latte with gpu 
-  - qmd-progress@spack~benchmarks
+  - qmd-progress@6b03dfca14428a9c479d1e0e96453ee62758644c~benchmarks
   - py-nvtx
   - py-numpy
   - py-scipy
