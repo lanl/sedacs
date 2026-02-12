@@ -5,6 +5,8 @@ using LinearAlgebra
 
 ### Vanilla SP2, inferred for a specific chemical potential
 
+# this uses the old definition of SP2 iteration selection, where the model solves for a 
+# μ_i at each layer such that y_i(μ_i) = 0.5
 function calc_μ_sp2(b::Vector{Bool})
     prod = 1.0
     y = 0.5
@@ -20,6 +22,8 @@ function calc_μ_sp2(b::Vector{Bool})
     return (y, 4prod)
 end
 
+# gives the sequence of choices between squaring and 2x-x^2 for each layer. 
+# if μ_i < μ, we pick squaring for the next layer. 
 function build_sp2(μ, nlayers)
     b = Bool[]
     for _ in 1:nlayers
@@ -29,6 +33,8 @@ function build_sp2(μ, nlayers)
     return b
 end
 
+# returns the embedding of SP2 into MLSP2, i.e. each layer is formulated as a quardratic
+# instead of a choice between two functions.
 function params_from_sp2(; μ, β, nlayers)
     θ = zeros(4, nlayers)
 
@@ -54,7 +60,7 @@ function params_from_sp2(; μ, β, nlayers)
     return θ
 end
 
-### Model definition and Jacobian
+### Model instantiation, initial parameters given by SP2
 
 β = 54
 μ = 0.25
@@ -66,6 +72,7 @@ nlayers = 15
 X = collect(range(0, 1, length=1000))
 Y = @. 1 - fermi_fn(X; β, μ)
 
+# flattens the model parameters into a vector
 function flatten(theta, d_)
     n = size(theta,1)
     d_index = n * (n + 1) ÷ 2 + n + 1
@@ -83,6 +90,7 @@ function flatten(theta, d_)
     return theta_vec
 end
 
+# recovers the model parameters in their original shape from their flattened form
 function recover(theta_vec, n)
     theta = zeros(eltype(theta_vec), n, n+1)
 
@@ -99,6 +107,14 @@ function recover(theta_vec, n)
     return (theta, d_)
 end
 
+# Boilerplate for "instantiating" a function that evaluates a MaxSP2 model given its flattened parameters
+# and the input, the form required by curve_fit.
+
+# This is done via function closure fixing the number of layers and the sign of the last layer.
+# I'm sure there's a way to read shapes without upsetting Enzyme.jl, but I'm not an expert on it.
+# The sign of the last layer is necessary because of the way the embedding was originally written
+# with square roots, although the form in the paper now shows a cleaner version that completes
+# the square, and requires an additional scalar parameter instead of an additional boolean one (sign s).
 function generate_g(n,s)
     function g(theta_vec, x)
 
@@ -117,6 +133,7 @@ end
 
 model = generate_g(nlayers, sign(θ0[1, end]))
 
+# old version of MLSP2 -> MaxSP2 embedding requiring square roots and sign carrying.
 function convert_model(W)
 
     A1, B1, C1, D1  = (W[x,:] for x in 1:size(W,1))
@@ -139,31 +156,9 @@ function convert_model(W)
     return (A,B,D, theta, d_)
 end
 
+# compute the embedding of SP2 -> MaxSP2
 A_, B_, D_, theta, d_ = convert_model(reshape(θ0, 4, :))
-
-# println(A_)
-# println(B_)
-# println(D_)
-
 θ0_ = flatten(theta, d_)
-
-# println(θ0)
-# println(typeof(θ0))
-
-# function model(θ, X)
-#     θ = reshape(θ, 4, :)
-
-#     layer = 1
-#     Z = @. θ[4, layer] * X
-#     A = @. θ[1, layer] * X^2 + θ[2, layer] * X + θ[3, layer]
-
-#     for layer in 2:size(θ, 2)
-#         Z += @. θ[4, layer] * A
-#         A = @. θ[1, layer] * A^2 + θ[2, layer] * A + θ[3, layer]
-#     end
-#     Z += A
-#     return Z
-# end
 
 config = ForwardDiff.JacobianConfig(θ -> model(θ, X), θ0_)
 
@@ -172,12 +167,7 @@ function jac(θ, X)
     ForwardDiff.jacobian(θ -> model(θ, X), θ, config, check)
 end
 
-# function jac(θ, X)
-#     J = zeros(length(X), length(θ))
-#     ESP2.jacobian_inplace(J, θ, X)
-#     return J
-# end
-
+# time twice to confirm just in time compilation
 @time jac(θ0_, X)
 @time jac(θ0_, X)
 
@@ -190,11 +180,17 @@ prob = NonlinearCurveFitProblem(nonfn, θ0_, X, Y)
 θ_cf = sol_cf.u
 Y_cf = model(θ_cf, X)
 norm(Y - Y_cf) / sqrt(length(Y))
+
+# compares difference from original instantiation
 norm(θ0_ - θ_cf)
 
+# prints out the full model parameters as a vector
 @show sol_cf.u
 
+# shows RMSE norm and "spectral" norm (max deviation on what would be eigenvalues).
 @show norm(Y - Y_cf) / sqrt(length(Y))
+@show max(Y - Y_cf)
+
 
 ### LsqFit fitting, slower by > 10x 
 
