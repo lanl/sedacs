@@ -35,6 +35,24 @@ It is designed to handle finite systems. Therefore, structures are placed in box
    mpirun -bind-to none -n 2 python -u main.py > out.out 2>&1
    ```
 
+### Molecular Dynamics (BOMD)
+
+You can run MD with:
+
+```shell
+mpirun -bind-to none -n 2 python -u run_MD.py --input-file input.in --dt 0.5 --sim-length 20 --ensemble NVE --temp 300 --prefix pyseqm_md
+```
+
+For lower overhead on distributed runs, `run_MD.py` reuses the adaptive graph from the previous step and refreshes the geometric graph periodically.
+You can control this with `--graph-refresh-interval` (set to `0` to disable geometric refresh).
+
+Main MD outputs are:
+- `pyseqm_md_energy.dat`
+- `pyseqm_md_traj.xyz`
+- `pyseqm_md_total_energy.txt`
+- `pyseqm_md_temperature.txt`
+- `pyseqm_md_potential_energy.txt`
+
 #### Partitioning
 
 - The system (e.g., nanostar) will be partitioned into parts as specified by the `NumParts` keyword in `input.in`.
@@ -92,4 +110,3 @@ print(np.max(np.abs(fref-f1)))
 
 - Ensure all required paths and parameters are set correctly before running the calculation.
 - Use `NumParts` carefully to optimize performance based on your available hardware (ranks and GPUs).
-

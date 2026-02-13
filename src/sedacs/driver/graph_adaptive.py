@@ -761,7 +761,18 @@ def get_singlePointDM(
     return graphOnRank, scfErrorOnRank
 
 
-def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
+def get_adaptiveDM_PYSEQM(
+    sdc,
+    eng,
+    comm,
+    rank,
+    numranks,
+    sy,
+    hindex,
+    graphNL,
+    save_output_files=True,
+    return_graph=False,
+):
     """The main driver function. It initializes supplementary comms, dm, graphs,
     performs scf cycle with graph and dm updates, and then computes forces.
 
@@ -783,6 +794,7 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         Initial connectivity graph
     """
     # SCF Initialization time.
+    md_result = None
     t_INIT = time.perf_counter()
     tic = time.perf_counter()
     sdc.EelecOld = 0.0
@@ -838,14 +850,39 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     primary_comm = comm.Split(color=color, key=rank)
 
     device = "cpu"
-    if sdc.scfDevice == "cuda" and sdc.numGPU == -1:
-        num_gpus = torch.cuda.device_count()
-    elif sdc.scfDevice == "cuda":
-        num_gpus = sdc.numGPU
+    if sdc.scfDevice == "cuda":
+        if sdc.numGPU == -1:
+            # Use the minimum count across nodes so heterogeneous nodes stay consistent.
+            local_num_gpus = torch.cuda.device_count()
+            num_gpus = comm.allreduce(local_num_gpus, op=MPI.MIN)
+        else:
+            num_gpus = sdc.numGPU
     else:
         num_gpus = node_numranks
 
-    num_gpus = min(num_gpus, node_numranks)
+    num_gpus = int(min(num_gpus, node_numranks))
+    if num_gpus < 1:
+        raise ValueError("No compute devices available for SCF execution.")
+
+    local_partition_errors = []
+    if sdc.nparts % num_nodes != 0:
+        local_partition_errors.append(
+            f"NumParts ({sdc.nparts}) must be divisible by number of nodes ({num_nodes})."
+        )
+    if sdc.nparts % (num_gpus * num_nodes) != 0:
+        local_partition_errors.append(
+            f"NumParts ({sdc.nparts}) must be divisible by "
+            f"num_gpus_per_node * num_nodes ({num_gpus} * {num_nodes})."
+        )
+    if sdc.nparts % node_numranks != 0:
+        local_partition_errors.append(
+            f"NumParts ({sdc.nparts}) must be divisible by ranks per node ({node_numranks})."
+        )
+
+    gathered_partition_errors = comm.allgather(local_partition_errors)
+    if any(errors for errors in gathered_partition_errors):
+        first_errors = next(errors for errors in gathered_partition_errors if errors)
+        raise ValueError("Invalid distributed partitioning setup: " + " ".join(first_errors))
 
     color = 0 if node_rank < num_gpus else MPI.UNDEFINED
 
@@ -854,10 +891,10 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     gpu_comm = comm.Split(color=color, key=rank)
 
     # Assume all nodes have same number of GPUs!
-    partsPerGPU = int(sdc.nparts / (num_gpus * num_nodes))
+    partsPerGPU = sdc.nparts // (num_gpus * num_nodes)
 
     # How many CH are processed by each node.
-    partsPerNode = int(sdc.nparts / num_nodes)
+    partsPerNode = sdc.nparts // num_nodes
 
     # //Communicator setup finished.
 
@@ -1417,15 +1454,36 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             forceNuc = -molSysData.molecule_whole.coordinates.grad.detach()
             molSysData.molecule_whole.coordinates.grad.zero_()
             print(f"Time to get nuclear forces {time.perf_counter() - tic:>8.2f} (s)")
-            np.save(
-                "forces",
-                (forces + forceNuc.cpu().numpy()[0]),
-            )
+            total_forces = forces + forceNuc.cpu().numpy()[0]
+            eNuc_scalar = eNuc.detach().cpu().item() if torch.is_tensor(eNuc) else float(eNuc)
+            potential_energy = float(global_Eelec[0] + eNuc_scalar)
+            if save_output_files:
+                np.save(
+                    "forces",
+                    total_forces,
+                )
+                np.save("potential_energy", np.array([potential_energy], dtype=np.float64))
+            md_result = {"forces": np.array(total_forces, copy=True), "potential_energy": potential_energy}
 
     # //Forces finished.
+    result = comm.bcast(md_result, root=0)
+    if return_graph:
+        return result, fullGraph
+    return result
 
 
-def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
+def get_adaptiveDM(
+    sdc,
+    eng,
+    comm,
+    rank,
+    numranks,
+    sy,
+    hindex,
+    graphNL,
+    save_output_files=True,
+    return_graph=False,
+):
     """Get the adaptive denisty matrix at the current iteration.
 
     Parameters
@@ -1446,6 +1504,10 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         Atom-wise orbital indices.
     graphNL:
         The thresholded graph neighborlist.
+    save_output_files:
+        If True, write force/energy helper files (`forces.npy`, `potential_energy.npy`) on rank 0.
+    return_graph:
+        If True, return the updated adaptive graph along with force/energy data.
 
     Returns
     -------
@@ -1465,7 +1527,18 @@ def get_adaptiveDM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             "Use graph_adaptive_scf.py or another interface-specific driver."
         )
 
-    get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL)
+    return get_adaptiveDM_PYSEQM(
+        sdc,
+        eng,
+        comm,
+        rank,
+        numranks,
+        sy,
+        hindex,
+        graphNL,
+        save_output_files=save_output_files,
+        return_graph=return_graph,
+    )
 
 
 get_occ_singlePoint = get_singlePoint
