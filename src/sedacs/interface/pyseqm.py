@@ -5,7 +5,7 @@ from sedacs.system import get_hindex
 import sys
 
 from sedacs.types import ArrayLike
-from typing import Union
+from typing import Optional, Union
 
 from sedacs.types import ArrayLike
 from sedacs.parser import Input
@@ -664,6 +664,7 @@ def get_molecule_pyseqm(sdc: Input,
                         atomTypes: ArrayLike,
                         do_large_tensors: bool = True,
                         device: str = 'cpu',
+                        requires_grad: Optional[bool] = None,
                         verb: bool = False) -> tuple[Molecule, int]:
   '''
   Function returns pyseqm molecule object for SEDACS
@@ -682,6 +683,9 @@ def get_molecule_pyseqm(sdc: Input,
       If False, PySEQM won't calculate large tensors like idxi, idxj, rij, xij, mask.
   device: str
       PyTorch device.
+  requires_grad: Optional[bool]
+      If set, forces ``molecule.coordinates.requires_grad`` to this value.
+      If None, keeps the backend default behavior.
   verb: bool
       Flag for verbose output.
 
@@ -758,7 +762,9 @@ def get_molecule_pyseqm(sdc: Input,
   else:
      charges = -1
      
-  molecule = Molecule(const, seqm_parameters, coordinates, species, charges=charges, do_large_tensors=do_large_tensors).to(device)  
+  molecule = Molecule(const, seqm_parameters, coordinates, species, charges=charges, do_large_tensors=do_large_tensors).to(device)
+  if requires_grad is not None:
+    molecule.coordinates.requires_grad_(requires_grad)
   return molecule, molecule.nocc
 
 

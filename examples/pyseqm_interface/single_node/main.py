@@ -35,7 +35,7 @@ torch.set_printoptions(precision=4, linewidth=300, threshold = 20000 )
 np.set_printoptions(precision=4, linewidth=300)
 
 # Initialize sdc parameters
-sdc, eng, comm, rank, numranks, sy, hindex, graphNL, nl, nlTrX, nlTrY, nlTrZ = init(args)
+sdc, eng, comm, rank, numranks, sy, hindex, graphNL, _ = init(args)
 print("INITIALIZATION TIME {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
 
 #sdc.verb = True

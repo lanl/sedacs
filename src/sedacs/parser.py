@@ -95,6 +95,8 @@ class Input:
         self.scfDevice = self.get_a_string("scfDevice=", "cpu", keyVals, validKeys, verb)
         ## Flag to do forces calculation 
         self.doForces = self.get_a_bool("doForces=", False, keyVals, validKeys, verb=False)
+        ## Use analytical electronic forces when available (faster than backprop fallback)
+        self.analyticForces = self.get_a_bool("analyticForces=", True, keyVals, validKeys, verb=False)
         ## calculate i-j pairs via vectorization (fast but memory consuming) or via loop
         self.ijMethod = self.get_a_string("ijMethod=", "Vec", keyVals, validKeys, verb)
         ## Number of graph jumps
