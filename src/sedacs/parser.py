@@ -99,6 +99,8 @@ class Input:
         self.analyticForces = self.get_a_bool("analyticForces=", True, keyVals, validKeys, verb=False)
         ## calculate i-j pairs via vectorization (fast but memory consuming) or via loop
         self.ijMethod = self.get_a_string("ijMethod=", "Vec", keyVals, validKeys, verb)
+        ## Use precomputed PySEQM large tensors (memory heavy; enables backprop force fallback policy)
+        self.use_pyseqm_lt = self.get_a_bool("use_pyseqm_lt=", False, keyVals, validKeys, verb=False)
         ## Number of graph jumps
         self.numJumps = self.get_an_int("numJumps=", 1, keyVals, validKeys, verb)
         ## Number of adaptive graph iterations
@@ -124,6 +126,12 @@ class Input:
             validKeys,
             verb,
         )
+        # For the PySEQM interface, disable SEDACS Coulomb solver path.
+        engine_interface = str(self.engine.get("InterfaceType", self.engineInterfaceType)).strip().lower()
+        if engine_interface == "pyseqm":
+            self.coulsolv = 0.0
+            if verb:
+                print("Input: Coulsolv= 0.0 (forced for PySEQM)")
         ## Verbosity switch
         self.verb = self.get_a_bool("Verbosity=", False, keyVals, validKeys, verb=True)
         ##Overlap (if set to True it will do a nonortho calculation)

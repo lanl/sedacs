@@ -1,4 +1,5 @@
 """Graph adaptive self-consistenf charge solver."""
+# ruff: noqa: D205, D401, E741, N802, N803, N806, N816, PLR0912, PLR0913, PLR0915, PLR2004, RUF059, SIM108, W291
 
 import itertools
 import os
@@ -83,7 +84,7 @@ def _collect_parts_core_halo(parts, full_graph, sdc, eng, sy, rank, use_pyseqm=F
         if sdc.verb and (use_pyseqm or rank == 0):
             print("coreHalo for part", i, "=", core_halo)
         if rank == 0:
-            print("  N atoms in core/coreHalo {:>6d} : {:>6d} {:>6d}".format(i, len(part), len(core_halo)))
+            print(f"  N atoms in core/coreHalo {i:>6d} : {len(part):>6d} {len(core_halo):>6d}")
 
     return parts_core_halo
 
@@ -93,18 +94,18 @@ def _update_partition_graph_data(sdc, sy, full_graph, parts, parts_core_halo, P_
     tic = time.perf_counter()
     new_graph_for_pairs = get_ch_graph(sdc, sy, full_graph, parts, parts_core_halo)
     if rank == 0:
-        print("Time to updt DM and mod graphs {:>7.2f} (s)".format(time.perf_counter() - tic))
+        print(f"Time to updt DM and mod graphs {time.perf_counter() - tic:>7.2f} (s)")
 
     tic = time.perf_counter()
     update_dm_contraction(sdc, sy, P_contr, graph_for_pairs, new_graph_for_pairs, device)
     graph_for_pairs = new_graph_for_pairs
     if rank == 0:
-        print("Time to updt DM and mod graphs {:>7.2f} (s)".format(time.perf_counter() - tic))
+        print(f"Time to updt DM and mod graphs {time.perf_counter() - tic:>7.2f} (s)")
 
     tic = time.perf_counter()
     graph_maskd = get_maskd(sdc, sy, graph_for_pairs)
     if rank == 0:
-        print("Time to updt DM and mod graphs {:>7.2f} (s)".format(time.perf_counter() - tic))
+        print(f"Time to updt DM and mod graphs {time.perf_counter() - tic:>7.2f} (s)")
 
     return graph_for_pairs, graph_maskd
 
@@ -339,7 +340,7 @@ def _collect_single_point_data(
         Q_LIST = None
 
     if node_rank == 0:
-        print("| t commLists {:>9.4f} (s)".format(time.perf_counter() - tic), rank)
+        print(f"| t commLists {time.perf_counter() - tic:>9.4f} (s)", rank)
 
     if rank == 0:
         tic = time.perf_counter()
@@ -356,7 +357,7 @@ def _collect_single_point_data(
             )
         else:
             mu0 = get_mu(mu0, full_eVals, sdc.Tel, sy.numel / 2, dvals=full_dVals)
-        print("Time mu0 {:>9.4f} (s)".format(time.perf_counter() - tic))
+        print(f"Time mu0 {time.perf_counter() - tic:>9.4f} (s)")
 
     if sdc.scfDevice == "cuda":
         del molecule_whole_device
@@ -540,7 +541,7 @@ def get_singlePointForces(
                 partIndex,
                 ":",
                 formatted_string,
-                "|| EelecCH {:>7.3f} eV ||".format(eElec.item()),
+                f"|| EelecCH {eElec.item():>7.3f} eV ||",
             )
             del eElec, subSy, f
     finally:
@@ -750,14 +751,12 @@ def get_singlePointDM(
     if P_contr_maxDifList:
         scfErrorOnRank = float(max(P_contr_maxDifList))
         print(
-            " MAX |\u0394DM_ij|: {:>10.7f} at SubSy {:>5d}".format(
-                scfErrorOnRank, int(np.argmax(P_contr_maxDifList))
-            )
+            f" MAX |\u0394DM_ij|: {scfErrorOnRank:>10.7f} at SubSy {int(np.argmax(P_contr_maxDifList)):>5d}"
         )
     else:
         scfErrorOnRank = 0.0
-        print(" MAX |\u0394DM_ij|: {:>10.7f} at SubSy {:>5d}".format(0.0, -1))
-    print(" \u03a3   |\u0394DM_ij|: {:>10.7f}".format(P_contr_sumDifTot))
+        print(f" MAX |\u0394DM_ij|: {0.0:>10.7f} at SubSy {-1:>5d}")
+    print(f" \u03a3   |\u0394DM_ij|: {P_contr_sumDifTot:>10.7f}")
 
     return graphOnRank, scfErrorOnRank
 
@@ -789,11 +788,13 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     sdc.EelecOld = 0.0
 
     # Whether or not to use large tensors. Prohibitively large for big systems.
-    eng.use_pyseqm_lt = False
+    eng.use_pyseqm_lt = sdc.use_pyseqm_lt
 
-    # If False, pyseqm won't compute them and sedacs will coumpute only
-    # the necessary subparts.
-    sdc.use_pyseqm_lt = eng.use_pyseqm_lt
+    if sdc.doForces and (not eng.use_pyseqm_lt) and (not sdc.analyticForces):
+        raise NotImplementedError(
+            "Backpropagation-based electronic forces are disabled when use_pyseqm_lt=False. "
+            "Use analyticForces=True, or set use_pyseqm_lt=True for backprop fallback."
+        )
 
     # Reconstructs the full density matrix for debugging purpose.
     eng.reconstruct_dm = False
@@ -844,8 +845,7 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     else:
         num_gpus = node_numranks
 
-    if num_gpus > node_numranks:
-        num_gpus = node_numranks
+    num_gpus = min(num_gpus, node_numranks)
 
     color = 0 if node_rank < num_gpus else MPI.UNDEFINED
 
@@ -880,7 +880,7 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     )[0]
 
     if rank == 0:
-        print("Time to init molSysData {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+        print(f"Time to init molSysData {time.perf_counter() - tic:>7.2f} (s)", rank)
 
     # //Initialization for SCF
 
@@ -893,7 +893,7 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         # Core partitions.
         parts = graph_partition(sdc, eng, fullGraph, sdc.partitionType, sdc.nparts, sy.coords, sdc.verb)
         if rank == 0:
-            print("Time to compute cores {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+            print(f"Time to compute cores {time.perf_counter() - tic:>7.2f} (s)", rank)
 
         tic = time.perf_counter()
         if rank == 0:
@@ -905,7 +905,7 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             parts, fullGraph, sdc, eng, sy, rank, use_pyseqm=True
         )
 
-        print("Time to compute halos {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+        print(f"Time to compute halos {time.perf_counter() - tic:>7.2f} (s)", rank)
 
         tic = time.perf_counter()
 
@@ -915,7 +915,7 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         # Mask for diagonal block in contracted density matrix.
         graph_maskd = get_maskd(sdc, sy, graph_for_pairs)
 
-        print("Time to init mod graphs {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+        print(f"Time to init mod graphs {time.perf_counter() - tic:>7.2f} (s)", rank)
 
         tic = time.perf_counter()
         if sdc.UHF:
@@ -945,7 +945,7 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             P_contr_size = P_contr.size()
             P_contr_nbytes = P_contr.numel() * P_contr.element_size()
 
-        print("Time to init DM {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+        print(f"Time to init DM {time.perf_counter() - tic:>7.2f} (s)", rank)
 
         del graphNL
 
@@ -968,7 +968,7 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     sdc.nparts = node_comm.bcast(sdc.nparts, root=0)
 
     if rank == 0:
-        print("BCST1 {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+        print(f"BCST1 {time.perf_counter() - tic:>7.2f} (s)", rank)
 
     tic = time.perf_counter()
     # P_contr is in shared memory between ranks on one node
@@ -994,18 +994,18 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
     P_contr = torch.from_numpy(P_contr_ary).to(device)
 
     if rank == 0:
-        print("BCST2 {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+        print(f"BCST2 {time.perf_counter() - tic:>7.2f} (s)", rank)
 
     tic = time.perf_counter()
     shared_state = (fullGraph, partsCoreHalo, graph_maskd, graph_for_pairs) if node_rank == 0 else None
     fullGraph, partsCoreHalo, graph_maskd, graph_for_pairs = node_comm.bcast(shared_state, root=0)
     if rank == 0:
-        print("BCST3 {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+        print(f"BCST3 {time.perf_counter() - tic:>7.2f} (s)", rank)
 
-    print("Time to init bcast and share DM {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+    print(f"Time to init bcast and share DM {time.perf_counter() - tic:>7.2f} (s)", rank)
 
     if rank == 0:
-        print("Time INIT {:>7.2f} (s)".format(time.perf_counter() - t_INIT))
+        print(f"Time INIT {time.perf_counter() - t_INIT:>7.2f} (s)")
 
     # //Initilziation for SCF finished.
 
@@ -1033,7 +1033,7 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             primary_comm.Bcast([P_contr.cpu().numpy(), MPI.DOUBLE], root=0)
 
         if rank == 0:
-            print("Time to  bcast DM_cpu_np {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+            print(f"Time to  bcast DM_cpu_np {time.perf_counter() - tic:>7.2f} (s)", rank)
 
         tic = time.perf_counter()
 
@@ -1048,7 +1048,7 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                 partsCoreHalo = _collect_parts_core_halo(parts, fullGraph, sdc, eng, sy, rank)
 
                 if rank == 0:
-                    print("Time to compute halos {:>7.2f} (s)".format(time.perf_counter() - tic))
+                    print(f"Time to compute halos {time.perf_counter() - tic:>7.2f} (s)")
                 # //End HALOS
 
                 graph_for_pairs, graph_maskd = _update_partition_graph_data(
@@ -1064,7 +1064,7 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             graph_state = (partsCoreHalo, graph_for_pairs, graph_maskd) if node_rank == 0 else None
             partsCoreHalo, graph_for_pairs, graph_maskd = node_comm.bcast(graph_state, root=0)
             if node_rank == 0:
-                print("Time to bcast DM and mod graphs {:>7.2f} (s)".format(time.perf_counter() - tic), rank)
+                print(f"Time to bcast DM and mod graphs {time.perf_counter() - tic:>7.2f} (s)", rank)
 
         tic = time.perf_counter()
 
@@ -1144,7 +1144,7 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         sdc.EelecNew = global_Eelec[0]
 
         if rank == 0:
-            print("Time to get_singlePoint {:>7.2f} (s)".format(time.perf_counter() - tic))
+            print(f"Time to get_singlePoint {time.perf_counter() - tic:>7.2f} (s)")
 
         # If True, these files will be read and used instead as default initial guess.
         if sdc.restartLoad:
@@ -1198,7 +1198,7 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                 q_slices = [Q_list[r * partsPerRank : (r + 1) * partsPerRank] for r in range(node_numranks)]
             Q_list_on_rank = node_comm.scatter(q_slices, root=0)
             if rank == 0:
-                print("Time send Q_list slice {:>7.2f} (s)".format(time.perf_counter() - tic))
+                print(f"Time send Q_list slice {time.perf_counter() - tic:>7.2f} (s)")
 
         if rank < node_numranks:
             tic = time.perf_counter()
@@ -1237,7 +1237,7 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                 )
 
             if rank == 0:
-                print("Time to updt DM {:>7.2f} (s)".format(time.perf_counter() - tic))
+                print(f"Time to updt DM {time.perf_counter() - tic:>7.2f} (s)")
 
             node_comm.Barrier()
 
@@ -1257,7 +1257,7 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                 scfError = float(max(scfErrorOnRank_LIST))
                 print("SCF ERR =", scfError)
 
-                print("Time to add graphs {:>7.2f} (s)".format(time.perf_counter() - tic))
+                print(f"Time to add graphs {time.perf_counter() - tic:>7.2f} (s)")
 
             del fullGraphRho
 
@@ -1271,7 +1271,7 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                         dim=(1, 2),
                     )
 
-                    print("DM TRACE: {:>10.8f}, {:>10.8f}".format(trace[0], trace[1]))
+                    print(f"DM TRACE: {trace[0]:>10.8f}, {trace[1]:>10.8f}")
 
                 else:
                     trace = torch.sum(
@@ -1280,9 +1280,9 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
                         .diagonal(dim1=-2, dim2=-1)
                     )
 
-                    print("DM TRACE: {:>10.7f}".format(trace))
+                    print(f"DM TRACE: {trace:>10.7f}")
 
-                print("Time to get trace {:>7.2f} (s)".format(time.perf_counter() - tic))
+                print(f"Time to get trace {time.perf_counter() - tic:>7.2f} (s)")
 
         else:
             fullGraph = None
@@ -1293,7 +1293,7 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         fullGraph = comm.bcast(fullGraph, root=0)
 
         if rank == 0:
-            print("Time to bcast fullGraph {:>7.2f} (s)".format(time.perf_counter() - tic))
+            print(f"Time to bcast fullGraph {time.perf_counter() - tic:>7.2f} (s)")
 
         if rank == 0:
             tol = float(sdc.scfTol)
@@ -1309,7 +1309,7 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         if sdc.scfDevice == "cuda":
             torch.cuda.empty_cache()
         if rank == 0:
-            print("t Iter {:>8.2f} (s)".format(time.perf_counter() - TIC_iter))
+            print(f"t Iter {time.perf_counter() - TIC_iter:>8.2f} (s)")
         if converged:
             break
 
@@ -1323,7 +1323,7 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         # to primary ranks on other nodes.
         if node_rank == 0:
             primary_comm.Bcast([P_contr.cpu().numpy(), MPI.DOUBLE], root=0)
-            forces = np.zeros((sy.coords.shape))
+            forces = np.zeros(sy.coords.shape)
             partsCoreHalo = _collect_parts_core_halo(parts, fullGraph, sdc, eng, sy, rank)
             graph_for_pairs, graph_maskd = _update_partition_graph_data(
                 sdc, sy, fullGraph, parts, partsCoreHalo, P_contr, graph_for_pairs, device, rank
@@ -1336,7 +1336,7 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             graph_maskd = None
 
         if sdc.scfDevice == "cuda":
-            device = "cuda:{}".format(node_rank)
+            device = f"cuda:{node_rank}"
         else:
             device = "cpu"
 
@@ -1357,7 +1357,7 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
         gpu_comm.Barrier()
 
         if rank == 0:
-            print("Time init forces {:>8.2f} (s)".format(time.perf_counter() - tic_F_INIT))
+            print(f"Time init forces {time.perf_counter() - tic_F_INIT:>8.2f} (s)")
 
         tic = time.perf_counter()
         if eng.interface == "PySEQM":
@@ -1390,10 +1390,10 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             gpu_comm.Allreduce(eElec, global_Eelec, op=MPI.SUM)
 
         if rank == 0:
-            print("Time to get electron forces {:>8.2f} (s)".format(time.perf_counter() - tic))
+            print(f"Time to get electron forces {time.perf_counter() - tic:>8.2f} (s)")
 
             print(
-                "eElec:   {:>10.12f}".format(global_Eelec[0]),
+                f"eElec:   {global_Eelec[0]:>10.12f}",
             )
 
         # Nuclear energy and forces. For now, done on one cpu/gpu,
@@ -1410,13 +1410,13 @@ def get_adaptiveDM_PYSEQM(sdc, eng, comm, rank, numranks, sy, hindex, graphNL):
             eNucAB = get_eNuc(eng, molSysData)
             eTot, eNuc = get_eTot(eng, molSysData, eNucAB, 0)
             print(
-                "Enuc:   {:>10.12f}".format(eNuc),
+                f"Enuc:   {eNuc:>10.12f}",
             )
             L = eNuc.sum()
             L.backward()
             forceNuc = -molSysData.molecule_whole.coordinates.grad.detach()
             molSysData.molecule_whole.coordinates.grad.zero_()
-            print("Time to get nuclear forces {:>8.2f} (s)".format(time.perf_counter() - tic))
+            print(f"Time to get nuclear forces {time.perf_counter() - tic:>8.2f} (s)")
             np.save(
                 "forces",
                 (forces + forceNuc.cpu().numpy()[0]),
