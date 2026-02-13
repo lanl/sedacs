@@ -30,9 +30,12 @@ expert is purposely kept low.
 #### For rapid deployment using lighter-weight Spack + pip setup:
 
 Install Spack
+> [!NOTE] 
+> Make sure you are not using the system-provided Spack or setting up other Spack beforehand in your .bashrc
 ```shell
-git clone --depth=2 https://github.com/spack/spack.git
-. ~/spack/share/spack/setup-env.sh # add this to your .bashrc to initialize Spack
+git clone --depth=2 https://github.com/spack/spack.git spack_sedacs
+. ~/spack_sedacs/share/spack/setup-env.sh
+spack repo update
 ```
 Clone SEDACS
 ```shell
