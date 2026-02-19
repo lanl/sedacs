@@ -8,6 +8,7 @@ Dirac distribution.
 """
 
 import numpy as np
+from numba import njit
 
 
 __all__ = [
@@ -16,135 +17,150 @@ __all__ = [
 ]
 
 
-## Fermi-Dirac function
-# @brief Get the Fermi-Dirac distribution probabilities given a set 
-# of energy values
-# @param mu Chemical potential 
-# @param energy Energy value/s 
-# @param etemp Electronic temperature [K]
-# @param kB Boltzman constant (default is in eV/K)
-#
-def fermi_dirac(mu, energy, temp, kB=8.61739e-5):
-    '''
-        Get Fermi probability distributions (values are between 0 and 1)
-    '''
-#    fermi = np.where((energy - mu)/(kB*temp) < 100, 1/(1 + np.exp((energy - mu)/(kB*temp))), 0.0)
-    x = (energy - mu) / (kB * temp)
-    fermi = np.zeros_like(x)
-    mask = x < 100
-    fermi[mask] = 1.0 / (1.0 + np.exp(x[mask]))
+@njit(cache=True, fastmath=True)
+def fermi_dirac(mu, evals, etemp, kB=8.61739e-5):
+    """
+    Vector Fermi-Dirac occupations for energies `evals` at chemical potential `mu`.
+    Uses a numerically-stable exp clamp.
+    """
+    beta = 1.0 / (kB * etemp)
+    n = evals.shape[0]
+    out = np.empty(n, dtype=np.float64)
 
-    return fermi
+    for i in range(n):
+        x = (evals[i] - mu) * beta
+
+        # Clamp to avoid overflow in exp for large |x|
+        if x > 60.0:
+            out[i] = 0.0
+        elif x < -60.0:
+            out[i] = 1.0
+        else:
+            out[i] = 1.0 / (1.0 + np.exp(x))
+    return out
 
 
-## Comput the chemical potential 
-# @brief Get the chemical potential from a set of eigenvalues and their weights 
-# coputed from a partial trace over a "subsytem". It first uses a Newton-Raphson (NR)
-# scheme. It then applies a bisection method if NR does not converge
-# @param mu0 Initial guess of mu. If set to None, it will use (HOMO+LUMO)/2. 
-# @param evals Eigenvalues of the system 
-# @param etemp Electronicn temperature 
-# @param nocc Number of occupied orbitals (This is typically coputed from the total 
-# number of electrons)
-# @param dvals Weights computed from a partial trace. If set to None, weights are set to 1.0.
-# @param kB Boltzman constant (default is in eV/K)
-# @param verb Verbosity switch 
-# 
-def get_mu(mu0, evals, etemp, nocc, dvals=None, kB=8.61739e-5, verb=False):
-    
-    if(verb):
-        print('\nCalculating mu ...,')
+@njit(cache=True, fastmath=True)
+def get_mu_numba(mu0, evals, etemp, nocc, dvals, kB=8.61739e-5, verb=False):
+    """
+    Numba version of your get_mu:
+      - Newton-Raphson iterations first
+      - if diverges / doesn't converge => fallback to scan+bisect style you had
+
+    Parameters
+    ----------
+    mu0 : float
+    evals : 1D float64 array
+    etemp : float
+    nocc : float
+    dvals : 1D float64 array (must be provided for numba; pass np.ones_like(evals) if needed)
+    kB : float
+    verb : bool (printing is supported in numba, but can slow things down)
+    """
+    if verb:
+        print("\nCalculating mu ...,")
 
     a = 1.0
     nmax = 30
-    tol = 1.0E-10
+    tol = 1.0e-10
 
-    #HOMO = evals[int(nocc) - 1]
-    #LUMO = evals[int(nocc)]
-    #with open("energygap.dat", "a") as f:
-    #    f.write(f"{HOMO} {LUMO}\n")
-    #mu = 0.5*(LUMO + HOMO)
-    #mu = 0.5 * (np.min(evals) + np.max(evals))
-    #mu = np.min(evals) 
     mu = mu0
-    norbs = len(evals)
+    norbs = evals.shape[0]
     notConverged = False
-    if(dvals is None): 
-        dvals = np.ones((norbs))
-    for i in range(nmax+1):
-        fermi = fermi_dirac(mu, evals, etemp) 
-        # occ = np.sum([fermi[j]*dvals[j] for j in range(norbs)])
+
+    # ---------- Newton-Raphson ----------
+    occErr = 0.0
+    occ = 0.0
+
+    for it in range(nmax + 1):
+        fermi = fermi_dirac(mu, evals, etemp, kB)
         occ = np.sum(fermi * dvals)
         occErr = abs(occ - nocc)
-        if abs(occErr) < tol:
+
+        if occErr < tol:
             break
-        dFermiDmu =  (1/(kB*etemp))*fermi*(1.0-fermi)*dvals
-        occ_prime = np.sum(dFermiDmu[:norbs]*dvals[:norbs])
-        mu = mu + a*(nocc - occ)/(occ_prime + 1.0E-3)
-        if(abs(mu) > 1.0E10):
-            print('WARNING: Newton-Raphson did not converge (will try bisection) Occupation error = ', occErr)
+
+        # d occ / d mu = sum_i [ (beta * f_i * (1-f_i)) * dvals_i ]
+        beta = 1.0 / (kB * etemp)
+        occ_prime = 0.0
+        for j in range(norbs):
+            fj = fermi[j]
+            occ_prime += (beta * fj * (1.0 - fj)) * dvals[j]
+
+        mu = mu + a * (nocc - occ) / (occ_prime + 1.0e-3)
+
+        if abs(mu) > 1.0e10:
+            print("WARNING: Newton-Raphson did not converge (will try bisection) Occupation error = ", occErr)
             notConverged = True
             break
-        if verb: 
-            print('N-R iteration (i,mu,occ,occErr)', i, mu, occ, occErr)
-        if(i == nmax):
-            print('WARNING: Newton-Raphson did not converge (will try bisection) Occupation error = ', occErr)
+
+        if verb:
+            print("N-R iteration (i,mu,occ,occErr)", it, mu, occ, occErr)
+
+        if it == nmax:
+            print("WARNING: Newton-Raphson did not converge (will try bisection) Occupation error = ", occErr)
             notConverged = True
-    
-    if(notConverged):
-        #etemp = 10000 
+
+    # ---------- Fallback: your scan + step-halving ----------
+    if notConverged:
         muMin = np.min(evals)
         muMax = np.max(evals)
-        mu = muMin
-        #mu = muMax
-        step = abs(muMax-muMin)
-        Ft1 = 0.0
-        Ft2 = 0.0
-        prod = 0.0
 
-        #Sum of the occupations
-        fermi = fermi_dirac(mu, evals, etemp)
-        # ft1 = np.sum([fermi[i]*dvals[i] for i in range(norbs)])
-        ft1 = np.sum(fermi * dvals)
-        ft1 = ft1 - nocc
-    
-        for i in range(1000001):
-            if(i == 1000000):
-                print("Bisection method in gpmdcov_musearch_bisec not converging ...")
-                exit(0)
-            if(mu > muMax + 1.0 or mu < muMin - 1.0):
-                print("Bisection method is diverging")
-                print("muMin=",muMin,"muMax=",muMax)
-                print(evals)
-                exit(0)
-        
-            if(abs(ft1) < tol): #tolerance control
-                occErr = ft2
+        mu = muMin
+        step = abs(muMax - muMin)
+
+        # ft = occ(mu) - nocc
+        fermi = fermi_dirac(mu, evals, etemp, kB)
+        ft1 = np.sum(fermi * dvals) - nocc
+
+        ft2 = ft1
+
+        for it in range(1_000_001):
+            if it == 1_000_000:
+                print("Bisection method not converging ...")
+                # keep behavior close to original; return best guess
                 break
+
+            if (mu > muMax + 1.0) or (mu < muMin - 1.0):
+                print("Bisection method is diverging")
+                print("muMin=", muMin, "muMax=", muMax)
+                break
+
+            if abs(ft1) < tol:
+                occErr = abs(ft1)
+                break
+
             mu = mu + step
 
-            ft2 = 0.0
+            fermi = fermi_dirac(mu, evals, etemp, kB)
+            occ = np.sum(fermi * dvals)
+            ft2 = occ - nocc
 
-            #New sum of the occupations
-            fermi = fermi_dirac(mu, evals, etemp)
-            # ft2 = np.sum([fermi[i]*dvals[i] for i in range(norbs)])
-            ft2 = np.sum(fermi * dvals)
-            occ = ft2
-            ft2 = ft2 - nocc
-
-            #Product to see the change in sign.
-            prod = ft2*ft1
-            if(prod < 0):
+            prod = ft2 * ft1
+            if prod < 0.0:
                 mu = mu - step
-                step = step / 2.0 #If the root is inside we shorten the step.
+                step = step * 0.5
             else:
-                ft1 = ft2  #If not, Ef moves forward.
-            if verb: 
-                print('Bisection iteration (i,mu,occ,occErr);', i, mu, occ, ft2)
-        
-    print('Final mu, error:', mu, occErr)
-        
+                ft1 = ft2
+
+            if verb:
+                print("Bisection iteration (i,mu,occ,occErr);", it, mu, occ, ft2)
+
+        occErr = abs(ft2)
+
+    print("Final mu, error:", mu, occErr)
     return mu
+
+
+# Convenience wrapper if you want dvals=None at the python level (still numba-compiled core):
+def get_mu(mu0, evals, etemp, nocc, dvals=None, kB=8.61739e-5, verb=False):
+    evals = np.asarray(evals, dtype=np.float64)
+    if dvals is None:
+        dvals = np.ones(evals.shape[0], dtype=np.float64)
+    else:
+        dvals = np.asarray(dvals, dtype=np.float64)
+    return get_mu_numba(mu0, evals, float(etemp), float(nocc), dvals, float(kB), bool(verb))
+
 
 ## Estimates mu from a matrix using the Girshgorin centers
 # @brief It will use the diagonal elements as an approximation 

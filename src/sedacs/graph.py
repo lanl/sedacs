@@ -856,19 +856,17 @@ def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos
 
     if graph is None:
         graph = np.zeros((nnodes, maxDeg + 1), dtype=int)
-    weights = np.zeros((nnodes))
     ncores = len(indicesCore)
     nch = len(indicesCoreHalos)
 
     # Get the coordinates for the core halo regions
     corehalo_coords = coords[indicesCoreHalos]
-    # Get the indices for the non core halo regions
-    nonCoreHalo_indices = np.setdiff1d(np.arange(nnodes), indicesCoreHalos)
     # Identify the neighboring atoms within a certain cutoff distance
     # This will help to reduce the computational cost of the overlap matrix
     nl = nl[indicesCoreHalos]
     neighbor_indices = np.unique(nl[nl >= 0])
-    nonCoreHalo_indices = np.intersect1d(neighbor_indices, nonCoreHalo_indices)
+    # Get the indices for the non core halo regions
+    nonCoreHalo_indices = np.setdiff1d(neighbor_indices, indicesCoreHalos)
     if len(nonCoreHalo_indices) == 0:
         return graph
     coords = coords[nonCoreHalo_indices]
@@ -894,10 +892,11 @@ def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos
     # Create a reduced density matrix for the core halo regions
     reduced_rho = np.zeros((nch, ncores), dtype=float)
     # Vectorized max pooling to get the reduced density matrix
+    rho = rho[:hindex[nch], :hindex[ncores]]
     reduced_rho[:] = np.maximum.reduceat(
-                    np.maximum.reduceat(rho, hindex[:-1], axis=0),
-                    hindex[:-1], axis=1
-                )[:nch, :ncores]
+                    np.maximum.reduceat(rho, hindex[:nch], axis=0),
+                    hindex[:ncores], axis=1
+                )
     # reduced_rho = np.where(reduced_rho > thresh, reduced_rho, 0)
     # Matrix multiplication to get the new halo regions
     SD = overlap_matrix @ reduced_rho
@@ -907,16 +906,21 @@ def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos
     for i in range(ncores):
         ii = indicesCoreHalos[i]
         # Recovering the connections we already have
-        weights[:] = 0.0
-        if graph[ii, 0]:
-            weights[graph[ii, 1:graph[ii, 0] + 1]] = thresh
-        # Assign the weights
-        weights[indices] += SD[:, i]
-        # Vectorized selection of candidates above the threshold and not including self loop
-        selected = np.where(weights >= thresh)[0]
-        # selected = selected[selected != ii]
-        k = len(selected)
+        deg = int(graph[ii, 0])
+        existing = graph[ii, 1:deg+1].astype(np.int64, copy=False) if deg else np.empty(0, dtype=np.int64)
 
+        # candidates from SD for this core
+        sd_col = SD[:, i]                       # length = len(nonCoreHalo_indices)
+        new = nonCoreHalo_indices[sd_col >= thresh]   # <-- GLOBAL node IDs
+
+        # match original behavior: existing edges are always kept (at thresh)
+        # and new edges are added if SD passes threshold
+        if existing.size:
+            selected = np.unique(np.concatenate((existing, new)))
+        else:
+            selected = new  # already global IDs
+
+        k = selected.size
         # Degree guard 
         if k > maxDeg:
             msg = (

@@ -906,6 +906,11 @@ def metis_partition(graph, nparts, graphweights=None, verb=False):
         # to where they belong. Node "i" belongs to "metisParts[i]" part.
         try:
             edgecuts, metisParts = metis.part_graph(adjlist, nparts, objtype='vol', contig=True, ctype='shem', iptype='grow', ncuts=10, niter=10, rtype='fm', minconn=True, recursive=False)
+            if len(np.unique(metisParts)) < nparts:
+                edgecuts, metisParts = metis.part_graph(adjlist, nparts, objtype='vol', contig=True, ctype='shem', iptype='grow', ncuts=10, niter=10, rtype='fm', ufactor=1, minconn=True, recursive=False)
+                if len(np.unique(metisParts)) < nparts:
+                    raise ValueError(f"Reduce number of parts to avoid empty partition.")
+                     
         except:
             edgecuts, metisParts = metis.part_graph(adjlist, nparts)
         # The next lines will transform from metis to our partition format
@@ -1438,3 +1443,21 @@ def get_coreHaloIndicesPYSEQM(eng, core,graph,njumps, *args):
     if(eng.interface == "PySEQM"): coreHalo = sorted(coreHalo)
     return coreHalo, nc
 
+def distribute_numpy(parts, partsCoreHalo, k):
+    sizes = [len(halo) for halo in partsCoreHalo]
+    sizes = np.asarray(sizes)
+    order = np.argsort(-sizes)   # descending
+    loads = np.zeros(k)
+    newparts = [[] for _ in range(k)]
+    newpartsCoreHalo = [[] for _ in range(k)]
+
+    for i in order:
+        j = np.argmin(loads)
+        newparts[j].append(parts[i])
+        newpartsCoreHalo[j].append(partsCoreHalo[i])
+        loads[j] += sizes[i]
+
+    parts = [part for i_parts in newparts for part in i_parts]
+    partsCoreHalo = [part for i_parts in newpartsCoreHalo for part in i_parts] 
+
+    return parts, partsCoreHalo
