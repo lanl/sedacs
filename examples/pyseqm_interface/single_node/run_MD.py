@@ -22,14 +22,14 @@ def parse_args():
     parser.add_argument("--input-file", type=str, default="input.in", help="SEDACS input file.")
     parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto", help="Device for SEDACS setup.")
     parser.add_argument("--dt", type=float, default=0.5, help="Timestep in fs.")
-    parser.add_argument("--sim-length", type=float, default=20.0, help="Simulation length in fs.")
+    parser.add_argument("--sim-length", type=float, default=5.0, help="Simulation length in fs.")
     parser.add_argument("--ensemble", choices=["NVE", "NVT"], default="NVE", help="Thermodynamic ensemble.")
     parser.add_argument("--temp", type=float, default=300.0, help="Initial temperature in K.")
-    parser.add_argument("--friction", type=float, default=10.0, help="Langevin friction in 1/ps for NVT.")
+    parser.add_argument("--friction", type=float, default=20.0, help="Langevin friction in 1/ps for NVT.")
     parser.add_argument("--seed", type=int, default=137, help="Random seed.")
     parser.add_argument("--prefix", type=str, default="pyseqm_md", help="Output filename prefix.")
-    parser.add_argument("--print-interval", type=int, default=10, help="Print every N MD steps.")
-    parser.add_argument("--save-interval", type=int, default=10, help="Write trajectory frame every N MD steps.")
+    parser.add_argument("--print-interval", type=int, default=1, help="Print every N MD steps.")
+    parser.add_argument("--save-interval", type=int, default=1, help="Write trajectory frame every N MD steps.")
     parser.add_argument(
         "--graph-refresh-interval",
         type=int,
