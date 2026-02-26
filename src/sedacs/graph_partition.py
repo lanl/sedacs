@@ -1295,6 +1295,48 @@ def get_parts_indices(parts, nnodes):
             whichPart[node] = partIndex
     return whichPart
 
+
+def _expand_core_halo_pyseqm(core, graph, njumps):
+    """Expand core by njumps using graph connectivity (PySEQM path)."""
+    core_arr = np.asarray(core, dtype=np.intp)
+    nc = int(core_arr.size)
+    if nc == 0:
+        return [], 0
+
+    if njumps <= 0:
+        return np.sort(core_arr).tolist(), nc
+
+    nnodes = graph.shape[0]
+    visited = np.zeros(nnodes, dtype=bool)
+    visited[core_arr] = True
+
+    core_halo = core_arr.tolist()
+    frontier = core_arr
+
+    for _ in range(njumps):
+        if frontier.size == 0:
+            break
+
+        next_frontier = []
+        for i in frontier:
+            deg_i = int(graph[i, 0])
+            if deg_i <= 0:
+                continue
+
+            nbrs = graph[i, 1:deg_i + 1]
+            unseen = nbrs[~visited[nbrs]]
+            if unseen.size:
+                visited[unseen] = True
+                next_frontier.extend(unseen.tolist())
+
+        if not next_frontier:
+            break
+
+        core_halo.extend(next_frontier)
+        frontier = np.asarray(next_frontier, dtype=np.intp)
+
+    return np.sort(np.asarray(core_halo, dtype=np.intp)).tolist(), nc
+
 ## Get the core and halo indices
 # @brief Gets the halos given a list of cores and a graph
 # @param core list of cores
@@ -1308,33 +1350,8 @@ def get_coreHaloIndices(core, graph, njumps, coreHalo=None, eng=None):
     # where the I/O is made consistent and we just have a simple function call here to handle the internal logic.
     if eng is not None:
         if eng.interface == "PySEQM":
-            print("in pyseqm block")
-            coreHalo = np.array(core.copy())
-            nc = len(coreHalo)
-            nch = nc
-            nnodes = len(graph[:,0])
-            nx = np.zeros((nnodes),dtype=bool)
-            nx[:] = False # $$$ ??? what is nx ???
-            nx[coreHalo] = True
-            #Add halos from graph
-            jump = 0
-            jumps_done_but_looking_for_odd = False
-            extraAtoms = []
-            while jump < njumps:
-                nc1 = nch 
-                for k in range(nc1):
-                    i = coreHalo[k]
-
-                    nxFalseMask = (nx[graph[i,1:graph[i,0]+1]] == False)
-                    if jumps_done_but_looking_for_odd == False:
-                        nch += np.sum(nxFalseMask)
-                        coreHalo = np.append(coreHalo, graph[i,1:graph[i,0]+1][nxFalseMask])
-                        nx[graph[i,1:graph[i,0]+1]] = True
-                jump += 1
-
-            coreHalo = sorted(coreHalo)
-
-            return coreHalo, nc, nch
+            coreHalo, nc = _expand_core_halo_pyseqm(core, graph, njumps)
+            return coreHalo, nc, len(coreHalo)
     else:
 
         # nc = len(core)
@@ -1383,58 +1400,5 @@ def get_coreHaloIndices(core, graph, njumps, coreHalo=None, eng=None):
         return coreHalo, nc, nch
 
 def get_coreHaloIndicesPYSEQM(eng, core,graph,njumps, *args):
-    coreHalo = np.array(core.copy())
-    nc = len(coreHalo)
-    nch = nc
-    nnodes = len(graph[:,0])
-    nx = np.zeros((nnodes),dtype=bool)
-    nx[:] = False # $$$ ??? what is nx ???
-    nx[coreHalo] = True
-    #Add halos from graph
-    jump = 0
-    jumps_done_but_looking_for_odd = False
-    extraAtoms = []
-    while jump < njumps:
-        nc1 = nch 
-        for k in range(nc1):
-            i = coreHalo[k]
-
-            nxFalseMask = (nx[graph[i,1:graph[i,0]+1]] == False)
-            if jumps_done_but_looking_for_odd == False:
-                nch += np.sum(nxFalseMask)
-                coreHalo = np.append(coreHalo, graph[i,1:graph[i,0]+1][nxFalseMask])
-                nx[graph[i,1:graph[i,0]+1]] = True
-            # else:
-            #     for kk in range(1, graph[i,0]+1):
-            #         j = graph[i,kk]
-            #         if (nx[j] == False) and (args[0].valency[args[1].symbols[args[1].types[j]]] ) % 2 == 1:
-            #             nch = nch + 1
-            #             coreHalo = np.append(coreHalo, int(j))
-            #             extraAtoms.append(int(j))
-            #             graph[core[0]][graph[core[0]][0]+1] = j
-            #             graph[core[0]][0] += 1
-            #             graph[core[0]][1:graph[core[0]][0]+1] = sorted(graph[core[0]][1:graph[core[0]][0]+1])
-            #             print('APPENDED EXTRA', j)
-            #             nx[j] = True
-            #             if(eng.interface == "PySEQM"): coreHalo = sorted(coreHalo)
-            #             return coreHalo, nc
-                    
-        # if jump == njumps - 1 and args:
-        #     num_el = 0
-        #     for II in range(len(coreHalo)):
-        #         num_el += args[0].valency[args[1].symbols[args[1].types[coreHalo][II]]]
-        #     #print('NumAt:', len(coreHalo), 'NumEl:', num_el)
-        #     if num_el%2 != 0:
-        #         #print('Odd NumEl:', num_el, '. Looking for an extra atom.')
-        #         jumps_done_but_looking_for_odd = True
-        #         jump -= 1
-                
-        jump += 1
-            
-                
-    # if not jumps_done_but_looking_for_odd:
-    #     print('\n')
-    
-    if(eng.interface == "PySEQM"): coreHalo = sorted(coreHalo)
+    coreHalo, nc = _expand_core_halo_pyseqm(core, graph, njumps)
     return coreHalo, nc
-

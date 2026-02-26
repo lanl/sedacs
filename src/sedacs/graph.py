@@ -396,33 +396,35 @@ def add_graphs(graphA, graphB):
 # @return graphC Resulting graph
 #
 def add_mult_graphs(graphs):
-    # Ensure all graphs have the same number of nodes
-    nnodes = graphs[0].shape[0]
-    maxDeg = graphs[0].shape[1]
-    
-    if not all(graph.shape[0] == nnodes for graph in graphs):
-        print("!!!ERROR: All graphs must have the same number of nodes")
+    nnodes, row_width = graphs[0].shape
+    if not all(graph.shape == (nnodes, row_width) for graph in graphs):
+        print("!!!ERROR: All graphs must have the same shape")
         return None
 
-    # Initialize the result graph `graphC` with -1s
-    graphC = np.full((nnodes, maxDeg), -1, dtype=int)
-
-    # Initialize a combined adjacency matrix for all graphs
-    adjC = np.zeros((nnodes, nnodes), dtype=bool)
-
-    # Populate combined adjacency matrix based on input graphs
-    for graph in graphs:
-        adj = np.zeros((nnodes, nnodes), dtype=bool)
-        for i in range(nnodes):
-            adj[i, graph[i, 1:graph[i, 0] + 1]] = True
-        adjC = np.logical_or(adjC, adj)
-
-    # Fill `graphC` based on the combined adjacency matrix `adjC`
+    max_neighbors = row_width - 1
+    graphC = np.full((nnodes, row_width), -1, dtype=int)
     for i in range(nnodes):
-        neighbors = np.where(adjC[i])[0]
-        graphC[i, 0] = len(neighbors)  # Number of neighbors
-        if len(neighbors) > 0:
-            graphC[i, 1:len(neighbors) + 1] = neighbors
+        row_chunks = []
+        for graph in graphs:
+            deg = int(graph[i, 0])
+            if deg > 0:
+                row_chunks.append(graph[i, 1:deg + 1])
+
+        if not row_chunks:
+            graphC[i, 0] = 0
+            continue
+
+        if len(row_chunks) == 1:
+            neighbors = row_chunks[0]
+        else:
+            # Unique returns sorted values, matching previous output ordering.
+            neighbors = np.unique(np.concatenate(row_chunks))
+
+        k = int(neighbors.size)
+        if k > max_neighbors:
+            raise ValueError(f"Max Degree parameter is too small: {max_neighbors} (< {k}).")
+        graphC[i, 0] = k
+        graphC[i, 1:k + 1] = neighbors
 
     return graphC
 ## Multiply two Adjacencies
@@ -587,13 +589,34 @@ def update_dm_contraction(sdc, sy, P_contr, graph_for_pairs, new_graph_for_pairs
 # @param partsCoreHalo (list): list of cores+halos.
 # @return np.ndarray(n_nodes, MaxDeg) of CH.
 def get_ch_graph(sdc, sy, fullGraph, parts, partsCoreHalo):
-    new_graph_for_pairs = np.array(fullGraph.copy())
+    new_graph_for_pairs = np.array(fullGraph, copy=True)
+    row_width = new_graph_for_pairs.shape[1]
+
+    atom_to_part = np.full(sy.nats, -1, dtype=np.intp)
+    for sublist_idx, part in enumerate(parts):
+        if len(part) == 0:
+            continue
+        part_arr = np.asarray(part, dtype=np.intp)
+        unassigned = atom_to_part[part_arr] == -1
+        if np.any(unassigned):
+            atom_to_part[part_arr[unassigned]] = sublist_idx
+
     for i in range(sy.nats):
-        for sublist_idx in range(sdc.nparts):
-            if i in parts[sublist_idx]:
-                new_graph_for_pairs[i, 0] = len(partsCoreHalo[sublist_idx])
-                new_graph_for_pairs[i, 1:new_graph_for_pairs[i][0]+1] = partsCoreHalo[sublist_idx]
-                break
+        sublist_idx = int(atom_to_part[i])
+        if sublist_idx < 0:
+            continue
+
+        ch_neighbors = np.asarray(partsCoreHalo[sublist_idx], dtype=new_graph_for_pairs.dtype)
+        deg = int(ch_neighbors.size)
+        if deg + 1 > row_width:
+            raise ValueError(
+                f"Max Degree parameter is too small: {row_width - 1} (< {deg})."
+            )
+
+        new_graph_for_pairs[i, 0] = deg
+        if deg:
+            new_graph_for_pairs[i, 1:deg + 1] = ch_neighbors
+
     return new_graph_for_pairs
 
 # Get a mask of diagonal blocks for contracted density matrix.
