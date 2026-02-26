@@ -1296,46 +1296,73 @@ def get_parts_indices(parts, nnodes):
     return whichPart
 
 
-def _expand_core_halo_pyseqm(core, graph, njumps):
-    """Expand core by njumps using graph connectivity (PySEQM path)."""
-    core_arr = np.asarray(core, dtype=np.intp)
-    nc = int(core_arr.size)
+@jit(nopython=True)
+def _expand_core_halo_pyseqm_numba(core_arr, graph, njumps):
+    nc = core_arr.shape[0]
     if nc == 0:
-        return [], 0
-
-    if njumps <= 0:
-        return np.sort(core_arr).tolist(), nc
+        return np.empty(0, dtype=np.int64), 0
 
     nnodes = graph.shape[0]
-    visited = np.zeros(nnodes, dtype=bool)
-    visited[core_arr] = True
+    work_size = nnodes + nc
 
-    core_halo = core_arr.tolist()
-    frontier = core_arr
+    visited = np.zeros(nnodes, dtype=np.uint8)
+    core_halo = np.empty(work_size, dtype=np.int64)
+    frontier = np.empty(work_size, dtype=np.int64)
+    next_frontier = np.empty(work_size, dtype=np.int64)
+
+    core_halo_count = 0
+    frontier_count = 0
+
+    # Preserve any duplicated core entries to match original behavior.
+    for idx in range(nc):
+        node = int(core_arr[idx])
+        core_halo[core_halo_count] = node
+        core_halo_count += 1
+        frontier[frontier_count] = node
+        frontier_count += 1
+        if 0 <= node < nnodes:
+            visited[node] = 1
+
+    if njumps <= 0:
+        return np.sort(core_halo[:core_halo_count]), nc
 
     for _ in range(njumps):
-        if frontier.size == 0:
+        if frontier_count == 0:
             break
 
-        next_frontier = []
-        for i in frontier:
-            deg_i = int(graph[i, 0])
-            if deg_i <= 0:
+        next_count = 0
+        for f in range(frontier_count):
+            i = int(frontier[f])
+            if i < 0 or i >= nnodes:
                 continue
 
-            nbrs = graph[i, 1:deg_i + 1]
-            unseen = nbrs[~visited[nbrs]]
-            if unseen.size:
-                visited[unseen] = True
-                next_frontier.extend(unseen.tolist())
+            deg_i = int(graph[i, 0])
+            for p in range(1, deg_i + 1):
+                nbr = int(graph[i, p])
+                if nbr < 0 or nbr >= nnodes:
+                    continue
+                if visited[nbr] == 0:
+                    visited[nbr] = 1
+                    next_frontier[next_count] = nbr
+                    next_count += 1
+                    core_halo[core_halo_count] = nbr
+                    core_halo_count += 1
 
-        if not next_frontier:
+        if next_count == 0:
             break
 
-        core_halo.extend(next_frontier)
-        frontier = np.asarray(next_frontier, dtype=np.intp)
+        for q in range(next_count):
+            frontier[q] = next_frontier[q]
+        frontier_count = next_count
 
-    return np.sort(np.asarray(core_halo, dtype=np.intp)).tolist(), nc
+    return np.sort(core_halo[:core_halo_count]), nc
+
+
+def _expand_core_halo_pyseqm(core, graph, njumps):
+    """Expand core by njumps using graph connectivity (PySEQM path)."""
+    core_arr = np.asarray(core, dtype=np.int64)
+    core_halo, nc = _expand_core_halo_pyseqm_numba(core_arr, graph, int(njumps))
+    return core_halo.tolist(), int(nc)
 
 ## Get the core and halo indices
 # @brief Gets the halos given a list of cores and a graph

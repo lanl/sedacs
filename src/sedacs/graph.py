@@ -390,43 +390,63 @@ def add_graphs(graphA, graphB):
 
     return graphC
 
+
+@njit
+def _add_mult_graphs_numba(stacked_graphs):
+    ngraphs, nnodes, row_width = stacked_graphs.shape
+    max_neighbors = row_width - 1
+
+    graphC = -np.ones((nnodes, row_width), dtype=stacked_graphs.dtype)
+    seen = np.full(nnodes, -1, dtype=np.int64)
+    tmp_neighbors = np.empty(max_neighbors, dtype=np.int64)
+
+    for i in range(nnodes):
+        k = 0
+        for g in range(ngraphs):
+            deg = int(stacked_graphs[g, i, 0])
+            for p in range(1, deg + 1):
+                nbr = int(stacked_graphs[g, i, p])
+                if nbr < 0:
+                    continue
+                if seen[nbr] != i:
+                    seen[nbr] = i
+                    if k >= max_neighbors:
+                        raise ValueError("Max Degree parameter is too small.")
+                    tmp_neighbors[k] = nbr
+                    k += 1
+
+        # Insertion sort keeps deterministic ascending neighbor order.
+        for a in range(1, k):
+            key = tmp_neighbors[a]
+            b = a - 1
+            while b >= 0 and tmp_neighbors[b] > key:
+                tmp_neighbors[b + 1] = tmp_neighbors[b]
+                b -= 1
+            tmp_neighbors[b + 1] = key
+
+        graphC[i, 0] = k
+        for p in range(k):
+            graphC[i, p + 1] = tmp_neighbors[p]
+
+    return graphC
+
 ## Add/merge multiple graphs (union operation)
 # @brief This will merge or add multiple graphs
 # @param graphs Graphs to be merged
 # @return graphC Resulting graph
 #
 def add_mult_graphs(graphs):
+    if not graphs:
+        print("!!!ERROR: Empty graph list")
+        return None
+
     nnodes, row_width = graphs[0].shape
     if not all(graph.shape == (nnodes, row_width) for graph in graphs):
         print("!!!ERROR: All graphs must have the same shape")
         return None
 
-    max_neighbors = row_width - 1
-    graphC = np.full((nnodes, row_width), -1, dtype=int)
-    for i in range(nnodes):
-        row_chunks = []
-        for graph in graphs:
-            deg = int(graph[i, 0])
-            if deg > 0:
-                row_chunks.append(graph[i, 1:deg + 1])
-
-        if not row_chunks:
-            graphC[i, 0] = 0
-            continue
-
-        if len(row_chunks) == 1:
-            neighbors = row_chunks[0]
-        else:
-            # Unique returns sorted values, matching previous output ordering.
-            neighbors = np.unique(np.concatenate(row_chunks))
-
-        k = int(neighbors.size)
-        if k > max_neighbors:
-            raise ValueError(f"Max Degree parameter is too small: {max_neighbors} (< {k}).")
-        graphC[i, 0] = k
-        graphC[i, 1:k + 1] = neighbors
-
-    return graphC
+    stacked_graphs = np.stack(graphs, axis=0).astype(np.int64, copy=False)
+    return _add_mult_graphs_numba(stacked_graphs)
 ## Multiply two Adjacencies
 # @brief The ij of the resulting graph will be connected
 # if i in A and j in B have a common directly connected node k.
@@ -580,6 +600,31 @@ def update_dm_contraction(sdc, sy, P_contr, graph_for_pairs, new_graph_for_pairs
     P_contr[:] = P_contr_new[:]
     del P_contr_new
 
+
+@njit
+def _get_maskd_numba(graph_for_pairs, max_deg):
+    nats = graph_for_pairs.shape[0]
+
+    # Count diagonal blocks first to allocate once.
+    n_diag = 0
+    for j in range(nats):
+        deg = int(graph_for_pairs[j, 0])
+        for p in range(1, deg + 1):
+            if graph_for_pairs[j, p] == j:
+                n_diag += 1
+
+    graph_maskd = np.empty(n_diag, dtype=np.int64)
+    k = 0
+    for j in range(nats):
+        deg = int(graph_for_pairs[j, 0])
+        row_base = j * max_deg
+        for p in range(1, deg + 1):
+            if graph_for_pairs[j, p] == j:
+                graph_maskd[k] = row_base + (p - 1)
+                k += 1
+
+    return graph_maskd
+
 # Get a graph where each atom has all atoms from its CH as its neighbors, including itself.
 # @brief .
 # @param sdc (obj): sedacs driver.
@@ -591,20 +636,20 @@ def update_dm_contraction(sdc, sy, P_contr, graph_for_pairs, new_graph_for_pairs
 def get_ch_graph(sdc, sy, fullGraph, parts, partsCoreHalo):
     new_graph_for_pairs = np.array(fullGraph, copy=True)
     row_width = new_graph_for_pairs.shape[1]
+    assigned = np.zeros(sy.nats, dtype=bool)
 
-    atom_to_part = np.full(sy.nats, -1, dtype=np.intp)
+    # Preserve first-match semantics of the original implementation.
     for sublist_idx, part in enumerate(parts):
         if len(part) == 0:
             continue
-        part_arr = np.asarray(part, dtype=np.intp)
-        unassigned = atom_to_part[part_arr] == -1
-        if np.any(unassigned):
-            atom_to_part[part_arr[unassigned]] = sublist_idx
 
-    for i in range(sy.nats):
-        sublist_idx = int(atom_to_part[i])
-        if sublist_idx < 0:
+        part_arr = np.asarray(part, dtype=np.intp)
+        target_mask = ~assigned[part_arr]
+        if not np.any(target_mask):
             continue
+
+        target_atoms = part_arr[target_mask]
+        assigned[target_atoms] = True
 
         ch_neighbors = np.asarray(partsCoreHalo[sublist_idx], dtype=new_graph_for_pairs.dtype)
         deg = int(ch_neighbors.size)
@@ -613,9 +658,9 @@ def get_ch_graph(sdc, sy, fullGraph, parts, partsCoreHalo):
                 f"Max Degree parameter is too small: {row_width - 1} (< {deg})."
             )
 
-        new_graph_for_pairs[i, 0] = deg
+        new_graph_for_pairs[target_atoms, 0] = deg
         if deg:
-            new_graph_for_pairs[i, 1:deg + 1] = ch_neighbors
+            new_graph_for_pairs[target_atoms, 1:deg + 1] = ch_neighbors
 
     return new_graph_for_pairs
 
@@ -626,22 +671,7 @@ def get_ch_graph(sdc, sy, fullGraph, parts, partsCoreHalo):
 # @param new_graph_for_pairs (list): graph of communities.
 # @return np.ndarray(n_atoms).
 def get_maskd(sdc, sy, graph_for_pairs):
-    # Initialize an array to hold graph_maskd values
-    graph_maskd = []
-    # Track the position counter across rows in a vectorized way
-    counter = 0
-    for j in range(sy.nats):
-        # Get neighbors for node j from graph_for_pairs
-        neighbors = graph_for_pairs[j][1:graph_for_pairs[j][0] + 1]
-        # Find positions where `i == j` (self-loops) in the neighbors list
-        mask = np.where(neighbors == j)[0]
-        # Calculate the absolute position for masked values and store them
-        graph_maskd.extend(counter + mask)
-        # Update the counter for the next row, adding the degree difference
-        counter += len(neighbors) + int(sdc.maxDeg - graph_for_pairs[j][0])
-    # Convert graph_maskd to a NumPy array
-    graph_maskd = np.array(graph_maskd)
-    return graph_maskd
+    return _get_maskd_numba(graph_for_pairs, int(sdc.maxDeg))
 
 # @brief Convert graphs into a square adjacency matrix.
 # @param graph: Input graph to be converted to square adj matrix.
