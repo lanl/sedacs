@@ -3,20 +3,19 @@ Some graph functions
 
 """
 
-import sys
-
-import mpi4py.MPI as MPI
-from sedacs.mpi import collect_and_sum_matrices_float
-from numba import njit
 import numpy as np
 import torch
+from mpi4py import MPI
+from numba import njit
+
+from sedacs.mpi import collect_and_sum_matrices_float
 
 global nxLib
 try:
     import networkx as nx
 
     nxLib = True
-except ImportError as e:
+except ImportError:
     nxLib = False
 global pltLib
 try:
@@ -45,7 +44,7 @@ def get_initial_graph(coords, nl, radius, maxDeg, LBox, graphweights=False, verb
     graph = np.full((nats, maxDeg + 1), -1, dtype=int)
     eweights = np.zeros((nats, maxDeg + 1), dtype=int) if graphweights else None
     if nl.shape[1] < maxDeg + 1:
-        nl = np.pad(nl, ((0, 0), (0, maxDeg + 1 - nl.shape[1])), mode='constant', constant_values=-1)
+        nl = np.pad(nl, ((0, 0), (0, maxDeg + 1 - nl.shape[1])), mode="constant", constant_values=-1)
 
     # Vectorized computation of distances
     delta = coords[:, np.newaxis, :] - coords[nl[:, 1:].astype(int)]
@@ -111,7 +110,7 @@ def get_nx_graph(graph, w):
     n = len(graph[:, 0])
     m = len(graph[0, :])
     nxGraph = nx.Graph()
-    nxGraph.graph['edge_weight_attr'] = 'weight'
+    nxGraph.graph["edge_weight_attr"] = "weight"
     if w is None:
         w = np.ones_like(graph, dtype=int)
     for i in range(0, n):
@@ -123,8 +122,8 @@ def get_nx_graph(graph, w):
             if (j != -1) and (j != i):
                 nxGraph.add_edge(i, j, weight=w[i, k])
 
-    #print("graph", graph)
-    #print("nxGraph", nxGraph)
+    # print("graph", graph)
+    # print("nxGraph", nxGraph)
     return nxGraph
 
 
@@ -182,15 +181,15 @@ def plot_nx_graph(nxGraph, nodeColor="r"):
 # @return graph The graph in 2D numpy array where `graph[i,k]` is the kth neighbor
 # of node i. NOTE: The 0 entry of every row is reserved to store the degree of every node.
 #
-def collect_graph_from_rho_PYSEQM(graph,rho,thresh,nnodes,maxDeg,indices,hindex=None,verb=False):
-   
-    rhoDim = len(rho[:,0])
-    if (graph is None):
-        graph = np.zeros((nnodes,maxDeg+1),dtype=np.int16) - 1
-    
-    #print('graph', graph[11])
+def collect_graph_from_rho_PYSEQM(graph, rho, thresh, nnodes, maxDeg, indices, hindex=None, verb=False):
+
+    rhoDim = len(rho[:, 0])
+    if graph is None:
+        graph = np.zeros((nnodes, maxDeg + 1), dtype=np.int16) - 1
+
+    # print('graph', graph[11])
     nats = len(indices)
-    weights = np.zeros((nnodes))
+    weights = np.zeros(nnodes)
     ki_ = 0
     if type(rho) is not np.ndarray:
         rho = rho.numpy().astype(np.float32)
@@ -206,23 +205,23 @@ def collect_graph_from_rho_PYSEQM(graph,rho,thresh,nnodes,maxDeg,indices,hindex=
 
     for i in range(nats):
         ii = indices[i]
-        #Recovering the connections we already have
+        # Recovering the connections we already have
         weights[:] = 0.0
 
         ###
-        j = np.arange(1, graph[ii,0]+1)
-        weights[graph[ii,j]] = thresh
+        j = np.arange(1, graph[ii, 0] + 1)
+        weights[graph[ii, j]] = thresh
 
         ###
         ki_old = ki_
-        ki_ = ki_ + hindex[ii+1] - hindex[ii]
-        ki_ar = np.arange(ki_old, ki_,1)
+        ki_ = ki_ + hindex[ii + 1] - hindex[ii]
+        ki_ar = np.arange(ki_old, ki_, 1)
         kj = 0  # Initialize kj
-        
+
         flat_rho_slices = rho[ki_ar][:, kj + valid_indices]
-        expanded_rho_slices = np.zeros((len(ki_ar),len(slice_lengths), max_length), dtype=rho.dtype)
-        expanded_rho_slices[:,valid_mask] = flat_rho_slices
-        abs_sums = np.sum(np.abs(expanded_rho_slices)**2, axis=(0,2))**0.5
+        expanded_rho_slices = np.zeros((len(ki_ar), len(slice_lengths), max_length), dtype=rho.dtype)
+        expanded_rho_slices[:, valid_mask] = flat_rho_slices
+        abs_sums = np.sum(np.abs(expanded_rho_slices) ** 2, axis=(0, 2)) ** 0.5
         np.add.at(weights, indices, abs_sums)
 
         mask = (np.arange(nnodes) != ii) & (weights >= thresh)
@@ -231,7 +230,7 @@ def collect_graph_from_rho_PYSEQM(graph,rho,thresh,nnodes,maxDeg,indices,hindex=
         if k > maxDeg:
             print("!!!ERROR: Max Degree parameter is too small")
             exit(0)
-        graph[ii, 1:k+1] = valid_jj_indices[:maxDeg]
+        graph[ii, 1 : k + 1] = valid_jj_indices[:maxDeg]
         graph[ii, 0] = k
 
         # if sum(abs(weights1-weights)) > 1e-14:
@@ -245,11 +244,11 @@ def collect_graph_from_rho_PYSEQM(graph,rho,thresh,nnodes,maxDeg,indices,hindex=
 
         ##
         # for j in range(1,graph[ii,0]): # $$$ what does it do? It never enters this loop
-        #     jj = graph[ii,j]             
+        #     jj = graph[ii,j]
         #     weights[jj] = thresh
         # ##
 
-        # # Computing the new weights by rho 
+        # # Computing the new weights by rho
         # ## $$$ vectorized this ###
         # for oi in range(hindex[ii],hindex[ii+1]):
         #     kj = 0
@@ -262,8 +261,7 @@ def collect_graph_from_rho_PYSEQM(graph,rho,thresh,nnodes,maxDeg,indices,hindex=
         #     ki = ki + 1
         # ##
 
-
-        # # Reasigning the connections to ii by the merged weights (the ones computed 
+        # # Reasigning the connections to ii by the merged weights (the ones computed
         # # from rho and the ones already existing.
 
         # ## $$$ vectorized this ###
@@ -283,8 +281,8 @@ def collect_graph_from_rho_PYSEQM(graph,rho,thresh,nnodes,maxDeg,indices,hindex=
         #         exit(0)
         # graph[ii,0] = k
 
-
     return graph
+
 
 ## Collect a graph from DMs
 # @brief This will build a graph from small DMs
@@ -305,16 +303,13 @@ def collect_graph_from_rho(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos,
 
     rho = np.abs(rho)
     reduced_rho = np.zeros((nch, nch), dtype=float)
-    reduced_rho[:] = np.maximum.reduceat(
-                    np.maximum.reduceat(rho, hindex[:-1], axis=0),
-                    hindex[:-1], axis=1
-                )
+    reduced_rho[:] = np.maximum.reduceat(np.maximum.reduceat(rho, hindex[:-1], axis=0), hindex[:-1], axis=1)
 
     for i in range(ncores):
         ii = indicesCoreHalos[i]
         # Recovering the connections we already have
         deg = int(graph[ii, 0])
-        existing = graph[ii, 1:deg + 1] 
+        existing = graph[ii, 1 : deg + 1]
 
         # Contributions from rho for CH nodes for this core:
         # Any CH node with sum >= thresh becomes a candidate.
@@ -335,9 +330,9 @@ def collect_graph_from_rho(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos,
         # Fill graph row ii: header then neighbors (ascending by construction of np.unique)
         graph[ii, 0] = k
         if k:
-            graph[ii, 1:k + 1] = nbrs
+            graph[ii, 1 : k + 1] = nbrs
         # Clear the tail with -1s
-        graph[ii, k + 1:] = -1
+        graph[ii, k + 1 :] = -1
 
     return graph
 
@@ -391,7 +386,7 @@ def add_graphs(graphA, graphB):
     return graphC
 
 
-@njit
+@njit(cache=True)
 def _add_mult_graphs_numba(stacked_graphs):
     ngraphs, nnodes, row_width = stacked_graphs.shape
     max_neighbors = row_width - 1
@@ -430,6 +425,7 @@ def _add_mult_graphs_numba(stacked_graphs):
 
     return graphC
 
+
 ## Add/merge multiple graphs (union operation)
 # @brief This will merge or add multiple graphs
 # @param graphs Graphs to be merged
@@ -447,6 +443,8 @@ def add_mult_graphs(graphs):
 
     stacked_graphs = np.stack(graphs, axis=0).astype(np.int64, copy=False)
     return _add_mult_graphs_numba(stacked_graphs)
+
+
 ## Multiply two Adjacencies
 # @brief The ij of the resulting graph will be connected
 # if i in A and j in B have a common directly connected node k.
@@ -515,6 +513,7 @@ def get_a_small_graph():
     graph[5, 1] = 4  # Node 5 to 4
     return graph
 
+
 # Get a small graph as an adjacency matrix(>-<)
 # @brief This will construct a small graph for testing purposes.
 # This graph can be is trivially partitioned in two parts
@@ -533,7 +532,7 @@ def get_a_small_adjacency_matrix():
     graph[0, 1] = 1
     graph[0, 5] = 1
 
-    # Node 1 to 2, 4 
+    # Node 1 to 2, 4
     graph[1, 2] = 1
     graph[1, 4] = 1
 
@@ -544,27 +543,29 @@ def get_a_small_adjacency_matrix():
 
     return graph
 
+
 # Get a small graph as an adjacency matrix(>-<)
 # @brief This will construct a random adjacency matrix wiht n_nodes.
 # @param n_nodes (int): Number of nodes.
-# @param density (float): Number between 0,1 represneting likelihood of 
+# @param density (float): Number between 0,1 represneting likelihood of
 #                   edge connections in the random graph.
 # @param degreeOnDiagonal (bool): Whether or not to put the degree
 #                                 of nodes on the diagonal. 0 if False.
 # @return np.ndarray(n_nodes, n_nodes) of adjacency matrix.
-def get_random_adjacency_matrix(n_nodes, density = .1, degreeOnDiagonal = False):
+def get_random_adjacency_matrix(n_nodes, density=0.1, degreeOnDiagonal=False):
     gRaw = np.random.random((n_nodes, n_nodes))
-    gBool = ((gRaw + gRaw.T)/2) < density
+    gBool = ((gRaw + gRaw.T) / 2) < density
     gInt = gBool.astype(int)
     np.fill_diagonal(gInt, 0)
 
     assert np.all(gInt == gInt.T)
 
     if degreeOnDiagonal:
-        diag = np.sum(gInt, axis = 0)
+        diag = np.sum(gInt, axis=0)
         np.fill_diagonal(gInt, diag)
 
     return gInt
+
 
 # Update density matrix contraction based on the new graph of communities
 # @brief.
@@ -575,33 +576,35 @@ def get_random_adjacency_matrix(n_nodes, density = .1, degreeOnDiagonal = False)
 def update_dm_contraction(sdc, sy, P_contr, graph_for_pairs, new_graph_for_pairs, device):
     P_contr_new = torch.zeros_like(P_contr, device=device)
     for i in range(sy.nats):
-        tmp1 = graph_for_pairs[i][1:graph_for_pairs[i][0]+1]
-        tmp2 = new_graph_for_pairs[i][1:new_graph_for_pairs[i][0]+1]
+        tmp1 = graph_for_pairs[i][1 : graph_for_pairs[i][0] + 1]
+        tmp2 = new_graph_for_pairs[i][1 : new_graph_for_pairs[i][0] + 1]
         pos = np.searchsorted(tmp1, tmp2)
         # Ensure the indices are within bounds
         pos = np.clip(pos, a_min=0, a_max=len(tmp1) - 1)
         # Check if the positions are valid and match
         mask_isin_n_in_o = (pos < len(tmp1)) & (tmp1[pos] == tmp2)
-        #print('isin',(np.isin(tmp2, tmp1) == mask_isin_n_in_o).all())
+        # print('isin',(np.isin(tmp2, tmp1) == mask_isin_n_in_o).all())
 
         pos = np.searchsorted(tmp2, tmp1)
         # Ensure the indices are within bounds
-        #pos = np.clip(pos, max=len(tmp2) - 1)
+        # pos = np.clip(pos, max=len(tmp2) - 1)
         # Check if the positions are valid and match
         mask_isin_o_in_n = (pos < len(tmp2)) & (tmp2[pos] == tmp1)
-        #print('PC', (np.isin(tmp1, tmp2) == mask_isin_o_in_n).all())
+        # print('PC', (np.isin(tmp1, tmp2) == mask_isin_o_in_n).all())
 
         if sdc.UHF:
-            P_contr_new[:,:,i][:,:new_graph_for_pairs[i][0]  ][:,   mask_isin_n_in_o   ] = \
-                P_contr[:,:,i][:,:graph_for_pairs[i][0]][:,   mask_isin_o_in_n   ] 
+            P_contr_new[:, :, i][:, : new_graph_for_pairs[i][0]][:, mask_isin_n_in_o] = P_contr[:, :, i][
+                :, : graph_for_pairs[i][0]
+            ][:, mask_isin_o_in_n]
         else:
-            P_contr_new[:,i][:new_graph_for_pairs[i][0]  ][   mask_isin_n_in_o   ] = \
-                P_contr[:,i][:graph_for_pairs[i][0]][   mask_isin_o_in_n   ] 
+            P_contr_new[:, i][: new_graph_for_pairs[i][0]][mask_isin_n_in_o] = P_contr[:, i][: graph_for_pairs[i][0]][
+                mask_isin_o_in_n
+            ]
     P_contr[:] = P_contr_new[:]
     del P_contr_new
 
 
-@njit
+@njit(cache=True)
 def _get_maskd_numba(graph_for_pairs, max_deg):
     nats = graph_for_pairs.shape[0]
 
@@ -624,6 +627,7 @@ def _get_maskd_numba(graph_for_pairs, max_deg):
                 k += 1
 
     return graph_maskd
+
 
 # Get a graph where each atom has all atoms from its CH as its neighbors, including itself.
 # @brief .
@@ -654,15 +658,14 @@ def get_ch_graph(sdc, sy, fullGraph, parts, partsCoreHalo):
         ch_neighbors = np.asarray(partsCoreHalo[sublist_idx], dtype=new_graph_for_pairs.dtype)
         deg = int(ch_neighbors.size)
         if deg + 1 > row_width:
-            raise ValueError(
-                f"Max Degree parameter is too small: {row_width - 1} (< {deg})."
-            )
+            raise ValueError(f"Max Degree parameter is too small: {row_width - 1} (< {deg}).")
 
         new_graph_for_pairs[target_atoms, 0] = deg
         if deg:
-            new_graph_for_pairs[target_atoms, 1:deg + 1] = ch_neighbors
+            new_graph_for_pairs[target_atoms, 1 : deg + 1] = ch_neighbors
 
     return new_graph_for_pairs
+
 
 # Get a mask of diagonal blocks for contracted density matrix.
 # @brief .
@@ -673,6 +676,7 @@ def get_ch_graph(sdc, sy, fullGraph, parts, partsCoreHalo):
 def get_maskd(sdc, sy, graph_for_pairs):
     return _get_maskd_numba(graph_for_pairs, int(sdc.maxDeg))
 
+
 # @brief Convert graphs into a square adjacency matrix.
 # @param graph: Input graph to be converted to square adj matrix.
 # @param graphType: Input graph type. Options:
@@ -682,21 +686,21 @@ def get_maskd(sdc, sy, graph_for_pairs):
 #        'sklearn':NxX, array padded with -1s. Row i contains non -1 entries where
 #         it has edges.
 #         E.g. 3rd row [1,6,8,9,-1,-1,-1] => degree = 4, connections [1,6,8,9].
-def convert_to_adjacency_matrix(graph, graphType='sedacs'):
-    if graphType == 'sklearn':
+def convert_to_adjacency_matrix(graph, graphType="sedacs"):
+    if graphType == "sklearn":
         nNodes = graph.shape[0]
-        adj = np.zeros((nNodes, nNodes), dtype = int)
+        adj = np.zeros((nNodes, nNodes), dtype=int)
         for i in range(nNodes):
-            inds = graph[i]>-0.1
-            adj[i,graph[i][inds]] = 1
-            adj[graph[i][inds],i] = 1
+            inds = graph[i] > -0.1
+            adj[i, graph[i][inds]] = 1
+            adj[graph[i][inds], i] = 1
         return adj
-    elif graphType == 'sedacs':
+    if graphType == "sedacs":
         nNodes = graph.shape[0]
-        adj = np.zeros((nNodes, nNodes), dtype = int)
+        adj = np.zeros((nNodes, nNodes), dtype=int)
         for i in range(nNodes):
-            connections = graph[i,1:1+graph[i,0]]
-            adj[i,connections] = 1
+            connections = graph[i, 1 : 1 + graph[i, 0]]
+            adj[i, connections] = 1
             adj[connections, i] = 1
         return adj
 
@@ -704,13 +708,14 @@ def convert_to_adjacency_matrix(graph, graphType='sedacs'):
 def convert_to_graph(adj, maxDeg):
     nNodes = adj.shape[0]
 
-    graph = np.zeros((nNodes, maxDeg), dtype = int)
+    graph = np.zeros((nNodes, maxDeg), dtype=int)
     for i in range(nNodes):
-        connections = adj[i,:].nonzero()[0]
-        graph[i,1:1+len(connections)] = connections[0:len(connections)]
-        graph[i,0] = len(connections)
+        connections = adj[i, :].nonzero()[0]
+        graph[i, 1 : 1 + len(connections)] = connections[0 : len(connections)]
+        graph[i, 0] = len(connections)
 
     return graph
+
 
 # def symmetrize_graph(graph):
 #     nnodes = graph.shape[0]
@@ -733,6 +738,7 @@ def convert_to_graph(adj, maxDeg):
 #         sym_graph[i, 1:len(neighbors)+1] = neighbors
 
 #     return sym_graph
+
 
 @njit
 def symmetrize_graph(graph):
@@ -817,20 +823,22 @@ def symmetrize_graph(graph):
 
     return sym_graph
 
+
 def is_symmetric_graph(graph):
     nnodes = graph.shape[0]
 
     for i in range(nnodes):
         deg = graph[i, 0]
         for j in range(deg):
-            nbr = graph[i, j+1]
+            nbr = graph[i, j + 1]
             if nbr < 0:
                 continue
             # check if i is in nbr's neighbor list
             nbr_deg = graph[nbr, 0]
-            if i not in graph[nbr, 1:nbr_deg+1]:
+            if i not in graph[nbr, 1 : nbr_deg + 1]:
                 return False
     return True
+
 
 def graph_to_adjlist(graph, graphweights=None):
     nnodes = graph.shape[0]
@@ -856,10 +864,12 @@ def graph_to_adjlist(graph, graphweights=None):
 
     return adjlist
 
-def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos, indicesCore, hindex, coords, latticeVectors, nl, alpha=0.7):
-    """
-    Adaptively expanding the size of halo regions by multiplying the 
-    overlap matrix (estimated from exponential decay of neighboring distances) 
+
+def adaptive_halo_expansion(
+    graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos, indicesCore, hindex, coords, latticeVectors, nl, alpha=0.7
+):
+    """Adaptively expanding the size of halo regions by multiplying the
+    overlap matrix (estimated from exponential decay of neighboring distances)
     from the out of core halo regions with the density matrix in the core halo regions.
     Dimension of the overlap matrix: Number of atoms (NA) in whole system/non core halo regions x NA in core halo regions.
     Dimension of the density matrix: Number of orbitals (NO) in core halo regions x NO in core halo regions
@@ -898,18 +908,19 @@ def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos
         Decay parameter for the overlap matrix, by default 0.7.
     expandonly : bool, optional
         If True, only expand the halo regions without modifying previous core+halo regions, by default True.
-    
+
     Returns
     -------
     np.ndarray
         Updated graph with the new halo regions.
+
     """
     if coords is None or rho is None:
         raise ValueError("Coordinates and density matrix must be provided.")
 
     if graph is None:
         graph = np.zeros((nnodes, maxDeg + 1), dtype=int)
-    weights = np.zeros((nnodes))
+    weights = np.zeros(nnodes)
     ncores = len(indicesCore)
     nch = len(indicesCoreHalos)
 
@@ -934,7 +945,7 @@ def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos
     delta = delta - LBox[np.newaxis, np.newaxis, :] * np.round(delta / LBox[np.newaxis, np.newaxis, :])
     distances = np.linalg.norm(delta, axis=2)
     # Estimate the overlap matrix based on the distances
-    overlap_matrix = np.exp(-alpha * distances ** 2)  # Exponential decay based on distance
+    overlap_matrix = np.exp(-alpha * distances**2)  # Exponential decay based on distance
     # overlap_matrix = np.where(overlap_matrix > thresh, overlap_matrix, 0)
 
     # Contract the density matrix from number of orbitals to number of atoms by selecting the max # density matrix elements for each atom.
@@ -947,22 +958,21 @@ def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos
     # Create a reduced density matrix for the core halo regions
     reduced_rho = np.zeros((nch, ncores), dtype=float)
     # Vectorized max pooling to get the reduced density matrix
-    reduced_rho[:] = np.maximum.reduceat(
-                    np.maximum.reduceat(rho, hindex[:-1], axis=0),
-                    hindex[:-1], axis=1
-                )[:nch, :ncores]
+    reduced_rho[:] = np.maximum.reduceat(np.maximum.reduceat(rho, hindex[:-1], axis=0), hindex[:-1], axis=1)[
+        :nch, :ncores
+    ]
     # reduced_rho = np.where(reduced_rho > thresh, reduced_rho, 0)
     # Matrix multiplication to get the new halo regions
     SD = overlap_matrix @ reduced_rho
     # assign indices
-    indices = nonCoreHalo_indices 
+    indices = nonCoreHalo_indices
     # Thresholding the SD matrix to get the new halo regions
     for i in range(ncores):
         ii = indicesCoreHalos[i]
         # Recovering the connections we already have
         weights[:] = 0.0
         if graph[ii, 0]:
-            weights[graph[ii, 1:graph[ii, 0] + 1]] = thresh
+            weights[graph[ii, 1 : graph[ii, 0] + 1]] = thresh
         # Assign the weights
         weights[indices] += SD[:, i]
         # Vectorized selection of candidates above the threshold and not including self loop
@@ -970,32 +980,28 @@ def adaptive_halo_expansion(graph, rho, thresh, nnodes, maxDeg, indicesCoreHalos
         # selected = selected[selected != ii]
         k = len(selected)
 
-        # Degree guard 
+        # Degree guard
         if k > maxDeg:
-            msg = (
-                f"Max Degree parameter is too small, maxDeg: {maxDeg} "
-                f"ActuallDeg: {k}"
-            )
+            msg = f"Max Degree parameter is too small, maxDeg: {maxDeg} ActuallDeg: {k}"
             raise ValueError(msg)
 
         # Write back neighbors
-        graph[ii, 1:k + 1] = selected
+        graph[ii, 1 : k + 1] = selected
         graph[ii, 0] = k
-        graph[ii, k + 1:] = -1  # Fill the rest with -1s
+        graph[ii, k + 1 :] = -1  # Fill the rest with -1s
 
     return graph
 
 
 @njit
 def compute_added(G1, G2, NNZ1, NNZ2, nnodes, maxToAddRemove=100):
-    """
-    Compute, for each vertex i, which neighbors in G2[i, :] are NOT already in G1[i, :].
+    """Compute, for each vertex i, which neighbors in G2[i, :] are NOT already in G1[i, :].
 
     Parameters
     ----------
-    G1 : numpy 2D array 
+    G1 : numpy 2D array
         Adjacency list (row i has up to NNZ1[i] valid entries).
-    G2 : numpy 2D array 
+    G2 : numpy 2D array
         Second adjacency list (row i has up to NNZ2[i] valid entries).
     NNZ1 : numpy 1D array
         Counts per row for G1.
@@ -1012,9 +1018,10 @@ def compute_added(G1, G2, NNZ1, NNZ2, nnodes, maxToAddRemove=100):
         For each row i, the neighbors from G2 not in G1, packed in columns [0:N_added[i]).
     N_added : numpy 1D array
         Number of added neighbors per row.
+
     """
     N = G1.shape[0]
-    M = G1.shape[1] # max possible new neighbors per row
+    M = G1.shape[1]  # max possible new neighbors per row
     G_added = np.zeros((N, maxToAddRemove), dtype=G2.dtype)
     N_added = np.zeros(N, dtype=np.int64)
 
@@ -1046,16 +1053,16 @@ def compute_added(G1, G2, NNZ1, NNZ2, nnodes, maxToAddRemove=100):
 
     return G_added, N_added
 
+
 @njit
 def compute_removed(G1, G2, NNZ1, NNZ2, nnodes, maxToAddRemove=100):
-    """
-    Compute, for each vertex i, which neighbors in G1[i, :] that are not in G2[i, :].
+    """Compute, for each vertex i, which neighbors in G1[i, :] that are not in G2[i, :].
 
     Parameters
     ----------
-    G1 : numpy 2D array 
+    G1 : numpy 2D array
         Adjacency list (row i has up to NNZ1[i] valid entries).
-    G2 : numpy 2D array 
+    G2 : numpy 2D array
         Second adjacency list (row i has up to NNZ2[i] valid entries).
     NNZ1 : numpy 1D array
         Counts per row for G1.
@@ -1072,6 +1079,7 @@ def compute_removed(G1, G2, NNZ1, NNZ2, nnodes, maxToAddRemove=100):
         For each row i, the neighbors from G1 not in G2, packed in columns [0:N_added[i]).
     N_removed : numpy 1D array
         Number of removed neighbors per row.
+
     """
     N = G1.shape[0]
     M = G1.shape[1]
@@ -1106,11 +1114,11 @@ def compute_removed(G1, G2, NNZ1, NNZ2, nnodes, maxToAddRemove=100):
 
     return G_removed, N_removed
 
+
 # Use G_removed and G_added to update from G1 to G2
 @njit
 def update_graph(G1, NNZ1, G_removed, N_removed, G_added, N_added):
-    """
-    Update G1 by removing neighbors in G_removed and adding neighbors in G_added.
+    """Update G1 by removing neighbors in G_removed and adding neighbors in G_added.
 
     Parameters
     ----------
@@ -1129,6 +1137,7 @@ def update_graph(G1, NNZ1, G_removed, N_removed, G_added, N_added):
     -------
     G_updated : int64[:, :]
         Updated adjacency list.
+
     """
     N, maxDeg = G1.shape
     G_updated = np.full((N, maxDeg + 1), -1, dtype=G1.dtype)
@@ -1163,43 +1172,57 @@ def update_graph(G1, NNZ1, G_removed, N_removed, G_added, N_added):
             G_updated[i, cnt + j + 1] = G_added[i, j]
 
         G_updated[i, 0] = NNZ_updated[i]
-        
+
         # 5) sort the neighbor list
         if NNZ_updated[i] > 1:
-            neighbors = G_updated[i, 1:NNZ_updated[i] + 1]
+            neighbors = G_updated[i, 1 : NNZ_updated[i] + 1]
             neighbors.sort()
-            G_updated[i, 1:NNZ_updated[i] + 1] = neighbors
+            G_updated[i, 1 : NNZ_updated[i] + 1] = neighbors
 
     return G_updated
 
 
 def graph_diff_and_update(prevGraph, graphOnRank, partsOnRank, comm, maxToAddRemove=100):
     nnodes = prevGraph.shape[0]
-    
+
     # Initialize added, removed, and updated graph
     G_added = np.zeros((nnodes, maxToAddRemove + 1), dtype=prevGraph.dtype)
     G_removed = np.zeros((nnodes, maxToAddRemove + 1), dtype=prevGraph.dtype)
-    
+
     # Get the local graph on this rank
     localGraph = prevGraph[partsOnRank]
     localGraph_new = graphOnRank[partsOnRank].copy()
 
     # Compute added and removed neighbors
-    G_added[partsOnRank, 1:], G_added[partsOnRank, 0] = compute_added(localGraph[:, 1:], localGraph_new[:, 1:], localGraph[:, 0], localGraph_new[:, 0], nnodes, maxToAddRemove=maxToAddRemove)
-    G_removed[partsOnRank, 1:], G_removed[partsOnRank, 0] = compute_removed(localGraph[:, 1:], localGraph_new[:, 1:], localGraph[:, 0], localGraph_new[:, 0], nnodes, maxToAddRemove=maxToAddRemove)
+    G_added[partsOnRank, 1:], G_added[partsOnRank, 0] = compute_added(
+        localGraph[:, 1:],
+        localGraph_new[:, 1:],
+        localGraph[:, 0],
+        localGraph_new[:, 0],
+        nnodes,
+        maxToAddRemove=maxToAddRemove,
+    )
+    G_removed[partsOnRank, 1:], G_removed[partsOnRank, 0] = compute_removed(
+        localGraph[:, 1:],
+        localGraph_new[:, 1:],
+        localGraph[:, 0],
+        localGraph_new[:, 0],
+        nnodes,
+        maxToAddRemove=maxToAddRemove,
+    )
 
     local_full_collection = False
-    if max(G_added[:,0]) > maxToAddRemove or max(G_removed[:,0]) > maxToAddRemove:
-        #raise ValueError("maxToAddRemove is too small to accommodate the number of added/removed neighbors.")
+    if max(G_added[:, 0]) > maxToAddRemove or max(G_removed[:, 0]) > maxToAddRemove:
+        # raise ValueError("maxToAddRemove is too small to accommodate the number of added/removed neighbors.")
         print("maxToAddRemove is too small to accommodate the number of added/removed neighbors.\n")
         print("Do full collection instead\n")
         local_full_collection = True
-    
+
     # Use logical OR reduction to see if ANY rank has True
-    global_full_collection = comm.allreduce(1 if local_full_collection else 0, op=MPI.SUM) > 0 
+    global_full_collection = comm.allreduce(1 if local_full_collection else 0, op=MPI.SUM) > 0
 
     if global_full_collection:
-        print("Collecting the full graph")  
+        print("Collecting the full graph")
         fullGraph = collect_and_sum_matrices_float(graphOnRank, comm)
         return fullGraph
 
@@ -1208,6 +1231,8 @@ def graph_diff_and_update(prevGraph, graphOnRank, partsOnRank, comm, maxToAddRem
     comm.Allreduce(MPI.IN_PLACE, G_removed, op=MPI.SUM)
 
     # Update the graph using the added and removed neighbors
-    updatedGraph = update_graph(prevGraph[:, 1:], prevGraph[:, 0], G_removed[:, 1:], G_removed[:, 0], G_added[:, 1:], G_added[:, 0])
+    updatedGraph = update_graph(
+        prevGraph[:, 1:], prevGraph[:, 0], G_removed[:, 1:], G_removed[:, 0], G_added[:, 1:], G_added[:, 0]
+    )
 
     return updatedGraph
