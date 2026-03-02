@@ -10,6 +10,7 @@ import warnings
 
 import numpy as np
 import torch
+from numba import njit
 from seqm.seqm_functions.pack import pack
 
 from sedacs.chemical_potential import get_mu
@@ -150,6 +151,240 @@ def _use_backprop_forces(sdc, eng):
     if not sdc.doForces:
         return False
     return (not sdc.analyticForces) or eng.use_pyseqm_lt
+
+
+def _init_density_diis_state(sdc):
+    """Initialize DM-DIIS state/config from optional driver attributes."""
+    damp = float(getattr(sdc, "diisDamp", 1.0))
+    damp = min(max(damp, 0.0), 1.0)
+    return {
+        "enabled": bool(getattr(sdc, "diis", True)),
+        "history": max(2, int(getattr(sdc, "diisHistory", 6))),
+        "start": max(1, int(getattr(sdc, "diisStart", 2))),
+        "reg": float(getattr(sdc, "diisReg", 1.0e-12)),
+        "max_coeff": float(getattr(sdc, "diisMaxCoeff", 20.0)),
+        "damp": damp,
+        "entries": [],
+    }
+
+
+def _reset_density_diis_history(diis_state):
+    """Clear DM-DIIS history buffers."""
+    if diis_state is None:
+        return
+    diis_state["entries"].clear()
+
+
+def _build_dm_sparse_entry(P_contr, P_contr_new, graph_for_pairs, uhf, alpha):
+    """Build sparse DM vectors in graph-invariant global keys.
+
+    Keys are directed pairs `(spin, j, i)` encoded into int64.
+    Stores:
+      y = x + alpha * r  (linearly mixed map at this iteration)
+      r = F(x) - x       (Pulay residual)
+    """
+    if torch.is_tensor(graph_for_pairs):
+        graph_np = graph_for_pairs.detach().cpu().numpy()
+    else:
+        graph_np = np.asarray(graph_for_pairs)
+
+    nats = int(graph_np.shape[0])
+    total_pairs = int(np.sum(graph_np[:, 0], dtype=np.int64))
+    spin_mult = 2 if uhf else 1
+    total_entries = spin_mult * total_pairs
+
+    keys = np.empty(total_entries, dtype=np.int64)
+    y_vals = np.empty((total_entries, 16), dtype=np.float64)
+    r_vals = np.empty((total_entries, 16), dtype=np.float64)
+    targets = np.empty((total_entries, 3 if uhf else 2), dtype=np.int64)
+
+    # Slots are [0, n_j) where graph_for_pairs[j, 1 + slot] defines neighbor i.
+    slot_template = np.arange(graph_np.shape[1] - 1, dtype=np.int64)
+    pair_base = np.int64(nats) * np.int64(nats)
+    cursor = 0
+    p_in_np = P_contr.detach().numpy()
+    p_out_np = P_contr_new.detach().numpy()
+
+    for j in range(nats):
+        n_j = int(graph_np[j, 0])
+        if n_j <= 0:
+            continue
+
+        neigh = np.asarray(graph_np[j, 1 : 1 + n_j], dtype=np.int64)
+        slots = slot_template[:n_j]
+
+        if uhf:
+            pin = p_in_np[:, :n_j, j].reshape(2, n_j, 16)
+            rout = (p_out_np[:, :n_j, j] - p_in_np[:, :n_j, j]).reshape(2, n_j, 16)
+            for spin in range(2):
+                nxt = cursor + n_j
+                keys[cursor:nxt] = spin * pair_base + np.int64(j) * np.int64(nats) + neigh
+                y_vals[cursor:nxt] = pin[spin] + alpha * rout[spin]
+                r_vals[cursor:nxt] = rout[spin]
+                targets[cursor:nxt, 0] = spin
+                targets[cursor:nxt, 1] = slots
+                targets[cursor:nxt, 2] = j
+                cursor = nxt
+        else:
+            pin = p_in_np[:n_j, j].reshape(n_j, 16)
+            rout = (p_out_np[:n_j, j] - p_in_np[:n_j, j]).reshape(n_j, 16)
+            nxt = cursor + n_j
+            keys[cursor:nxt] = np.int64(j) * np.int64(nats) + neigh
+            y_vals[cursor:nxt] = pin + alpha * rout
+            r_vals[cursor:nxt] = rout
+            targets[cursor:nxt, 0] = slots
+            targets[cursor:nxt, 1] = j
+            cursor = nxt
+
+    keys = np.ascontiguousarray(keys[:cursor], dtype=np.int64)
+    y_vals = np.ascontiguousarray(y_vals[:cursor], dtype=np.float64)
+    r_vals = np.ascontiguousarray(r_vals[:cursor], dtype=np.float64)
+    targets = np.ascontiguousarray(targets[:cursor], dtype=np.int64)
+
+    if keys.size == 0:
+        return {"keys": keys, "y": y_vals, "r": r_vals, "targets": targets, "dup_keys": False}
+
+    order = np.argsort(keys, kind="mergesort")
+    keys = np.ascontiguousarray(keys[order], dtype=np.int64)
+    y_vals = np.ascontiguousarray(y_vals[order], dtype=np.float64)
+    r_vals = np.ascontiguousarray(r_vals[order], dtype=np.float64)
+    targets = np.ascontiguousarray(targets[order], dtype=np.int64)
+    dup_keys = bool(np.any(keys[1:] == keys[:-1]))
+    return {"keys": keys, "y": y_vals, "r": r_vals, "targets": targets, "dup_keys": dup_keys}
+
+
+def _sparse_dot(keys_a, vals_a, keys_b, vals_b):
+    """Dot product over sparse vectors with sorted unique global pair keys."""
+    return float(_sparse_dot_numba(keys_a, vals_a, keys_b, vals_b))
+
+
+@njit(cache=True)
+def _sparse_dot_numba(keys_a, vals_a, keys_b, vals_b):
+    """Numba-accelerated sparse key merge-dot."""
+    na = keys_a.shape[0]
+    nb = keys_b.shape[0]
+    if na == 0 or nb == 0:
+        return 0.0
+
+    i = 0
+    j = 0
+    total = 0.0
+
+    while i < na and j < nb:
+        ka = keys_a[i]
+        kb = keys_b[j]
+        if ka == kb:
+            s = 0.0
+            for k in range(16):
+                s += vals_a[i, k] * vals_b[j, k]
+            total += s
+            i += 1
+            j += 1
+        elif ka < kb:
+            i += 1
+        else:
+            j += 1
+
+    return total
+
+
+def _accumulate_projected(accum, coeff, src_keys, src_vals, tgt_keys):
+    """accum += coeff * src_vals projected onto tgt_keys (missing -> zero)."""
+    if src_keys.size == 0 or tgt_keys.size == 0 or coeff == 0.0:
+        return
+    idx = np.searchsorted(src_keys, tgt_keys)
+    mask = (idx < src_keys.size) & (src_keys[idx] == tgt_keys)
+    if np.any(mask):
+        accum[mask] += coeff * src_vals[idx[mask]]
+
+
+def _scatter_sparse_dm_values(P_contr, values, targets, uhf):
+    """Scatter sparse block values into the current contracted-DM slot layout."""
+    if values.size == 0:
+        return
+    blocks = values.reshape(-1, 4, 4)
+    p_np = P_contr.detach().numpy()
+    if uhf:
+        p_np[targets[:, 0], targets[:, 1], targets[:, 2], :, :] = blocks
+    else:
+        p_np[targets[:, 0], targets[:, 1], :, :] = blocks
+
+
+def _mix_density_with_diis(sdc, gsc, P_contr, P_contr_new, graph_for_pairs, diis_state):
+    """Mix contracted DM using key-based residual-DIIS with linear fallback.
+
+    Parameters
+    ----------
+    P_contr:
+        Current SCF input density (updated in place).
+    P_contr_new:
+        SCF output map for the current iteration.
+    """
+    alpha = float(sdc.alpha)
+    current = _build_dm_sparse_entry(P_contr, P_contr_new, graph_for_pairs, sdc.UHF, alpha)
+    y_linear = current["y"]
+
+    def _fallback(mode):
+        _scatter_sparse_dm_values(P_contr, y_linear, current["targets"], sdc.UHF)
+        return mode, None
+
+    if current["dup_keys"]:
+        # Defensive fallback for malformed graph rows with repeated neighbors.
+        _reset_density_diis_history(diis_state)
+        return _fallback("linear_dupkey")
+
+    if (diis_state is None) or (not diis_state["enabled"]):
+        return _fallback("linear")
+
+    entries = diis_state["entries"]
+    entries.append({"keys": current["keys"], "y": current["y"], "r": current["r"]})
+    if len(entries) > diis_state["history"]:
+        entries.pop(0)
+
+    m = len(entries)
+    if (gsc < diis_state["start"]) or (m < 2):
+        return _fallback("linear")
+
+    B = np.full((m + 1, m + 1), -1.0, dtype=np.float64)
+    B[m, m] = 0.0
+    rhs = np.zeros(m + 1, dtype=np.float64)
+    rhs[m] = -1.0
+
+    for i in range(m):
+        for j in range(i, m):
+            val = _sparse_dot(entries[i]["keys"], entries[i]["r"], entries[j]["keys"], entries[j]["r"])
+            B[i, j] = val
+            B[j, i] = val
+
+    reg = diis_state["reg"]
+    if reg > 0.0:
+        diag = np.diag(B[:m, :m])
+        scale = float(np.mean(diag)) if diag.size else 1.0
+        B[np.arange(m), np.arange(m)] += reg * max(scale, 1.0)
+
+    coeffs = None
+    try:
+        coeffs = np.linalg.solve(B, rhs)[:m]
+    except np.linalg.LinAlgError:
+        coeffs = None
+
+    if coeffs is None or (not np.all(np.isfinite(coeffs))):
+        return _fallback("linear_fallback")
+
+    max_coeff = diis_state["max_coeff"]
+    if (max_coeff > 0.0) and (np.max(np.abs(coeffs)) > max_coeff):
+        return _fallback("linear_clipped")
+
+    y_diis = np.zeros_like(current["y"])
+    for c, entry in zip(coeffs, entries):
+        c = float(c)
+        _accumulate_projected(y_diis, c, entry["keys"], entry["y"], current["keys"])
+
+    damp = float(diis_state["damp"])
+    mixed_vals = (1.0 - damp) * y_linear + damp * y_diis
+    _scatter_sparse_dm_values(P_contr, mixed_vals, current["targets"], sdc.UHF)
+
+    return "diis", coeffs
 
 
 def _collect_single_point_data(
@@ -565,13 +800,14 @@ def get_singlePointDM(
     hindex,
     mu0,
     P_contr,
+    P_contr_new,
     graph_for_pairs,
     eValOnRank_list,
     Q_list,
     NH_Nh_Hs_list,
     core_indices_in_sub_expanded_list,
 ):
-    """Update P_contr with core columns of CH dm.
+    """Build contracted SCF output map and graph from core columns of CH DM.
 
     This is done in parallel on ALL local ranks of node 0 on CPU. 
     TODO: Improve the efficiency.
@@ -600,6 +836,8 @@ def get_singlePointDM(
         The chemical potential.
     P_contr:
         Contracted density matrix. Shape: (sy.nats, sdc.maxDeg, 4,4)
+    P_contr_new:
+        SCF output map for contracted density matrix (same shape as ``P_contr``).
     graph_for_pairs:
         Graph of communities. E.g. graph_for_pairs[i] is a whole CH community
         in which atom i is a core atom, including itself. graph_for_pairs[i][0]
@@ -697,8 +935,8 @@ def get_singlePointDM(
             # Sum of abs differences between new and old DM.
             P_contr_sumDif += float(torch.sum(torch.abs(TMP1 - TMP2)).item())
 
-            # Update DM.
-            P_contr[:, :max_len, parts[partIndex]] = (1 - sdc.alpha) * TMP1 + sdc.alpha * TMP2
+            # Build SCF output map (mixing is applied after distributed DM update).
+            P_contr_new[:, :max_len, parts[partIndex]] = TMP2
 
             # Packing rho_ren from 4x4 blocks into normal form based on number
             # of AOs per atom.
@@ -729,8 +967,8 @@ def get_singlePointDM(
             # Sum of abs differences between new and old DM.
             P_contr_sumDif += float(torch.sum(torch.abs(TMP1 - TMP2)).item())
 
-            # Update DM.
-            P_contr[:max_len, parts[partIndex]] = (1 - sdc.alpha) * TMP1 + sdc.alpha * TMP2
+            # Build SCF output map (mixing is applied after distributed DM update).
+            P_contr_new[:max_len, parts[partIndex]] = TMP2
 
             # Packing rho_ren from 4x4 blocks into normal form based on number
             # of AOs per atom.
@@ -1030,6 +1268,17 @@ def get_adaptiveDM_PYSEQM(
 
     P_contr = torch.from_numpy(P_contr_ary).to(device)
 
+    # Shared buffer for SCF output map (P_out) used by DM-DIIS mixing.
+    P_contr_new_win = MPI.Win.Allocate_shared(
+        P_contr_nbytes, torch.tensor(0, dtype=eng.torch_dt).element_size(), comm=node_comm
+    )
+    P_contr_new_buf, _ = P_contr_new_win.Shared_query(0)
+    P_contr_new_ary = np.ndarray(buffer=P_contr_new_buf, dtype=eng.np_dt, shape=(P_contr_size))
+    if node_rank == 0:
+        P_contr_new_ary[:] = P_contr_ary[:]
+    comm.Barrier()
+    P_contr_new = torch.from_numpy(P_contr_new_ary).to(device)
+
     if rank == 0:
         print(f"BCST2 {time.perf_counter() - tic:>7.2f} (s)", rank)
 
@@ -1054,6 +1303,8 @@ def get_adaptiveDM_PYSEQM(
     if sdc.UHF:
         mu0 = np.array([mu0 + 0.1, mu0 - 0.1])
         mu0 = np.array([-1.3, -5.5])
+
+    diis_state = _init_density_diis_state(sdc) if rank == 0 else None
 
     # Iteration loop.
     for gsc in range(sdc.numAdaptIter):
@@ -1205,6 +1456,7 @@ def get_adaptiveDM_PYSEQM(
                 NH_Nh_Hs_list = torch.load("NH_Nh_Hs_list.pt")
                 core_indices_in_sub_expanded_list = torch.load("core_indices_in_sub_expanded_list.pt")
                 Nocc_list = torch.load("Nocc_list.pt")
+                _reset_density_diis_history(diis_state)
 
         # Save for future restart. Slows things down significantly.
         if rank == 0 and sdc.restartSave:
@@ -1250,6 +1502,8 @@ def get_adaptiveDM_PYSEQM(
             eValOnRank_list, NH_Nh_Hs_list, core_indices_in_sub_expanded_list, mu0 = node_comm.bcast(
                 dm_state, root=0
             )
+            if rank == 0:
+                P_contr_new[:] = P_contr
             node_comm.Barrier()
 
             # Density matrix update and the graph from the DM.
@@ -1266,6 +1520,7 @@ def get_adaptiveDM_PYSEQM(
                     hindex,
                     mu0,
                     P_contr,
+                    P_contr_new,
                     graph_for_pairs,
                     eValOnRank_list,
                     Q_list_on_rank,
@@ -1294,7 +1549,22 @@ def get_adaptiveDM_PYSEQM(
                 scfError = float(max(scfErrorOnRank_LIST))
                 print("SCF ERR =", scfError)
 
+                mix_mode, diis_coeffs = _mix_density_with_diis(
+                    sdc, gsc, P_contr, P_contr_new, graph_for_pairs, diis_state
+                )
+                print(
+                    "DM MIX =",
+                    mix_mode,
+                    "| hist =",
+                    len(diis_state["entries"]) if diis_state is not None else 0,
+                )
+                if diis_coeffs is not None and sdc.verb:
+                    print("DIIS COEFF =", np.array2string(diis_coeffs, precision=4))
+
                 print(f"Time to add graphs {time.perf_counter() - tic:>7.2f} (s)")
+
+            # Ensure node-0 workers don't read stale DM state before the next phase.
+            node_comm.Barrier()
 
             del fullGraphRho
 
