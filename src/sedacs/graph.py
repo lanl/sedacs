@@ -188,20 +188,21 @@ def collect_graph_from_rho_PYSEQM(graph, rho, thresh, nnodes, maxDeg, indices, h
         graph = np.zeros((nnodes, maxDeg + 1), dtype=np.int16) - 1
 
     # print('graph', graph[11])
+    indices = np.asarray(indices, dtype=np.int64)
     nats = len(indices)
-    weights = np.zeros(nnodes)
-    ki_ = 0
-    if type(rho) is not np.ndarray:
-        rho = rho.numpy().astype(np.float32)
-    # Precompute the slice lengths for all j
-    slice_lengths = hindex[np.array(indices) + 1] - hindex[indices]
-    # Vectorize the extraction of slices from rho
-    cumsum_lengths = np.cumsum(np.r_[0, slice_lengths[:-1]])
-    max_length = np.max(slice_lengths)
-    slice_indices = cumsum_lengths[:, None] + np.arange(max_length)
-    # Mask to avoid out-of-bounds indexing
-    valid_mask = slice_indices < cumsum_lengths[:, None] + slice_lengths[:, None]
-    valid_indices = slice_indices[valid_mask]
+    weights = np.zeros(nnodes, dtype=np.float64)
+    weights_ch = np.empty(nats, dtype=np.float64)
+    if torch.is_tensor(rho):
+        rho = rho.detach().cpu().numpy()
+    else:
+        rho = np.asarray(rho)
+    rho = np.ascontiguousarray(rho)
+    # Precompute orbital slice lengths for CH atoms.
+    hindex = np.asarray(hindex, dtype=np.int64)
+    slice_lengths = (hindex[indices + 1] - hindex[indices]).astype(np.int64, copy=False)
+    cumsum_lengths = np.zeros_like(slice_lengths)
+    if slice_lengths.size > 1:
+        cumsum_lengths[1:] = np.cumsum(slice_lengths[:-1])
 
     for i in range(nats):
         ii = indices[i]
@@ -213,24 +214,11 @@ def collect_graph_from_rho_PYSEQM(graph, rho, thresh, nnodes, maxDeg, indices, h
         weights[graph[ii, j]] = thresh
 
         ###
-        ki_old = ki_
-        ki_ = ki_ + hindex[ii + 1] - hindex[ii]
-        ki_ar = np.arange(ki_old, ki_, 1)
-        kj = 0  # Initialize kj
+        _compute_abs_sums_pyseqm_row_numba(rho, cumsum_lengths, slice_lengths, i, weights_ch)
+        for j in range(nats):
+            weights[indices[j]] += weights_ch[j]
 
-        flat_rho_slices = rho[ki_ar][:, kj + valid_indices]
-        expanded_rho_slices = np.zeros((len(ki_ar), len(slice_lengths), max_length), dtype=rho.dtype)
-        expanded_rho_slices[:, valid_mask] = flat_rho_slices
-        abs_sums = np.sum(np.abs(expanded_rho_slices) ** 2, axis=(0, 2)) ** 0.5
-        np.add.at(weights, indices, abs_sums)
-
-        mask = (np.arange(nnodes) != ii) & (weights >= thresh)
-        valid_jj_indices = np.nonzero(mask)[0]
-        k = len(valid_jj_indices)
-        if k > maxDeg:
-            print("!!!ERROR: Max Degree parameter is too small")
-            exit(0)
-        graph[ii, 1 : k + 1] = valid_jj_indices[:maxDeg]
+        k = _write_graph_row_from_weights_numba(graph[ii], weights, int(ii), float(thresh), int(maxDeg))
         graph[ii, 0] = k
 
         # if sum(abs(weights1-weights)) > 1e-14:
@@ -282,6 +270,43 @@ def collect_graph_from_rho_PYSEQM(graph, rho, thresh, nnodes, maxDeg, indices, h
         # graph[ii,0] = k
 
     return graph
+
+
+@njit(cache=True)
+def _compute_abs_sums_pyseqm_row_numba(rho, cumsum_lengths, slice_lengths, row_atom, out):
+    """Compute per-atom |rho| block norms for one CH row atom."""
+    row_start = cumsum_lengths[row_atom]
+    row_len = slice_lengths[row_atom]
+    row_end = row_start + row_len
+    nats = slice_lengths.shape[0]
+
+    for atom_j in range(nats):
+        col_start = cumsum_lengths[atom_j]
+        col_end = col_start + slice_lengths[atom_j]
+        acc = 0.0
+        for oi in range(row_start, row_end):
+            for oj in range(col_start, col_end):
+                val = rho[oi, oj]
+                acc += val * val
+        out[atom_j] = np.sqrt(acc)
+
+
+@njit(cache=True)
+def _write_graph_row_from_weights_numba(graph_row, weights, self_idx, thresh, max_deg):
+    """Write neighbors with weight >= thresh into one sedacs graph row."""
+    k = 0
+    nnodes = weights.shape[0]
+    for jj in range(nnodes):
+        if jj == self_idx:
+            continue
+        if weights[jj] >= thresh:
+            k += 1
+            if k > max_deg:
+                raise ValueError("Max Degree parameter is too small")
+            graph_row[k] = jj
+    for col in range(k + 1, max_deg + 1):
+        graph_row[col] = -1
+    return k
 
 
 ## Collect a graph from DMs
@@ -573,24 +598,77 @@ def get_random_adjacency_matrix(n_nodes, density=0.1, degreeOnDiagonal=False):
 # @param P_contr (tensor): Old density matrix.
 # @param graph_for_pairs (list): old graph of communities.
 # @param new_graph_for_pairs (list): new graph of communities.
-def update_dm_contraction(sdc, sy, P_contr, graph_for_pairs, new_graph_for_pairs, device):
+@njit(cache=True)
+def _update_dm_contraction_rhf_numba(p_old, p_new, old_graph, new_graph, nats):
+    """Remap RHF contracted DM blocks from old CH graph slots into new slots."""
+    slot_map = np.full(nats, -1, dtype=np.int64)
+    for i in range(nats):
+        old_deg = int(old_graph[i, 0])
+        new_deg = int(new_graph[i, 0])
+
+        for old_slot in range(old_deg):
+            nbr = int(old_graph[i, old_slot + 1])
+            if (nbr >= 0) and (nbr < nats):
+                slot_map[nbr] = old_slot
+
+        for new_slot in range(new_deg):
+            nbr = int(new_graph[i, new_slot + 1])
+            if (nbr < 0) or (nbr >= nats):
+                continue
+            old_slot = slot_map[nbr]
+            if old_slot >= 0:
+                for a in range(4):
+                    for b in range(4):
+                        p_new[new_slot, i, a, b] = p_old[old_slot, i, a, b]
+
+        for old_slot in range(old_deg):
+            nbr = int(old_graph[i, old_slot + 1])
+            if (nbr >= 0) and (nbr < nats):
+                slot_map[nbr] = -1
+
+
+@njit(cache=True)
+def _update_dm_contraction_uhf_numba(p_old, p_new, old_graph, new_graph, nats):
+    """Remap UHF contracted DM blocks from old CH graph slots into new slots."""
+    slot_map = np.full(nats, -1, dtype=np.int64)
+    for i in range(nats):
+        old_deg = int(old_graph[i, 0])
+        new_deg = int(new_graph[i, 0])
+
+        for old_slot in range(old_deg):
+            nbr = int(old_graph[i, old_slot + 1])
+            if (nbr >= 0) and (nbr < nats):
+                slot_map[nbr] = old_slot
+
+        for new_slot in range(new_deg):
+            nbr = int(new_graph[i, new_slot + 1])
+            if (nbr < 0) or (nbr >= nats):
+                continue
+            old_slot = slot_map[nbr]
+            if old_slot >= 0:
+                for spin in range(2):
+                    for a in range(4):
+                        for b in range(4):
+                            p_new[spin, new_slot, i, a, b] = p_old[spin, old_slot, i, a, b]
+
+        for old_slot in range(old_deg):
+            nbr = int(old_graph[i, old_slot + 1])
+            if (nbr >= 0) and (nbr < nats):
+                slot_map[nbr] = -1
+
+
+def _update_dm_contraction_fallback(sdc, sy, P_contr, graph_for_pairs, new_graph_for_pairs, device):
+    """Fallback implementation (used for non-CPU tensors)."""
     P_contr_new = torch.zeros_like(P_contr, device=device)
     for i in range(sy.nats):
         tmp1 = graph_for_pairs[i][1 : graph_for_pairs[i][0] + 1]
         tmp2 = new_graph_for_pairs[i][1 : new_graph_for_pairs[i][0] + 1]
         pos = np.searchsorted(tmp1, tmp2)
-        # Ensure the indices are within bounds
         pos = np.clip(pos, a_min=0, a_max=len(tmp1) - 1)
-        # Check if the positions are valid and match
         mask_isin_n_in_o = (pos < len(tmp1)) & (tmp1[pos] == tmp2)
-        # print('isin',(np.isin(tmp2, tmp1) == mask_isin_n_in_o).all())
 
         pos = np.searchsorted(tmp2, tmp1)
-        # Ensure the indices are within bounds
-        # pos = np.clip(pos, max=len(tmp2) - 1)
-        # Check if the positions are valid and match
         mask_isin_o_in_n = (pos < len(tmp2)) & (tmp2[pos] == tmp1)
-        # print('PC', (np.isin(tmp1, tmp2) == mask_isin_o_in_n).all())
 
         if sdc.UHF:
             P_contr_new[:, :, i][:, : new_graph_for_pairs[i][0]][:, mask_isin_n_in_o] = P_contr[:, :, i][
@@ -602,6 +680,33 @@ def update_dm_contraction(sdc, sy, P_contr, graph_for_pairs, new_graph_for_pairs
             ]
     P_contr[:] = P_contr_new[:]
     del P_contr_new
+
+
+def update_dm_contraction(sdc, sy, P_contr, graph_for_pairs, new_graph_for_pairs, device):
+    if P_contr.device.type != "cpu":
+        _update_dm_contraction_fallback(sdc, sy, P_contr, graph_for_pairs, new_graph_for_pairs, device)
+        return
+
+    if torch.is_tensor(graph_for_pairs):
+        old_graph = graph_for_pairs.detach().cpu().numpy()
+    else:
+        old_graph = np.asarray(graph_for_pairs)
+    if torch.is_tensor(new_graph_for_pairs):
+        new_graph = new_graph_for_pairs.detach().cpu().numpy()
+    else:
+        new_graph = np.asarray(new_graph_for_pairs)
+
+    old_graph = np.ascontiguousarray(old_graph, dtype=np.int64)
+    new_graph = np.ascontiguousarray(new_graph, dtype=np.int64)
+    p_old = P_contr.detach().numpy()
+    p_new = np.zeros_like(p_old)
+
+    if sdc.UHF:
+        _update_dm_contraction_uhf_numba(p_old, p_new, old_graph, new_graph, int(sy.nats))
+    else:
+        _update_dm_contraction_rhf_numba(p_old, p_new, old_graph, new_graph, int(sy.nats))
+
+    p_old[:] = p_new
 
 
 @njit(cache=True)

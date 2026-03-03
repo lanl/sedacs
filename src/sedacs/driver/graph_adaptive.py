@@ -188,6 +188,7 @@ def _build_dm_sparse_entry(P_contr, P_contr_new, graph_for_pairs, uhf, alpha):
     else:
         graph_np = np.asarray(graph_for_pairs)
 
+    graph_np = np.ascontiguousarray(graph_np, dtype=np.int64)
     nats = int(graph_np.shape[0])
     total_pairs = int(np.sum(graph_np[:, 0], dtype=np.int64))
     spin_mult = 2 if uhf else 1
@@ -197,44 +198,31 @@ def _build_dm_sparse_entry(P_contr, P_contr_new, graph_for_pairs, uhf, alpha):
     y_vals = np.empty((total_entries, 16), dtype=np.float64)
     r_vals = np.empty((total_entries, 16), dtype=np.float64)
     targets = np.empty((total_entries, 3 if uhf else 2), dtype=np.int64)
+    p_in_np = np.ascontiguousarray(P_contr.detach().numpy())
+    p_out_np = np.ascontiguousarray(P_contr_new.detach().numpy())
 
-    # Slots are [0, n_j) where graph_for_pairs[j, 1 + slot] defines neighbor i.
-    slot_template = np.arange(graph_np.shape[1] - 1, dtype=np.int64)
-    pair_base = np.int64(nats) * np.int64(nats)
-    cursor = 0
-    p_in_np = P_contr.detach().numpy()
-    p_out_np = P_contr_new.detach().numpy()
-
-    for j in range(nats):
-        n_j = int(graph_np[j, 0])
-        if n_j <= 0:
-            continue
-
-        neigh = np.asarray(graph_np[j, 1 : 1 + n_j], dtype=np.int64)
-        slots = slot_template[:n_j]
-
-        if uhf:
-            pin = p_in_np[:, :n_j, j].reshape(2, n_j, 16)
-            rout = (p_out_np[:, :n_j, j] - p_in_np[:, :n_j, j]).reshape(2, n_j, 16)
-            for spin in range(2):
-                nxt = cursor + n_j
-                keys[cursor:nxt] = spin * pair_base + np.int64(j) * np.int64(nats) + neigh
-                y_vals[cursor:nxt] = pin[spin] + alpha * rout[spin]
-                r_vals[cursor:nxt] = rout[spin]
-                targets[cursor:nxt, 0] = spin
-                targets[cursor:nxt, 1] = slots
-                targets[cursor:nxt, 2] = j
-                cursor = nxt
-        else:
-            pin = p_in_np[:n_j, j].reshape(n_j, 16)
-            rout = (p_out_np[:n_j, j] - p_in_np[:n_j, j]).reshape(n_j, 16)
-            nxt = cursor + n_j
-            keys[cursor:nxt] = np.int64(j) * np.int64(nats) + neigh
-            y_vals[cursor:nxt] = pin + alpha * rout
-            r_vals[cursor:nxt] = rout
-            targets[cursor:nxt, 0] = slots
-            targets[cursor:nxt, 1] = j
-            cursor = nxt
+    if uhf:
+        cursor = _build_dm_sparse_entry_uhf_numba(
+            graph_np,
+            p_in_np,
+            p_out_np,
+            float(alpha),
+            keys,
+            y_vals,
+            r_vals,
+            targets,
+        )
+    else:
+        cursor = _build_dm_sparse_entry_rhf_numba(
+            graph_np,
+            p_in_np,
+            p_out_np,
+            float(alpha),
+            keys,
+            y_vals,
+            r_vals,
+            targets,
+        )
 
     keys = np.ascontiguousarray(keys[:cursor], dtype=np.int64)
     y_vals = np.ascontiguousarray(y_vals[:cursor], dtype=np.float64)
@@ -249,7 +237,7 @@ def _build_dm_sparse_entry(P_contr, P_contr_new, graph_for_pairs, uhf, alpha):
     y_vals = np.ascontiguousarray(y_vals[order], dtype=np.float64)
     r_vals = np.ascontiguousarray(r_vals[order], dtype=np.float64)
     targets = np.ascontiguousarray(targets[order], dtype=np.int64)
-    dup_keys = bool(np.any(keys[1:] == keys[:-1]))
+    dup_keys = bool(_has_adjacent_duplicates_numba(keys))
     return {"keys": keys, "y": y_vals, "r": r_vals, "targets": targets, "dup_keys": dup_keys}
 
 
@@ -292,10 +280,183 @@ def _accumulate_projected(accum, coeff, src_keys, src_vals, tgt_keys):
     """accum += coeff * src_vals projected onto tgt_keys (missing -> zero)."""
     if src_keys.size == 0 or tgt_keys.size == 0 or coeff == 0.0:
         return
-    idx = np.searchsorted(src_keys, tgt_keys)
-    mask = (idx < src_keys.size) & (src_keys[idx] == tgt_keys)
-    if np.any(mask):
-        accum[mask] += coeff * src_vals[idx[mask]]
+    _accumulate_projected_numba(accum, float(coeff), src_keys, src_vals, tgt_keys)
+
+
+@njit(cache=True)
+def _build_dm_sparse_entry_rhf_numba(graph_np, p_in_np, p_out_np, alpha, keys, y_vals, r_vals, targets):
+    """Build sparse RHF DM entry buffers."""
+    nats = graph_np.shape[0]
+    cursor = 0
+    for j in range(nats):
+        n_j = graph_np[j, 0]
+        for slot in range(n_j):
+            neigh = graph_np[j, 1 + slot]
+            keys[cursor] = j * nats + neigh
+            targets[cursor, 0] = slot
+            targets[cursor, 1] = j
+
+            k = 0
+            for a in range(4):
+                for b in range(4):
+                    pin = p_in_np[slot, j, a, b]
+                    rout = p_out_np[slot, j, a, b] - pin
+                    y_vals[cursor, k] = pin + alpha * rout
+                    r_vals[cursor, k] = rout
+                    k += 1
+            cursor += 1
+    return cursor
+
+
+@njit(cache=True)
+def _build_dm_sparse_entry_uhf_numba(graph_np, p_in_np, p_out_np, alpha, keys, y_vals, r_vals, targets):
+    """Build sparse UHF DM entry buffers."""
+    nats = graph_np.shape[0]
+    pair_base = nats * nats
+    cursor = 0
+    for j in range(nats):
+        n_j = graph_np[j, 0]
+        for slot in range(n_j):
+            neigh = graph_np[j, 1 + slot]
+            for spin in range(2):
+                keys[cursor] = spin * pair_base + j * nats + neigh
+                targets[cursor, 0] = spin
+                targets[cursor, 1] = slot
+                targets[cursor, 2] = j
+
+                k = 0
+                for a in range(4):
+                    for b in range(4):
+                        pin = p_in_np[spin, slot, j, a, b]
+                        rout = p_out_np[spin, slot, j, a, b] - pin
+                        y_vals[cursor, k] = pin + alpha * rout
+                        r_vals[cursor, k] = rout
+                        k += 1
+                cursor += 1
+    return cursor
+
+
+@njit(cache=True)
+def _has_adjacent_duplicates_numba(keys):
+    """Check if a sorted key vector has duplicates."""
+    n = keys.shape[0]
+    for i in range(1, n):
+        if keys[i] == keys[i - 1]:
+            return True
+    return False
+
+
+@njit(cache=True)
+def _accumulate_projected_numba(accum, coeff, src_keys, src_vals, tgt_keys):
+    """accum += coeff * src_vals projected onto sorted tgt_keys."""
+    i = 0
+    j = 0
+    ns = src_keys.shape[0]
+    nt = tgt_keys.shape[0]
+
+    while i < ns and j < nt:
+        ka = src_keys[i]
+        kb = tgt_keys[j]
+        if ka == kb:
+            for k in range(16):
+                accum[j, k] += coeff * src_vals[i, k]
+            i += 1
+            j += 1
+        elif ka < kb:
+            i += 1
+        else:
+            j += 1
+
+
+@njit(cache=True)
+def _sorted_subset_positions_numba(sorted_superset, sorted_subset):
+    """Return positions of sorted_subset items inside sorted_superset."""
+    out = np.empty(sorted_subset.shape[0], dtype=np.int64)
+    i = 0
+    j = 0
+    k = 0
+    ns = sorted_superset.shape[0]
+    nt = sorted_subset.shape[0]
+
+    while i < ns and j < nt:
+        a = sorted_superset[i]
+        b = sorted_subset[j]
+        if a == b:
+            out[k] = i
+            k += 1
+            i += 1
+            j += 1
+        elif a < b:
+            i += 1
+        else:
+            j += 1
+
+    return out[:k]
+
+
+def _core_positions_in_core_halo(core_halo, core, out_dtype):
+    """Get core atom positions inside core+halo list."""
+    core_halo = np.asarray(core_halo, dtype=np.int64)
+    core = np.asarray(core, dtype=np.int64)
+    if core.size == 0:
+        return np.empty(0, dtype=out_dtype)
+
+    core_halo_sorted = (core_halo.size < 2) or np.all(core_halo[1:] >= core_halo[:-1])
+    core_sorted = (core.size < 2) or np.all(core[1:] >= core[:-1])
+    if core_halo_sorted and core_sorted:
+        pos = _sorted_subset_positions_numba(core_halo, core)
+        if pos.shape[0] == core.shape[0]:
+            return pos.astype(out_dtype, copy=False)
+
+    # Defensive fallback if ordering/subset assumptions do not hold.
+    return np.nonzero(np.isin(core_halo, core))[0].astype(out_dtype, copy=False)
+
+
+@njit(cache=True)
+def _update_p_contr_new_rhf_numba(p_in, p_out, tmp2, part_atoms, max_len):
+    """Write RHF SCF map blocks and accumulate max/sum DM differences."""
+    max_dif = 0.0
+    sum_dif = 0.0
+    n_core = part_atoms.shape[0]
+    for c in range(n_core):
+        atom = part_atoms[c]
+        for row in range(max_len):
+            for a in range(4):
+                for b in range(4):
+                    new_val = tmp2[row, c, a, b]
+                    old_val = p_in[row, atom, a, b]
+                    diff = old_val - new_val
+                    if diff < 0.0:
+                        diff = -diff
+                    if diff > max_dif:
+                        max_dif = diff
+                    sum_dif += diff
+                    p_out[row, atom, a, b] = new_val
+    return max_dif, sum_dif
+
+
+@njit(cache=True)
+def _update_p_contr_new_uhf_numba(p_in, p_out, tmp2, part_atoms, max_len):
+    """Write UHF SCF map blocks and accumulate max/sum DM differences."""
+    max_dif = 0.0
+    sum_dif = 0.0
+    n_core = part_atoms.shape[0]
+    for spin in range(2):
+        for c in range(n_core):
+            atom = part_atoms[c]
+            for row in range(max_len):
+                for a in range(4):
+                    for b in range(4):
+                        new_val = tmp2[spin, row, c, a, b]
+                        old_val = p_in[spin, row, atom, a, b]
+                        diff = old_val - new_val
+                        if diff < 0.0:
+                            diff = -diff
+                        if diff > max_dif:
+                            max_dif = diff
+                        sum_dif += diff
+                        p_out[spin, row, atom, a, b] = new_val
+    return max_dif, sum_dif
 
 
 def _scatter_sparse_dm_values(P_contr, values, targets, uhf):
@@ -878,8 +1039,10 @@ def get_singlePointDM(
 
     local_parts = list(range(partIndex1, partIndex2))
     core_indices_lookup = [
-        np.nonzero(np.isin(partsCoreHalo[p], parts[p]))[0].astype(eng.np_int_dt, copy=False) for p in local_parts
+        _core_positions_in_core_halo(partsCoreHalo[p], parts[p], eng.np_int_dt) for p in local_parts
     ]
+    p_in_np = P_contr.detach().numpy()
+    p_out_np = P_contr_new.detach().numpy()
 
     for i, partIndex in enumerate(local_parts):
         # This will calculate the DM in subsys and update the whole DM
@@ -907,11 +1070,9 @@ def get_singlePointDM(
         if sdc.UHF:  # Open shell.
             # Vectorized. Faster for larger cores.
             max_len = graph_for_pairs[parts[partIndex][0]][0]
+            part_atoms = np.asarray(parts[partIndex], dtype=np.int64)
 
             # Get part of P_contr that corresponds to cores of current CH
-            TMP1 = P_contr[:, :max_len, parts[partIndex]]
-
-            # Get core column blocks of CH
             TMP2 = (
                 rho_ren.reshape(
                     (
@@ -928,15 +1089,14 @@ def get_singlePointDM(
                 .transpose(3, 4)
                 .transpose(1, 2)[:, :, core_indices_in_sub]
             )
-
-            # Max difference in DM elements.
-            P_contr_maxDif = float(torch.max(torch.abs(TMP1 - TMP2)).item())
-
-            # Sum of abs differences between new and old DM.
-            P_contr_sumDif += float(torch.sum(torch.abs(TMP1 - TMP2)).item())
-
-            # Build SCF output map (mixing is applied after distributed DM update).
-            P_contr_new[:, :max_len, parts[partIndex]] = TMP2
+            tmp2_np = TMP2.detach().numpy()
+            P_contr_maxDif, P_contr_sumDif = _update_p_contr_new_uhf_numba(
+                p_in_np,
+                p_out_np,
+                tmp2_np,
+                part_atoms,
+                int(max_len),
+            )
 
             # Packing rho_ren from 4x4 blocks into normal form based on number
             # of AOs per atom.
@@ -944,7 +1104,7 @@ def get_singlePointDM(
 
         else:  # Closed shell. See documentation in open-shell.
             max_len = graph_for_pairs[parts[partIndex][0]][0]
-            TMP1 = P_contr[:max_len, parts[partIndex]]
+            part_atoms = np.asarray(parts[partIndex], dtype=np.int64)
             TMP2 = (
                 rho_ren.reshape(
                     (
@@ -960,15 +1120,14 @@ def get_singlePointDM(
                 .transpose(2, 3)
                 .transpose(0, 1)[:, core_indices_in_sub]
             )
-
-            # Max difference in DM elements.
-            P_contr_maxDif = float(torch.max(torch.abs(TMP1 - TMP2)).item())
-
-            # Sum of abs differences between new and old DM.
-            P_contr_sumDif += float(torch.sum(torch.abs(TMP1 - TMP2)).item())
-
-            # Build SCF output map (mixing is applied after distributed DM update).
-            P_contr_new[:max_len, parts[partIndex]] = TMP2
+            tmp2_np = TMP2.detach().numpy()
+            P_contr_maxDif, P_contr_sumDif = _update_p_contr_new_rhf_numba(
+                p_in_np,
+                p_out_np,
+                tmp2_np,
+                part_atoms,
+                int(max_len),
+            )
 
             # Packing rho_ren from 4x4 blocks into normal form based on number
             # of AOs per atom.
