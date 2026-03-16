@@ -21,8 +21,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Run MD with SEDACS + PySEQM.")
     parser.add_argument("--input-file", type=str, default="input.in", help="SEDACS input file.")
     parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto", help="Device for SEDACS setup.")
-    parser.add_argument("--dt", type=float, default=0.5, help="Timestep in fs.")
-    parser.add_argument("--sim-length", type=float, default=5.0, help="Simulation length in fs.")
+    parser.add_argument("--dt", type=float, default=0.2, help="Timestep in fs.")
+    parser.add_argument("--sim-length", type=float, default=10.0, help="Simulation length in fs.")
     parser.add_argument("--ensemble", choices=["NVE", "NVT"], default="NVE", help="Thermodynamic ensemble.")
     parser.add_argument("--temp", type=float, default=300.0, help="Initial temperature in K.")
     parser.add_argument("--friction", type=float, default=20.0, help="Langevin friction in 1/ps for NVT.")
@@ -40,6 +40,11 @@ def parse_args():
         "--save-driver-files",
         action="store_true",
         help="Write per-step driver files (forces.npy and potential_energy.npy).",
+    )
+    parser.add_argument(
+        "--reuse-density-matrix",
+        action="store_true",
+        help="Warm-start each MD force call with the previous step's contracted density matrix.",
     )
     return parser.parse_args()
 
@@ -108,6 +113,8 @@ def main():
             print(f"Graph refresh interval: every {args.graph_refresh_interval} force calls")
         else:
             print("Graph refresh interval: disabled (reuse adaptive graph from previous step)")
+        print("Chemical potential reuse: enabled")
+        print(f"Contracted density matrix reuse: {'enabled' if args.reuse_density_matrix else 'disabled'}")
 
     atom_types = np.asarray(sy.types, dtype=np.int64)
     atom_symbols = np.asarray(sy.symbols)[atom_types]
@@ -123,6 +130,7 @@ def main():
     system = SystemState(positions_t, types_t, masses_t, cell_t, use_shadow=False)
 
     graph_state = {"graph": graph_nl, "force_calls": 0}
+    scf_state = {"state": None}
 
     def calculate_energy_and_forces(system_state, init=False):
         del init
@@ -143,11 +151,15 @@ def main():
             sy,
             hindex,
             graph_state["graph"],
+            scf_state=scf_state["state"],
+            reuse_density_matrix=args.reuse_density_matrix,
             save_output_files=args.save_driver_files,
             return_graph=True,
+            return_scf_state=True,
         )
         graph_state["graph"] = updated_graph
         graph_state["force_calls"] = force_calls + 1
+        scf_state["state"] = md_result.get("scf_state")
 
         force_t = torch.from_numpy(np.asarray(md_result["forces"])).to(
             device=system_state.positions.device, dtype=system_state.positions.dtype

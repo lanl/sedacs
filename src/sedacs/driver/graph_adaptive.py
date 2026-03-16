@@ -146,6 +146,92 @@ def _get_uhf_nocc_targets(sy):
     return total / 2.0, total / 2.0
 
 
+def _default_mu0(sdc):
+    """Return the default chemical potential guess."""
+    mu0 = -4.7
+    if sdc.UHF:
+        mu0 = np.array([-1.3, -5.5], dtype=np.float64)
+    return mu0
+
+
+def _extract_initial_mu0(sdc, scf_state):
+    """Read the warm-start chemical potential from caller state when available."""
+    if not scf_state or ("mu0" not in scf_state):
+        return _default_mu0(sdc)
+
+    mu0 = scf_state["mu0"]
+    if sdc.UHF:
+        mu0_arr = np.asarray(mu0, dtype=np.float64).reshape(-1)
+        if mu0_arr.size != 2:
+            raise ValueError(f"Expected 2 UHF chemical potentials, got shape {np.shape(mu0)}.")
+        return mu0_arr.copy()
+
+    mu0_arr = np.asarray(mu0, dtype=np.float64).reshape(-1)
+    if mu0_arr.size != 1:
+        raise ValueError(f"Expected scalar RHF chemical potential, got shape {np.shape(mu0)}.")
+    return float(mu0_arr[0])
+
+
+def _init_contracted_density_guess(
+    sdc,
+    eng,
+    sy,
+    molecule_whole,
+    graph_maskd,
+    graph_for_pairs,
+    device,
+    scf_state,
+    reuse_density_matrix,
+    rank,
+):
+    """Create the initial contracted DM, optionally warm-starting from a previous step."""
+    if sdc.UHF:
+        P_contr = torch.zeros(2, sdc.maxDeg, sy.nats, 4, 4, dtype=eng.torch_dt, device=device)
+    else:
+        P_contr = torch.zeros(sdc.maxDeg, sy.nats, 4, 4, dtype=eng.torch_dt, device=device)
+
+    reused_density_matrix = False
+    if reuse_density_matrix and scf_state is not None:
+        prev_p_contr = scf_state.get("P_contr")
+        prev_graph_for_pairs = scf_state.get("graph_for_pairs")
+        if prev_p_contr is not None and prev_graph_for_pairs is not None:
+            prev_p_contr_t = torch.as_tensor(prev_p_contr, dtype=eng.torch_dt, device=device)
+            if tuple(prev_p_contr_t.shape) != tuple(P_contr.shape):
+                raise ValueError(
+                    "Warm-start P_contr has incompatible shape: "
+                    f"expected {tuple(P_contr.shape)}, got {tuple(prev_p_contr_t.shape)}."
+                )
+
+            P_contr.copy_(prev_p_contr_t)
+            update_dm_contraction(sdc, sy, P_contr, prev_graph_for_pairs, graph_for_pairs, device)
+            reused_density_matrix = True
+            if rank == 0:
+                print("Warm start: reused contracted density matrix from previous step.")
+
+    if not reused_density_matrix:
+        diag_guess = get_diag_guess_pyseqm(molecule_whole, sy)
+        if sdc.UHF:
+            P_contr.transpose(1, 2).reshape(2, sy.nats * sdc.maxDeg, 4, 4)[:, graph_maskd] = 0.5 * diag_guess
+        else:
+            P_contr.transpose(0, 1).reshape(sy.nats * sdc.maxDeg, 4, 4)[graph_maskd] = diag_guess
+
+    return P_contr
+
+
+def _build_return_scf_state(mu0, P_contr, graph_for_pairs, reuse_density_matrix):
+    """Package SCF warm-start state for the next force call."""
+    if np.isscalar(mu0):
+        mu0_out = float(mu0)
+    else:
+        mu0_out = np.array(mu0, copy=True)
+
+    state = {"mu0": mu0_out}
+    if reuse_density_matrix:
+        state["P_contr"] = np.array(P_contr.detach().cpu().numpy(), copy=True)
+        state["graph_for_pairs"] = np.array(graph_for_pairs, copy=True)
+    return state
+
+
 def _use_backprop_forces(sdc, eng):
     """Return True when force evaluation must use autograd/backprop."""
     if not sdc.doForces:
@@ -1167,8 +1253,11 @@ def get_adaptiveDM_PYSEQM(
     sy,
     hindex,
     graphNL,
+    scf_state=None,
+    reuse_density_matrix=False,
     save_output_files=True,
     return_graph=False,
+    return_scf_state=False,
 ):
     """The main driver function. It initializes supplementary comms, dm, graphs,
     performs scf cycle with graph and dm updates, and then computes forces.
@@ -1352,32 +1441,20 @@ def get_adaptiveDM_PYSEQM(
         print(f"Time to init mod graphs {time.perf_counter() - tic:>7.2f} (s)", rank)
 
         tic = time.perf_counter()
-        if sdc.UHF:
-            # Contracted density matrix.
-            P_contr = torch.zeros(2, sy.nats * sdc.maxDeg, 4, 4, dtype=eng.torch_dt, device=device)
-
-            # Diagonal initial guess.
-            P_contr[:, graph_maskd] = 0.5 * get_diag_guess_pyseqm(molecule_whole, sy)
-
-            # Shape is: (2, n_atoms, max_deg, 4, 4).
-            # A rectangle of 4x4 square blocks.
-            P_contr = P_contr.reshape(2, sy.nats, sdc.maxDeg, 4, 4).transpose(1, 2)
-            P_contr_size = P_contr.size()
-            P_contr_nbytes = P_contr.numel() * P_contr.element_size()
-
-        else:
-            # Contracted density matrix.
-            P_contr = torch.zeros(sy.nats * sdc.maxDeg, 4, 4, dtype=eng.torch_dt, device=device)
-
-            # Diagonal initial guess.
-            P_contr[graph_maskd] = get_diag_guess_pyseqm(molecule_whole, sy)
-
-            # Shape is: (n_atoms, max_deg, 4, 4).
-            # A rectangle of 4x4 square blocks.
-            P_contr = P_contr.reshape(sy.nats, sdc.maxDeg, 4, 4).transpose(0, 1)
-
-            P_contr_size = P_contr.size()
-            P_contr_nbytes = P_contr.numel() * P_contr.element_size()
+        P_contr = _init_contracted_density_guess(
+            sdc,
+            eng,
+            sy,
+            molecule_whole,
+            graph_maskd,
+            graph_for_pairs,
+            device,
+            scf_state,
+            reuse_density_matrix,
+            rank,
+        )
+        P_contr_size = P_contr.size()
+        P_contr_nbytes = P_contr.numel() * P_contr.element_size()
 
         print(f"Time to init DM {time.perf_counter() - tic:>7.2f} (s)", rank)
 
@@ -1458,10 +1535,7 @@ def get_adaptiveDM_PYSEQM(
 
     # Initial chemical potential guess. TODO: This should probably not be
     # hard-coded.
-    mu0 = -4.7
-    if sdc.UHF:
-        mu0 = np.array([mu0 + 0.1, mu0 - 0.1])
-        mu0 = np.array([-1.3, -5.5])
+    mu0 = _extract_initial_mu0(sdc, scf_state)
 
     diis_state = _init_density_diis_state(sdc) if rank == 0 else None
 
@@ -1893,6 +1967,13 @@ def get_adaptiveDM_PYSEQM(
                 )
                 np.save("potential_energy", np.array([potential_energy], dtype=np.float64))
             md_result = {"forces": np.array(total_forces, copy=True), "potential_energy": potential_energy}
+            if return_scf_state:
+                md_result["scf_state"] = _build_return_scf_state(
+                    mu0,
+                    P_contr,
+                    graph_for_pairs,
+                    reuse_density_matrix,
+                )
 
     # //Forces finished.
     result = comm.bcast(md_result, root=0)
@@ -1910,8 +1991,11 @@ def get_adaptiveDM(
     sy,
     hindex,
     graphNL,
+    scf_state=None,
+    reuse_density_matrix=False,
     save_output_files=True,
     return_graph=False,
+    return_scf_state=False,
 ):
     """Get the adaptive denisty matrix at the current iteration.
 
@@ -1933,10 +2017,18 @@ def get_adaptiveDM(
         Atom-wise orbital indices.
     graphNL:
         The thresholded graph neighborlist.
+    scf_state:
+        Optional warm-start state returned by a previous `get_adaptiveDM` call.
+        When provided, `mu0` is reused automatically.
+    reuse_density_matrix:
+        If True, also reuse/remap the previous contracted density matrix from
+        `scf_state`.
     save_output_files:
         If True, write force/energy helper files (`forces.npy`, `potential_energy.npy`) on rank 0.
     return_graph:
         If True, return the updated adaptive graph along with force/energy data.
+    return_scf_state:
+        If True, include warm-start state in the returned result dictionary.
 
     Returns
     -------
@@ -1965,8 +2057,11 @@ def get_adaptiveDM(
         sy,
         hindex,
         graphNL,
+        scf_state=scf_state,
+        reuse_density_matrix=reuse_density_matrix,
         save_output_files=save_output_files,
         return_graph=return_graph,
+        return_scf_state=return_scf_state,
     )
 
 
