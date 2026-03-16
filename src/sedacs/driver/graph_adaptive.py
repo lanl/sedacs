@@ -185,16 +185,15 @@ def _init_contracted_density_guess(
     rank,
 ):
     """Create the initial contracted DM, optionally warm-starting from a previous step."""
-    if sdc.UHF:
-        P_contr = torch.zeros(2, sdc.maxDeg, sy.nats, 4, 4, dtype=eng.torch_dt, device=device)
-    else:
-        P_contr = torch.zeros(sdc.maxDeg, sy.nats, 4, 4, dtype=eng.torch_dt, device=device)
-
     reused_density_matrix = False
     if reuse_density_matrix and scf_state is not None:
         prev_p_contr = scf_state.get("P_contr")
         prev_graph_for_pairs = scf_state.get("graph_for_pairs")
         if prev_p_contr is not None and prev_graph_for_pairs is not None:
+            if sdc.UHF:
+                P_contr = torch.zeros(2, sdc.maxDeg, sy.nats, 4, 4, dtype=eng.torch_dt, device=device)
+            else:
+                P_contr = torch.zeros(sdc.maxDeg, sy.nats, 4, 4, dtype=eng.torch_dt, device=device)
             prev_p_contr_t = torch.as_tensor(prev_p_contr, dtype=eng.torch_dt, device=device)
             if tuple(prev_p_contr_t.shape) != tuple(P_contr.shape):
                 raise ValueError(
@@ -211,9 +210,13 @@ def _init_contracted_density_guess(
     if not reused_density_matrix:
         diag_guess = get_diag_guess_pyseqm(molecule_whole, sy)
         if sdc.UHF:
-            P_contr.transpose(1, 2).reshape(2, sy.nats * sdc.maxDeg, 4, 4)[:, graph_maskd] = 0.5 * diag_guess
+            P_contr = torch.zeros(2, sy.nats * sdc.maxDeg, 4, 4, dtype=eng.torch_dt, device=device)
+            P_contr[:, graph_maskd] = 0.5 * diag_guess
+            P_contr = P_contr.reshape(2, sy.nats, sdc.maxDeg, 4, 4).transpose(1, 2)
         else:
-            P_contr.transpose(0, 1).reshape(sy.nats * sdc.maxDeg, 4, 4)[graph_maskd] = diag_guess
+            P_contr = torch.zeros(sy.nats * sdc.maxDeg, 4, 4, dtype=eng.torch_dt, device=device)
+            P_contr[graph_maskd] = diag_guess
+            P_contr = P_contr.reshape(sy.nats, sdc.maxDeg, 4, 4).transpose(0, 1)
 
     return P_contr
 
