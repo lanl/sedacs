@@ -259,14 +259,28 @@ def init(args):
         #Initialize proxy/guest code
         init_proxy(sy.symbols,sy.orbs)
     elif eng.name == "LATTE":
-        latte_root = subprocess.check_output(
-            ["spack", "location", "-i", "latte"],
-            text=True
-        ).strip()
+        if os.environ["LATTE_PATH"]:
+            pass
+        else:
+            latte_root = subprocess.check_output(
+                ["spack", "location", "-i", "latte"],
+                text=True
+            ).strip()
 
-        latte_lib = str(Path(latte_root) / "lib")
+            root_path = Path(latte_root)
 
-        os.environ["LATTE_PATH"] = latte_lib
+            latte_lib = None
+            for libdir in ("lib", "lib64"):
+                candidate = root_path / libdir
+                if candidate.is_dir():
+                    latte_lib = str(candidate)
+                    break
+
+            if latte_lib is None:
+                raise RuntimeError(f"No lib or lib64 directory found in {latte_root}")
+ 
+            os.environ["LATTE_PATH"] = str(latte_lib)
+ 
     eng.up = True
 
     return sdc, eng, comm, rank, numranks, sy, hindex, fullGraph, eweights

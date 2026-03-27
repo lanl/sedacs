@@ -16,6 +16,7 @@ import gc
 torch.set_default_dtype(torch.float64)
 
 from sedacs.driver.init import init
+from sedacs.graph import get_initial_graph
 from sedacs.graph_partition import get_coreHaloIndices, graph_partition
 from sedacs.driver.graph_kernel_byparts import get_kernel_byParts, rankN_update_byParts
 from sedacs.driver.graph_adaptive_kernel_scf import get_adaptive_KernelSCFDM
@@ -100,11 +101,6 @@ def main(args):
     graphDH, sy.charges, mu, parts, partsCoreHalo, subSysOnRank = get_adaptive_KernelSCFDM(
         sdc, eng, comm, rank, numranks, sy, hindex, graphNL, mu, alpha=localization, graphweights=graphweights, device=device,
     )
-    if rank == 0:
-        parts = graph_partition(
-            sdc, eng, graphDH, sdc.partitionType, sdc.nparts, sy.coords, graphweights=None, verb=True
-        )
-    parts = comm.bcast(parts, root=0)
     njumps = 1
     partsCoreHalo = []
     for i in range(sdc.nparts):
@@ -186,7 +182,7 @@ def main(args):
         # Current time
         Time = (MD_step) * dt
         print(
-            f"Time = {Time:<16.8f} Etotal = {ETOT:<16.8f} Temperature = {Temperature:<16.8f}"
+            f"Time = {Time:<16.8f} Etotal = {ETOT:<16.8f} Temperature = {Temperature:<16.8f} SUM(q[n]) = {torch.sum(q).item():<16.16f}"
         )
 
         # dR2(0)/dt2: V(0)->V(1/2)
@@ -285,39 +281,23 @@ def main(args):
 
         if Time % 100 == 99:
             if rank == 0:
+                nl = torch.where(
+                        (sy.nl_dists > sdc.rcut) | (sy.nl_dists == 0.0), -1, sy.nl
+                        )
+                nl = nl.sort(dim=1, descending=True)[0]
+                nl = nl[:, : torch.max(torch.sum(nl != -1, dim=1))]
+                num_neighbors = torch.sum(nl != -1, dim=1)
+                nl = torch.cat((num_neighbors.unsqueeze(1), nl.sort(dim=1, descending=True)[0]), dim=1)
+                nl = nl.cpu().numpy()
+                graph, graphweights = get_initial_graph(sy.coords, nl, sdc.rcut, sdc.maxDeg, np.diag(sy.latticeVectors), graphweights=True, verb=False)
                 parts = graph_partition(
-                    sdc, eng, graphDH, sdc.partitionType, sdc.nparts, sy.coords, graphweights=None, verb=True
+                    sdc, eng, graph, sdc.partitionType, sdc.nparts, sy.coords, graphweights=graphweights, verb=True
                 )
+
             parts = comm.bcast(parts, root=0)
 
             renew = 1
             
-        if renew:
-            njumps = 1
-            partsCoreHalo = []
-            for i in range(sdc.nparts):
-                coreHalo, nc, nh = get_coreHaloIndices(parts[i], graphDH, njumps)
-                partsCoreHalo.append(coreHalo)
-                print("MD_step, core,halo size:", MD_step, i, "=", nc, nh)
-            graphDH, sy.charges, EPOT, entropy, FTOT, mu, parts, partsCoreHalo, subSysOnRank = (
-                get_adaptive_sp_energy_forces(
-                    sdc,
-                    eng,
-                    comm,
-                    rank,
-                    numranks,
-                    sy,
-                    parts,
-                    partsCoreHalo,
-                    hindex,
-                    graphDH,
-                    mu,
-                    alpha=localization,
-                    shadow_md=shadow_md,
-                    device=device,
-                )
-            )
-
         njumps = 1
         partsCoreHalo = []
         for i in range(sdc.nparts):

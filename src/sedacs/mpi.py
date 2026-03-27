@@ -318,7 +318,7 @@ def collect_and_concatenate_vectors(vectOnRank, comm) -> ArrayLike:
 
     # In-place Allgatherv: copy my local chunk into place, then collect the rest
     start = int(displs[rank])
-    fullVect[start:start + int(local_n)] = vectOnRank
+    fullVect[start:start + local_n.item()] = vectOnRank
     comm.Allgatherv(MPI.IN_PLACE, [fullVect, recv_counts, displs, MPI._typedict[dtype.char]])
 
     return fullVect

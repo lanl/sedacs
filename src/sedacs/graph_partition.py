@@ -6,8 +6,9 @@ from sedacs.file_io import (
         write_pdb_coordinates
 )
 from sedacs.sedacs_partition.sedacs_part import *
-#import matplotlib.pyplot as plt
-#
+import os
+import subprocess
+from pathlib import Path
 
 import time
 
@@ -19,11 +20,38 @@ except: SpectralClusteringLib = False
 import os
 from sedacs.periodic_table import PeriodicTable
 
-try: 
+try:
     import metis
     metisLib = True
-except: 
-    metisLib = False
+except:
+    try:
+        metis_dll = os.environ.get("METIS_DLL")
+
+        if not metis_dll:
+            metis_root = subprocess.check_output(
+                ["spack", "location", "-i", "metis"],
+                text=True
+            ).strip()
+
+            root_path = Path(metis_root)
+
+            metis_lib = None
+            for libdir in ("lib", "lib64"):
+                candidate = root_path / libdir / "libmetis.so"
+                if candidate.is_file():
+                    metis_lib = str(candidate)
+                    break
+
+            if metis_lib is None:
+                raise RuntimeError(f"Could not find libmetis.so under {metis_root}")
+
+            os.environ["METIS_DLL"] = metis_lib
+
+        import metis
+        metisLib = True
+
+    except:
+        metisLib = False
 
 try:
     import networkx as nx
@@ -904,15 +932,48 @@ def metis_partition(graph, nparts, graphweights=None, verb=False):
         # Metis partition metis call
         # Metis returns nxParts which is a list of every's part (or "color")
         # to where they belong. Node "i" belongs to "metisParts[i]" part.
-        try:
-            edgecuts, metisParts = metis.part_graph(adjlist, nparts, objtype='vol', contig=True, ctype='shem', iptype='grow', ncuts=10, niter=10, rtype='fm', minconn=True, recursive=False)
-            if len(np.unique(metisParts)) < nparts:
-                edgecuts, metisParts = metis.part_graph(adjlist, nparts, objtype='vol', contig=True, ctype='shem', iptype='grow', ncuts=10, niter=10, rtype='fm', ufactor=1, minconn=True, recursive=False)
-                if len(np.unique(metisParts)) < nparts:
-                    raise ValueError(f"Reduce number of parts to avoid empty partition.")
-                     
-        except:
-            edgecuts, metisParts = metis.part_graph(adjlist, nparts)
+        base_kwargs = {
+            "objtype": "cut",
+            "ctype": "shem",
+            "iptype": "grow",
+            "rtype": "fm",
+            "ufactor": 1,
+            "recursive": False,
+        }
+
+        attempts = [
+            {"contig": True,  "minconn": True,  "ncuts": 10, "niter": 20},
+            {"contig": True,  "minconn": False, "ncuts": 20, "niter": 100},
+            {"contig": False, "minconn": True,  "ncuts": 20, "niter": 100},
+            {"contig": False, "minconn": False, "ncuts": 20, "niter": 100},
+        ]
+
+
+        last_error = None
+
+        for opts in attempts:
+            try:
+                edgecuts, metisParts = metis.part_graph(
+                    adjlist,
+                    nparts,
+                    **base_kwargs,
+                    **opts,
+                )
+            except Exception as e:
+                last_error = e
+                continue
+
+            if len(np.unique(metisParts)) == nparts:
+                break
+        else:
+            if last_error is not None:
+                raise ValueError(
+                    "Could not partition graph successfully. "
+                    "Try reducing the number of parts."
+                ) from last_exception
+
+            raise ValueError("Reduce number of parts to avoid empty partition.")
+
         # The next lines will transform from metis to our partition format
         parts = []
         for k in range(nparts):
