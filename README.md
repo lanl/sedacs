@@ -68,7 +68,7 @@ spack install
 ```
 This approach enables platform-specific optimization and can improve the performance of the SEDACS–LATTE interface on tailored HPC systems. Note that minor modifications to `spack_all.yaml` may be required to resolve dependency or compiler issues on different architectures and platforms.
 
-### Setup SEDACSâLATTE Interface on NERSC Perlmutter
+### Setup SEDACS–LATTE Interface on NERSC Perlmutter
 
 Clone SEDACS, LATTE, BML, and PROGRESS repos
 ```shell
