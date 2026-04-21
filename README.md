@@ -103,7 +103,7 @@ Export env variables
 ```
 export LATTE_PATH=~/LATTE/
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/bml/install/lib64/
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/bml/install/lib64/
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/qmd-progress/install/lib64/
 ```
 
 ---
