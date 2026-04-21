@@ -1,0 +1,5 @@
+#!/bin/bash
+# select_gpu_device wrapper script
+export CUDA_VISIBLE_DEVICES=$(( SLURM_LOCALID % 4 )) 
+#export CUDA_VISIBLE_DEVICES=$(( OMPI_COMM_WORLD_LOCAL_RANK % 4 )) 
+exec $*

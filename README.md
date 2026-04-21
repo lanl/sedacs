@@ -68,6 +68,44 @@ spack install
 ```
 This approach enables platform-specific optimization and can improve the performance of the SEDACS–LATTE interface on tailored HPC systems. Note that minor modifications to `spack_all.yaml` may be required to resolve dependency or compiler issues on different architectures and platforms.
 
+### Setup SEDACS–LATTE Interface on NERSC Perlmutter
+
+Clone SEDACS, LATTE, BML, and PROGRESS repos
+```shell
+git clone https://github.com/lanl/sedacs.git
+git clone -b lattepy https://github.com/lanl/LATTE.git
+git clone https://github.com/lanl/bml.git
+git clone https://github.com/lanl/qmd-progress.git
+```
+Compile LATTE, BML, and PROGRESS libraries with Cray wrappers
+```shell
+source sedacs/envs/perlmutter/build_bml.sh
+source sedacs/envs/perlmutter/build_progress.sh
+cp sedacs/envs/perlmutter/makefile.CHOICES LATTE/
+cd LATTE/src
+make
+cd ../..
+```
+Install Python dependencies
+```
+module load python
+mamba create -p $HOME/mamba_sedacs python=3.12 metis -c conda-forge --yes
+mamba activate $HOME/mamba_sedacs
+pip install -r sedacs/envs/perlmutter/requirements.txt 
+MPICC="cc -shared" pip install --force-reinstall --no-cache-dir --no-binary=mpi4py mpi4py
+```
+Install SEDACS
+```
+cd sedacs
+pip install -e .
+```
+Export env variables
+```
+export LATTE_PATH=~/LATTE/
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/bml/install/lib64/
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/qmd-progress/install/lib64/
+```
+
 ---
 
 ## Folder structure
