@@ -84,7 +84,7 @@ source sedacs/envs/perlmutter/build_bml.sh
 source sedacs/envs/perlmutter/build_progress.sh
 cd LATTE/src
 make
-cd ..
+cd ../..
 ```
 Install Python dependencies
 ```
