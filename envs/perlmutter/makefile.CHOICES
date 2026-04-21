@@ -1,0 +1,93 @@
+#
+# Compilation and link flags for LATTE
+#
+
+MY_PATH="/global/cfs/cdirs/m4988"
+
+# Precision - double or single
+PRECISION = DOUBLE
+
+# Make the latte library
+# AR and RUNLIB executable default path to compile 
+# latte as a library (change accordingly)
+MAKELIB = ON
+SHARED = ON
+AR = /usr/bin/ar cq
+RANLIB = /usr/bin/ranlib
+
+# Use PROGRESS and BML libraries
+PROGRESS = ON
+PROGRESS_PATH= $(MY_PATH)/qmd-progress/install/
+BML_PATH= $(MY_PATH)/bml/install/
+MAGMA_PATH = $(OLCF_MAGMA_ROOT)
+#METIS_PATH = $(MY_PATH)/metis-5.1.0/
+
+
+# Use METIS library for graph partitioning
+METIS = OFF
+
+# GPU available - OFF or ON
+GPUOPT = OFF
+
+# Using DBCSR library from cp2k? OFF or ON
+DBCSR_OPT = OFF
+
+# Parallelizing over k-points?
+MPIOPT = OFF
+
+#
+# CPU Fortran options
+#
+
+FC = ftn 
+FCL = $(FC)
+
+FFLAGS =  -ffree-line-length-none -fopenmp -lpthread 
+FFLAGS += -O2 -g 
+FFLAGS += -I${BML_PATH}include
+FFLAGS += -I${PROGRESS_PATH}include
+#FFLAGS += -L/projects/shared/spack/var/spack/environments/cheng-han/.spack-env/._view/4l2ndkdhuy7g6cjzb2ocqusx6y2zqv7r/targets/x86_64-linux/lib -lnvToolsExt
+#FFLAGS += -lnvToolsExt
+FFLAGS += -ffree-line-length-none 
+#FFLAGS += -lopenblas
+#FFLAGS += -L/projects/shared/spack/var/spack/environments/cheng-han/.spack-env/view/lib -lopenblas
+FFLAGS += -fopenmp -lm -fPIC -g -O0 -fcheck=all --check=bounds -lm -fPIC 
+LINKFLAG = $(FFLAGS)
+
+LIB = -fopenmp -lpthread 
+#LIB  += -L${PROGRESS_PATH}/lib -lprogress -L${BML_PATH}/lib -lbml_fortran -lbml
+#LIB += -fopenmp -L${OLCF_MAGMA_ROOT}/lib  -lmagma
+#LIB += -lm -lgfortran
+# for metis
+#LIB += -L$(METIS_PATH)/lib -lmetis
+LIB += $(FFLAGS)
+
+
+# Uncomment for coverage
+#CVR = OFF
+ifeq ($(CVR), ON)
+	FFLAGS += -fprofile-arcs -ftest-coverage
+	LINKFLAG += -fprofile-arcs -ftest-coverage
+endif
+
+ifeq ($(MAGMA), ON)
+	LIB += -L${MAGMA_PATH}/lib -lmagma 
+endif
+
+ifeq ($(PROGRESS), ON)
+	LIB += -L$(PROGRESS_PATH)lib64 -lprogress -L$(BML_PATH)lib64 -lbml_fortran -lbml
+	FFLAGS += -I$(BML_PATH)include -I$(PROGRESS_PATH)include  -L$(PROGRESS_PATH)lib64 -lprogress -L$(BML_PATH)lib64 -lbml_fortran -lbml
+endif
+
+ifeq ($(GRAPH), ON) 
+	LIB += -L$(METIS_PATH)/lib -lmetis
+	FFLAGS += -I$(METIS_PATH)/include
+endif
+
+#
+# GPU options
+#
+
+GPU_CUDA_LIB = -L${OLCF_CUDA_ROOT}/lib64/ -lcublas -lcudart
+
+GPU_ARCH = sm_80 
