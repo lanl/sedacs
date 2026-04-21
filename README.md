@@ -81,6 +81,7 @@ Compile LATTE, BML, and PROGRESS libraries with Cray wrappers
 ```shell
 source sedacs/envs/perlmutter/build_bml.sh
 source sedacs/envs/perlmutter/build_progress.sh
+cp sedacs/envs/perlmutter/makefile.CHOICES LATTE/
 cd LATTE/src
 make
 cd ../..
@@ -88,8 +89,8 @@ cd ../..
 Install Python dependencies
 ```
 module load python
-mamba create -n sedacs python=3.12 metis -c conda-forge --yes
-mamba activate sedacs
+mamba create -p $HOME/mamba_sedacs python=3.12 metis -c conda-forge --yes
+mamba activate $HOME/mamba_sedacs
 pip install -r sedacs/envs/perlmutter/requirements.txt 
 MPICC="cc -shared" pip install --force-reinstall --no-cache-dir --no-binary=mpi4py mpi4py
 ```
