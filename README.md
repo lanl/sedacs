@@ -79,7 +79,6 @@ git clone https://github.com/lanl/qmd-progress.git
 ```
 Compile LATTE, BML, and PROGRESS libraries with Cray wrappers
 ```shell
-git clone https://github.com/lanl/bml.git
 source sedacs/envs/perlmutter/build_bml.sh
 source sedacs/envs/perlmutter/build_progress.sh
 cd LATTE/src
