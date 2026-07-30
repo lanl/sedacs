@@ -9,7 +9,7 @@ spack:
   - bml@master~mpi~magma #+magma+cusolver to enable latte with gpu 
   - qmd-progress@6b03dfca14428a9c479d1e0e96453ee62758644c~mpi~benchmarks
   - latte@=lattepy+interface+progress~mpi
-  - meits
+  - metis
   - py-pip
   - python@3.12.12
   view: true
